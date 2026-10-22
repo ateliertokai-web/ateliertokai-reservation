@@ -27,6 +27,8 @@ function dl(ev){return ev.deadlineMs?new Date(ev.deadlineMs).toLocaleString('ja-
 function opts(a,b,sel){var o='';for(var i=a;i<=b;i++)o+='<option'+(i===sel?' selected':'')+'>'+i+'</option>';return o}
 function busy(on,btn,txt){if(btn){btn.disabled=on;if(txt)btn.textContent=txt}}
 function top(){window.scrollTo(0,0)}
+/* 車種：全角英数を半角にする（大文字・小文字はそのまま） */
+function fixModel(v){return v.replace(/[ａ-ｚＡ-Ｚ０-９]/g,function(c){return String.fromCharCode(c.charCodeAt(0)-65248)})}
 /* この端末に予約番号を覚えておく（メールアドレスも一緒に保存。共用端末では「この端末から消す」で削除できます） */
 var MYKEY='yoyaku_my_v1';
 function myGet(){try{var a=JSON.parse(localStorage.getItem(MYKEY)||'[]');return Array.isArray(a)?a:[]}catch(e){return[]}}
@@ -201,11 +203,12 @@ function formView(){
   var half=function(s){return s.replace(/[０-９]/g,function(c){return String.fromCharCode(c.charCodeAt(0)-65248)})};
   // 入力中（変換中）は触らない。変換が確定したとき・入力欄を離れたときに整える（変換候補が壊れるのを防ぐ）
   var bindFix=function(el,fn,after){var run=function(){var v=fn(el.value);if(v!==el.value)el.value=v;if(after)after(el.value)};el.addEventListener('input',function(e){if(e.isComposing)return;run()});el.addEventListener('compositionend',run);el.addEventListener('blur',function(){run()})};
-  var fixModel=function(v){return v.replace(/[ａ-ｚＡ-Ｚ０-９]/g,function(c){return String.fromCharCode(c.charCodeAt(0)-65248)})};
   bindFix(q('cl'),function(v){return half(v).replace(/\D/g,'').slice(0,3)},function(v){if(v.length===3&&document.activeElement===q('cl'))q('kn').focus()});
   bindFix(q('nm'),function(v){return half(v).replace(/\D/g,'').slice(0,4)});
   bindFix(q('kn'),function(v){return v.replace(/[ァ-ヶ]/g,function(c){return String.fromCharCode(c.charCodeAt(0)-96)}).replace(/[^ぁ-ん]/g,'').slice(0,1)},function(v){if(v&&document.activeElement===q('kn'))q('nm').focus()});
   bindFix(q('md'),fixModel);
+  // 地名は、変換を確定したら次の欄（分類番号）へ移る
+  q('pf').addEventListener('compositionend',function(){var el=this;setTimeout(function(){if(el.value.trim()&&document.activeElement===el)q('cl').focus()},0)});
   app.querySelectorAll('.st').forEach(function(c){c.onchange=function(){app.querySelector('.stf[data-k="'+c.dataset.k+'"]').hidden=!c.checked}});
   // 参加者1には、代表申込者を自動で入れる（参加者1を直接変更したあとは、そのまま）
   q('rn').addEventListener('input',function(){var f=q('pn')&&q('pn').querySelector('input');if(f&&!p1t)f.value=this.value});
