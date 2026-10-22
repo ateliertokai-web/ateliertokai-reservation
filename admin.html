@@ -199,7 +199,7 @@ function evView(){
    '<div id="dates"><div class="row dr"><label>日付<input type="date" class="dt" required></label></div></div><button type="button" class="s" id="ad">＋ 日付を追加</button>'+
    '<div style="margin-top:12px"><b style="font-size:14px">時間帯（飛び飛びに複数作れます）</b><div id="rngs">'+rgRow('10:00','17:00',60)+'</div><div class="tools"><button type="button" class="s" id="ar">＋ 時間帯を追加</button><label class="chk" style="margin:0"><input type="checkbox" id="cad">終日（1枠）</label></div><p class="note" style="margin:0">例：10:00〜11:30（90分）と 14:00〜15:30（90分）。「1枠の長さ」で時間帯を区切って、枠を作ります。</p></div>'+
    '<div class="row"><label>休憩 開始<input type="time" id="cbs"></label><label>休憩 終了<input type="time" id="cbe"></label><button type="button" class="s" id="cbc">休憩をクリア</button></div>'+
-   '<div class="row"><label>定員（組）<input type="number" id="cg" value="25" min="1" style="width:80px"></label><label>定員（人数・0で無制限）<input type="number" id="cp" value="0" min="0" style="width:80px"></label><label>1組の上限人数<input type="number" id="cx" value="4" min="1" style="width:80px"></label></div>'+
+   '<div class="row"><label>定員（組）<input type="number" id="cg" value="25" min="1" style="width:80px"></label><label>定員（人数・0で無制限）<input type="number" id="cp" value="0" min="0" style="width:80px"></label><label>1組の上限人数<input type="number" id="cx" value="10" min="1" style="width:80px"></label></div>'+
    '<p class="note">※ 既存のイベント名を入力した場合は、そのイベントに枠を追加します（方式などの設定は変わりません）。新しいイベント名の場合は、下の設定で作成します。</p>'+
    '<div id="newopt">'+optHTML('nw',{})+'</div><div class="err" id="cer"></div><button class="p" type="submit" style="max-width:260px">枠を作成</button></form></details>'+
    '<h2 style="font-size:16px">作成済みのイベント</h2>';
