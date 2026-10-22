@@ -36,7 +36,7 @@ function loginView(msg){
   app.innerHTML='<h2>管理者ログイン</h2><form id="f" class="card"><label>メールアドレス<input id="em" type="email" autocomplete="username" required></label><label>パスワード<input id="pw" type="password" autocomplete="current-password" required></label><div class="err" id="er">'+esc(msg||'')+'</div><button class="p" type="submit">ログイン</button></form>';
   q('f').onsubmit=function(e){
     e.preventDefault();q('er').textContent='';
-    auth.signInWithEmailAndPassword(q('em').value.trim(),q('pw').value).catch(function(){q('er').textContent='メールアドレスまたはパスワードが違います'});
+    auth.signInWithEmailAndPassword(q('em').value.trim(),q('pw').value).catch(function(e){var c=(e&&e.code)||'';q('er').textContent=(/invalid-credential|wrong-password|user-not-found|invalid-email/.test(c)?'メールアドレスまたはパスワードが違います':'ログインできませんでした')+'（'+(c||(e&&e.message)||'')+'）'});
   };
 }
 
@@ -142,13 +142,47 @@ function csv(list){
 
 /* ---------- イベント・枠 ---------- */
 var chk=function(id,on,label){return '<label class="chk" style="margin:4px 0"><input type="checkbox" id="'+id+'"'+(on?' checked':'')+'>'+label+'</label>'};
+/* ---------- 写真（イベントパンフなど） ---------- */
+var IMG={};
+function imgHTML(p){return '<div class="box" style="margin:10px 0"><b style="font-size:14px">写真・パンフレット（最大3枚）</b><div class="imgs" id="'+p+'im"></div><input type="file" accept="image/*" multiple id="'+p+'if"><p class="note" style="margin:6px 0 0">自動で小さくして保存します。1枚目が、お客様画面のイベント一覧に小さく表示されます。タップすると全部の写真を見られます。</p></div>'}
+function fileToImg(file){return new Promise(function(res,rej){var fr=new FileReader();fr.onload=function(){var im=new Image();im.onload=function(){res(im)};im.onerror=function(){rej(new Error('画像を読み込めませんでした'))};im.src=fr.result};fr.onerror=function(){rej(new Error('ファイルを読み込めませんでした'))};fr.readAsDataURL(file)})}
+function dataToImg(u){return new Promise(function(res,rej){var im=new Image();im.onload=function(){res(im)};im.onerror=function(){rej(new Error('画像を読み込めませんでした'))};im.src=u})}
+function shrink(im,max,qq){var w=im.naturalWidth,h=im.naturalHeight,k=Math.min(1,max/Math.max(w,h)),c=document.createElement('canvas');c.width=Math.max(1,Math.round(w*k));c.height=Math.max(1,Math.round(h*k));var x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(im,0,0,c.width,c.height);return c.toDataURL('image/jpeg',qq)}
+async function packImg(file){var im=await fileToImg(file),max=1400,qq=.8,full;for(var i=0;i<8;i++){full=shrink(im,max,qq);if(full.length<=240000)break;max=Math.round(max*.85);qq=Math.max(.5,qq-.05)}if(full.length>240000)throw new Error('画像が大きすぎます');return {full:full,thumb:shrink(im,240,.7)}}
+async function thumbOf(full){return shrink(await dataToImg(full),240,.7)}
+function renderImgs(p){
+  var s=IMG[p],box=q(p+'im');if(!box)return;
+  box.innerHTML=s.list.map(function(x,i){return '<div><img src="'+x.full+'" alt=""><button type="button" data-di="'+i+'" title="削除">×</button></div>'}).join('')||'<span class="note">写真はまだありません</span>';
+  box.querySelectorAll('[data-di]').forEach(function(b){b.onclick=function(){s.list.splice(+b.dataset.di,1);s.dirty=true;renderImgs(p)}});
+}
+function wireImgs(p,initial){
+  IMG[p]={list:(initial||[]).map(function(u){return {full:u}}),dirty:false};
+  renderImgs(p);
+  q(p+'if').onchange=async function(){
+    var files=[].slice.call(this.files),inp=this;
+    for(var i=0;i<files.length;i++){
+      if(IMG[p].list.length>=3){say('写真は3枚までです');break}
+      try{IMG[p].list.push(await packImg(files[i]));IMG[p].dirty=true;renderImgs(p)}catch(x){say(x.message)}
+    }
+    inp.value='';
+  };
+}
+async function saveImages(evId,p){
+  var s=IMG[p];if(!s||!s.dirty)return;
+  var fulls=s.list.map(function(x){return x.full}),th='';
+  if(s.list.length)th=s.list[0].thumb||await thumbOf(s.list[0].full);
+  if(fulls.length)await C.eimgs.doc(evId).set({imgs:fulls});else await C.eimgs.doc(evId).delete();
+  await C.events.doc(evId).update({thumb:th,imgN:fulls.length});
+  s.dirty=false;
+}
+
 function optHTML(p,e){
   return '<div class="row"><label>方式<select id="'+p+'m"><option'+(e.method!=='抽選'?' selected':'')+'>先着</option><option'+(e.method==='抽選'?' selected':'')+'>抽選</option></select></label>'+
    '<label>抽選の締切<input type="datetime-local" id="'+p+'d" value="'+dtl(e.deadlineMs)+'"></label>'+
    '<label>同一イベントグループ名（連日予約防止用）<input id="'+p+'g" value="'+esc(e.group)+'" placeholder="例：サッカー観戦"></label></div>'+
-   '<div>'+chk(p+'v',e.visible!==false,'お客様画面に表示する')+chk(p+'w',e.wait!==false,'満席時にキャンセル待ちを受け付ける')+chk(p+'l',!!e.lap,'未就学児の注意文を表示')+chk(p+'n',!!e.names,'参加者名の入力欄を表示')+chk(p+'o',!!e.order,'ご注文中・新規のお客様チェック欄を表示')+chk(p+'t',!!e.note,'備考欄を表示')+'</div>'+
+   '<div>'+chk(p+'v',e.visible!==false,'お客様画面に表示する')+chk(p+'w',e.wait!==false,'満席時にキャンセル待ちを受け付ける')+chk(p+'l',!!e.lap,'未就学児の注意文を表示')+chk(p+'n',!!e.names,'参加者名の入力欄を表示')+chk(p+'o',!!e.order,'ご注文中・新規のお客様チェック欄を表示')+chk(p+'t',!!e.note,'お客様ページに備考欄を作成')+'</div>'+
    '<label>お客様画面に出すメッセージ（空欄なら非表示）<textarea id="'+p+'s" rows="2">'+esc(e.msg)+'</textarea></label>'+
-   '<label>未就学児の注意文（空欄なら標準の文）<textarea id="'+p+'p" rows="2">'+esc(e.lapText)+'</textarea></label>';
+   '<label>未就学児の注意文（空欄なら標準の文）<textarea id="'+p+'p" rows="2">'+esc(e.lapText)+'</textarea></label>'+imgHTML(p);
 }
 function readOpt(p,name){
   var m=q(p+'m').value,dv=q(p+'d').value;
@@ -157,12 +191,13 @@ function readOpt(p,name){
   o.deadlineMs=(m==='抽選'&&dv)?new Date(dv).getTime():0;
   return o;
 }
+function rgRow(s,e,m){return '<div class="row rg"><label>開始<input type="time" class="rs" value="'+(s||'')+'"></label><label>終了<input type="time" class="re" value="'+(e||'')+'"></label><label>1枠の長さ(分)<input type="number" class="rm" value="'+(m||60)+'" min="5" style="width:80px"></label><button type="button" class="s d rx">削除</button></div>'}
 function evView(){
   var p=q('pane');
   var h='<details open><summary>枠を作成する</summary><form id="cf" class="card">'+
    '<div class="row"><label>イベント名<input id="cn" list="cnl" required placeholder="例：サッカー観戦"></label><datalist id="cnl">'+S.events.map(function(e){return '<option value="'+esc(e.name)+'">'}).join('')+'</datalist></div>'+
    '<div id="dates"><div class="row dr"><label>日付<input type="date" class="dt" required></label></div></div><button type="button" class="s" id="ad">＋ 日付を追加</button>'+
-   '<div class="row" style="margin-top:12px"><label>開始<input type="time" id="cs" value="10:00"></label><label>終了<input type="time" id="ce" value="17:00"></label><label class="chk" style="align-self:end"><input type="checkbox" id="cad">終日（1枠）</label><label>1枠の長さ(分)<input type="number" id="cm" value="60" min="5" style="width:80px"></label></div>'+
+   '<div style="margin-top:12px"><b style="font-size:14px">時間帯（飛び飛びに複数作れます）</b><div id="rngs">'+rgRow('10:00','17:00',60)+'</div><div class="tools"><button type="button" class="s" id="ar">＋ 時間帯を追加</button><label class="chk" style="margin:0"><input type="checkbox" id="cad">終日（1枠）</label></div><p class="note" style="margin:0">例：10:00〜11:30（90分）と 14:00〜15:30（90分）。「1枠の長さ」で時間帯を区切って、枠を作ります。</p></div>'+
    '<div class="row"><label>休憩 開始<input type="time" id="cbs"></label><label>休憩 終了<input type="time" id="cbe"></label><button type="button" class="s" id="cbc">休憩をクリア</button></div>'+
    '<div class="row"><label>定員（組）<input type="number" id="cg" value="25" min="1" style="width:80px"></label><label>定員（人数・0で無制限）<input type="number" id="cp" value="0" min="0" style="width:80px"></label><label>1組の上限人数<input type="number" id="cx" value="4" min="1" style="width:80px"></label></div>'+
    '<p class="note">※ 既存のイベント名を入力した場合は、そのイベントに枠を追加します（方式などの設定は変わりません）。新しいイベント名の場合は、下の設定で作成します。</p>'+
@@ -174,18 +209,27 @@ function evView(){
   var addDate=function(){var d=document.createElement('div');d.className='row dr';d.innerHTML='<label>日付<input type="date" class="dt"></label>';q('dates').appendChild(d)};
   q('ad').onclick=addDate;
   q('cbc').onclick=function(){q('cbs').value='';q('cbe').value=''};
-  q('cad').onchange=function(){['cs','ce','cm','cbs','cbe'].forEach(function(i){q(i).disabled=q('cad').checked});q('cbc').disabled=q('cad').checked};
+  var rgWire=function(){app.querySelectorAll('.rx').forEach(function(b){b.onclick=function(){if(app.querySelectorAll('.rg').length>1)b.closest('.rg').remove()}})};
+  rgWire();
+  q('ar').onclick=function(){var rows=app.querySelectorAll('.rg'),m=rows[0]?rows[0].querySelector('.rm').value:60,d=document.createElement('div');d.innerHTML=rgRow('','',m);q('rngs').appendChild(d.firstChild);rgWire()};
+  q('cad').onchange=function(){var on=q('cad').checked;['cbs','cbe','cbc','ar'].forEach(function(i){q(i).disabled=on});app.querySelectorAll('.rs,.re,.rm,.rx').forEach(function(x){x.disabled=on})};
+  wireImgs('nw',[]);
   q('cn').oninput=function(){var ex=S.events.some(function(e){return e.name===q('cn').value.trim()});q('newopt').hidden=ex};
   q('cf').onsubmit=async function(e){
     e.preventDefault();q('cer').textContent='';
     var name=q('cn').value.trim(),dates=[].map.call(app.querySelectorAll('.dt'),function(i){return i.value}).filter(Boolean);
     if(!name||!dates.length){q('cer').textContent='イベント名と日付を入力してください';return}
     var ex=S.events.filter(function(x){return x.name===name})[0];
-    var o={allday:q('cad').checked,start:q('cs').value,end:q('ce').value,minutes:q('cm').value,bstart:q('cbs').value,bend:q('cbe').value,capG:q('cg').value,capP:q('cp').value,maxPer:q('cx').value};
+    var ranges=[].map.call(app.querySelectorAll('.rg'),function(r){return {start:r.querySelector('.rs').value,end:r.querySelector('.re').value,minutes:r.querySelector('.rm').value}}).filter(function(r){return r.start||r.end});
+    if(!q('cad').checked){
+      if(!ranges.length){q('cer').textContent='時間帯を入力してください';return}
+      for(var ri=0;ri<ranges.length;ri++){var rr=ranges[ri];if(!rr.start||!rr.end||rr.end<=rr.start||!(+rr.minutes>=5)){q('cer').textContent='時間帯'+(ri+1)+'の、開始・終了・1枠の長さを確認してください（終了は開始より後に）';return}}
+    }
+    var o={allday:q('cad').checked,ranges:ranges,start:ranges[0]&&ranges[0].start,end:ranges[0]&&ranges[0].end,minutes:ranges[0]&&ranges[0].minutes,bstart:q('cbs').value,bend:q('cbe').value,capG:q('cg').value,capP:q('cp').value,maxPer:q('cx').value};
     var evId=ex?ex.id:C.newId(),ev=ex?{}:Object.assign(readOpt('nw',name),{drawn:false});
     if(ex)ev={name:name};
     if(!ex&&ev.method==='抽選'&&!ev.deadlineMs){q('cer').textContent='抽選の締切を入力してください';return}
-    try{var r=await C.createSlots(evId,ev,dates,o);if(r.ok){S.msg=r.count+'件の枠を作成しました';S.evId=evId;go()}else q('cer').textContent=r.msg}catch(x){q('cer').textContent='失敗しました: '+x.message}
+    try{var r=await C.createSlots(evId,ev,dates,o);if(r.ok){if(!ex){try{await saveImages(evId,'nw')}catch(ix){S.msg='枠は作成しましたが、写真の保存に失敗しました: '+ix.message;S.evId=evId;go();return}}S.msg=r.count+'件の枠を作成しました';S.evId=evId;go()}else q('cer').textContent=r.msg}catch(x){q('cer').textContent='失敗しました: '+x.message}
   };
   app.querySelectorAll('[data-open]').forEach(function(b){b.onclick=function(){openEv(+b.dataset.open)}});
 }
@@ -197,13 +241,14 @@ async function openEv(i){
    '<details open><summary>枠 '+sl.length+'件</summary><div class="scroll"><table><tr><th>日時</th><th>定員(組)</th><th>定員(人数)</th><th>1組上限</th><th>現在</th><th></th></tr>'+sl.map(function(s){
      return '<tr data-s="'+s.id+'"><td>'+md(s.date)+' '+rng(s)+'</td><td><input type="number" data-k="g" value="'+s.capG+'"></td><td><input type="number" data-k="p" value="'+(s.capP||0)+'"></td><td><input type="number" data-k="x" value="'+s.maxPer+'"></td><td>'+(s.booked||0)+'組・'+(s.people||0)+'名</td><td><button class="s" data-a="ss">保存</button> <button class="s d" data-a="sd">削除</button></td></tr>';
    }).join('')+'</table></div></details>';
+  try{var ei=await C.eimgs.doc(e.id).get();wireImgs('e'+i,ei.exists?ei.data().imgs:[])}catch(x){wireImgs('e'+i,[])}
   box.onclick=async function(ev){
     var b=ev.target.closest('[data-a]');if(!b)return;var a=b.dataset.a;
     try{
       if(a==='save'){
         var o=readOpt('e'+i,e.name);
         if(o.method==='抽選'&&!o.deadlineMs){say('抽選の締切を入力してください');return}
-        await C.events.doc(e.id).update(o);say('設定を保存しました');await go()
+        await C.events.doc(e.id).update(o);await saveImages(e.id,'e'+i);say('設定を保存しました');await go()
       }else if(a==='del'){
         if(!confirm('「'+e.name+'」と、その枠をすべて削除します。予約データは残りますが、お客様画面からは見えなくなります。よろしいですか？'))return;
         await C.deleteEvent(e.id);say('削除しました');await go()
