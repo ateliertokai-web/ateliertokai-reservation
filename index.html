@@ -149,14 +149,14 @@ function formView(){
    '<h2 style="font-size:16px">来場人数</h2><div class="g"><label>合計（1〜'+max+'名）<select id="tt"></select></label><label>うち大人<select id="ad"></select></label></div>'+
    '<div class="note" id="kd"></div><div id="bd" class="g3" hidden></div><div class="note" id="bh"></div>'+
    (ev.lap?'<p class="box">'+esc(ev.lapText||RV.LAP_TEXT)+'</p>':'')+
-   (ev.names?'<h2 style="font-size:16px">参加者のお名前</h2><div id="pn"></div>':'')+
+   ((ev.names||ev.golf)?'<h2 style="font-size:16px">参加者のお名前</h2><div id="pn"></div>':'')+
    (ev.order?'<label class="chk"><input type="checkbox" id="od"'+(r.order?' checked':'')+'>現在お車注文中でレクサス車未所有の方はチェックをお願い致します。</label>':'')+
    '<fieldset id="car"><legend>保有レクサス車登録ナンバー</legend><div class="plate">'+
    '<label>地名<input id="pf" maxlength="6" autocomplete="off" placeholder="鹿児島" value="'+esc(car.pref)+'"></label>'+
    '<label>分類番号<input id="cl" inputmode="numeric" maxlength="3" autocomplete="off" placeholder="300" value="'+esc(car.cls)+'"></label>'+
    '<label>ひらがな<input id="kn" maxlength="1" autocomplete="off" placeholder="あ" value="'+esc(car.kana)+'"></label>'+
    '<label>番号<input id="nm" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="1234" value="'+esc(car.num)+'"></label></div>'+
-   '<label>車種<input id="md" maxlength="30" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" inputmode="latin" placeholder="例：NX350h" value="'+esc(car.model)+'"></label></fieldset>'+
+   '<label>車種<input id="md" maxlength="30" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" inputmode="latin" placeholder="例：NX350h" value="'+esc(car.model)+'"></label></fieldset>'+
    '<fieldset><legend>ご利用店舗（両方可）</legend>'+Object.keys(RV.STORES).map(function(k,i){
       var on=stores.indexOf(k)>=0;
       return '<label class="chk"><input type="checkbox" class="st" data-k="'+esc(k)+'"'+(on?' checked':'')+'>'+esc(k)+'</label>'+
@@ -167,12 +167,13 @@ function formView(){
    (edit?'<div style="text-align:center;margin-top:18px"><button type="button" class="s d" id="cx">この予約をキャンセルする</button></div>':'')+'</form>';
   app.innerHTML=h;
   q('bk').onclick=edit?function(){detailView()}:pickSlot;
-  var tt=q('tt'),ad=q('ad'),bd=q('bd'),kids=0;
+  var tt=q('tt'),ad=q('ad'),bd=q('bd'),kids=0,p1t=!!(edit&&(r.participants||[])[0]);
   var T0=edit?Math.min(max,Math.max(1,(+r.a||0)+(+r.k||0)+(+r.s||0)+(+r.m||0))):1;
   tt.innerHTML=opts(1,max,T0);
   var A0=edit?(+r.a||1):1;
-  function fillAd(keep){var T=+tt.value;ad.innerHTML=opts(1,T,Math.min(keep,T))}
+  function fillAd(keep){var T=+tt.value;ad.innerHTML=ev.golf?opts(T,T,T):opts(1,T,Math.min(keep,T))}
   fillAd(A0);
+  if(ev.golf)ad.parentNode.style.display='none'; // ゴルフ: お子様の選択なし（全員大人）
   function bsum(){return ['bk_','bs_','bm_'].reduce(function(n,i){return n+(q(i)?+q(i).value:0)},0)}
   function hint(){var h=q('bh');if(!kids){h.textContent='';return}h.textContent='お子様の内訳の合計：'+bsum()+' / '+kids+'名';h.style.color=bsum()===kids?'':'#b42318'}
   function upd(){
@@ -189,6 +190,7 @@ function formView(){
       if(!cur.length&&edit)cur=(r.participants||[]).slice();
       var h='';for(var i=0;i<T;i++)h+='<label style="margin:6px 0">参加者'+(i+1)+'<input maxlength="40" value="'+esc(cur[i]!==undefined?cur[i]:(i===0?q('rn').value:''))+'"></label>';
       q('pn').innerHTML=h;
+      var f1=q('pn').querySelector('input');if(f1)f1.oninput=function(){p1t=true};
     }
   }
   tt.onchange=function(){fillAd(+ad.value);upd()};ad.onchange=upd;
@@ -199,13 +201,14 @@ function formView(){
   var half=function(s){return s.replace(/[０-９]/g,function(c){return String.fromCharCode(c.charCodeAt(0)-65248)})};
   // 入力中（変換中）は触らない。変換が確定したとき・入力欄を離れたときに整える（変換候補が壊れるのを防ぐ）
   var bindFix=function(el,fn,after){var run=function(){var v=fn(el.value);if(v!==el.value)el.value=v;if(after)after(el.value)};el.addEventListener('input',function(e){if(e.isComposing)return;run()});el.addEventListener('compositionend',run);el.addEventListener('blur',function(){run()})};
-  var fixModel=function(v){return v.replace(/[ａ-ｚＡ-Ｚ０-９]/g,function(c){return String.fromCharCode(c.charCodeAt(0)-65248)}).toUpperCase()};
+  var fixModel=function(v){return v.replace(/[ａ-ｚＡ-Ｚ０-９]/g,function(c){return String.fromCharCode(c.charCodeAt(0)-65248)})};
   bindFix(q('cl'),function(v){return half(v).replace(/\D/g,'').slice(0,3)},function(v){if(v.length===3&&document.activeElement===q('cl'))q('kn').focus()});
   bindFix(q('nm'),function(v){return half(v).replace(/\D/g,'').slice(0,4)});
   bindFix(q('kn'),function(v){return v.replace(/[ァ-ヶ]/g,function(c){return String.fromCharCode(c.charCodeAt(0)-96)}).replace(/[^ぁ-ん]/g,'').slice(0,1)},function(v){if(v&&document.activeElement===q('kn'))q('nm').focus()});
   bindFix(q('md'),fixModel);
   app.querySelectorAll('.st').forEach(function(c){c.onchange=function(){app.querySelector('.stf[data-k="'+c.dataset.k+'"]').hidden=!c.checked}});
-  q('rm').oninput=null;
+  // 参加者1には、代表申込者を自動で入れる（参加者1を直接変更したあとは、そのまま）
+  q('rn').addEventListener('input',function(){var f=q('pn')&&q('pn').querySelector('input');if(f&&!p1t)f.value=this.value});
   q('f').onsubmit=function(e){e.preventDefault();submit()};
   if(edit)q('cx').onclick=cancelView;
 }
