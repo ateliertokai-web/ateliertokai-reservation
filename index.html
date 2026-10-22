@@ -156,7 +156,7 @@ function formView(){
    '<label>分類番号<input id="cl" inputmode="numeric" maxlength="3" autocomplete="off" placeholder="300" value="'+esc(car.cls)+'"></label>'+
    '<label>ひらがな<input id="kn" maxlength="1" autocomplete="off" placeholder="あ" value="'+esc(car.kana)+'"></label>'+
    '<label>番号<input id="nm" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="1234" value="'+esc(car.num)+'"></label></div>'+
-   '<label>車種<input id="md" maxlength="30" autocomplete="off" placeholder="例：NX350h" value="'+esc(car.model)+'"></label></fieldset>'+
+   '<label>車種<input id="md" maxlength="30" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" inputmode="latin" placeholder="例：NX350h" value="'+esc(car.model)+'"></label></fieldset>'+
    '<fieldset><legend>ご利用店舗（両方可）</legend>'+Object.keys(RV.STORES).map(function(k,i){
       var on=stores.indexOf(k)>=0;
       return '<label class="chk"><input type="checkbox" class="st" data-k="'+esc(k)+'"'+(on?' checked':'')+'>'+esc(k)+'</label>'+
@@ -197,10 +197,13 @@ function formView(){
   if(q('od')){var od=q('od');var tg=function(){q('car').disabled=od.checked};od.onchange=tg;tg()}
   /* ナンバー入力の補助 */
   var half=function(s){return s.replace(/[０-９]/g,function(c){return String.fromCharCode(c.charCodeAt(0)-65248)})};
-  q('cl').oninput=function(){this.value=half(this.value).replace(/\D/g,'').slice(0,3);if(this.value.length===3)q('kn').focus()};
-  q('nm').oninput=function(){this.value=half(this.value).replace(/\D/g,'').slice(0,4)};
-  q('kn').oninput=function(){this.value=this.value.replace(/[ァ-ヶ]/g,function(c){return String.fromCharCode(c.charCodeAt(0)-96)}).replace(/[^ぁ-ん]/g,'').slice(0,1);if(this.value)q('nm').focus()};
-  q('md').oninput=function(){this.value=this.value.replace(/[ａ-ｚＡ-Ｚ０-９]/g,function(c){return String.fromCharCode(c.charCodeAt(0)-65248)}).toUpperCase()};
+  // 入力中（変換中）は触らない。変換が確定したとき・入力欄を離れたときに整える（変換候補が壊れるのを防ぐ）
+  var bindFix=function(el,fn,after){var run=function(){var v=fn(el.value);if(v!==el.value)el.value=v;if(after)after(el.value)};el.addEventListener('input',function(e){if(e.isComposing)return;run()});el.addEventListener('compositionend',run);el.addEventListener('blur',function(){run()})};
+  var fixModel=function(v){return v.replace(/[ａ-ｚＡ-Ｚ０-９]/g,function(c){return String.fromCharCode(c.charCodeAt(0)-65248)}).toUpperCase()};
+  bindFix(q('cl'),function(v){return half(v).replace(/\D/g,'').slice(0,3)},function(v){if(v.length===3&&document.activeElement===q('cl'))q('kn').focus()});
+  bindFix(q('nm'),function(v){return half(v).replace(/\D/g,'').slice(0,4)});
+  bindFix(q('kn'),function(v){return v.replace(/[ァ-ヶ]/g,function(c){return String.fromCharCode(c.charCodeAt(0)-96)}).replace(/[^ぁ-ん]/g,'').slice(0,1)},function(v){if(v&&document.activeElement===q('kn'))q('nm').focus()});
+  bindFix(q('md'),fixModel);
   app.querySelectorAll('.st').forEach(function(c){c.onchange=function(){app.querySelector('.stf[data-k="'+c.dataset.k+'"]').hidden=!c.checked}});
   q('rm').oninput=null;
   q('f').onsubmit=function(e){e.preventDefault();submit()};
@@ -218,7 +221,7 @@ function gather(){
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.mail))er.push('メールアドレスを正しく入力してください');
   if(q('pn'))d.participants=[].map.call(q('pn').querySelectorAll('input'),function(i){return i.value.trim()});
   if(!d.order){
-    d.car={pref:get('pf'),cls:get('cl'),kana:get('kn'),num:get('nm'),model:get('md')};
+    d.car={pref:get('pf'),cls:get('cl'),kana:get('kn'),num:get('nm'),model:fixModel(get('md'))};
     if(!d.car.pref||!/^\d{1,3}$/.test(d.car.cls)||!/^[ぁ-ん]$/.test(d.car.kana)||!/^\d{1,4}$/.test(d.car.num))er.push('保有レクサス車の登録ナンバーを入力してください');
     if(!d.car.model)er.push('車種を入力してください');
   }
