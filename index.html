@@ -54,8 +54,9 @@ async function home(){
     if(!evs.length)h+='<div class="card note">現在、受付中のイベントはありません。</div>';
     evs.forEach(function(e,i){
       var closed=e.method==='抽選'&&(e.drawn||(e.deadlineMs&&Date.now()>e.deadlineMs));
-      h+='<button class="ev" data-i="'+i+'"'+(closed?' disabled style="opacity:.55"':'')+'><b>'+esc(e.name)+'</b>'+
-        (e.method==='抽選'?'<span class="tag k">抽選</span><span>'+(closed?'受付は終了しました':'締切 '+dl(e))+'</span>':'<span class="tag">先着順</span>')+'</button>';
+      var inner='<b>'+esc(e.name)+'</b>'+
+        (e.method==='抽選'?'<span class="tag k">抽選</span><span>'+(closed?'受付は終了しました':'締切 '+dl(e))+'</span>':'<span class="tag">先着順</span>');
+      h+='<button class="ev" data-i="'+i+'"'+(closed?' disabled style="opacity:.55"':'')+'>'+(e.thumb?'<div class="evr"><img class="evimg" src="'+e.thumb+'" alt=""><div>'+inner+'</div></div>':inner)+'</button>';
     });
     var mine=myGet();
     if(mine.length){
@@ -103,6 +104,7 @@ async function pickSlot(){
   }catch(e){app.innerHTML='<div class="card err">読み込めませんでした。</div>';return}
   var ev=S.ev,h='<button class="l" id="bk">← イベント一覧へ</button><h2>'+esc(ev.name)+'<small>'+(ev.method==='抽選'?'抽選のお申し込みです（締切 '+dl(ev)+'）':'先着順のお申し込みです')+'</small></h2>';
   if(ev.msg)h+='<div class="box">'+esc(ev.msg).replace(/\n/g,'<br>')+'</div>';
+  if(ev.imgN>0){h+=(ev.thumb?'<img class="gthumb" id="gt" src="'+ev.thumb+'" alt="">':'')+'<div id="gal"><button class="s" id="gb">写真・パンフレットを見る（'+ev.imgN+'枚）</button></div>'}
   var cur='';
   if(!S.slots.length)h+='<div class="card note">現在、選べる日時がありません。</div>';
   S.slots.forEach(function(s,i){
@@ -113,6 +115,16 @@ async function pickSlot(){
   });
   app.innerHTML=h;
   q('bk').onclick=home;
+  if(q('gb')){
+    var openGal=async function(){
+      var box=q('gal');box.innerHTML='<p class="note">読み込み中…</p>';
+      try{var d=await C.eimgs.doc(ev.id).get(),im=d.exists?d.data().imgs:[];
+        box.innerHTML='<div class="gal">'+im.map(function(u){return '<img src="'+u+'" alt="">'}).join('')+'</div><button class="s" id="gc">写真を閉じる</button>';
+        q('gc').onclick=function(){box.innerHTML='<button class="s" id="gb">写真・パンフレットを見る（'+ev.imgN+'枚）</button>';q('gb').onclick=openGal};
+      }catch(e){box.innerHTML='<p class="err">読み込めませんでした。</p>'}
+    };
+    q('gb').onclick=openGal;if(q('gt'))q('gt').onclick=openGal;
+  }
   app.querySelectorAll('.slot').forEach(function(b){b.onclick=function(){S.slot=S.slots[+b.dataset.i];S.mode='new';S.rec=null;formView()}});
 }
 

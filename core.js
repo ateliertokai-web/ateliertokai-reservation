@@ -11,7 +11,7 @@ function makeCore(firebase, db, opts) {
   var now = opts.now || function () { return Date.now(); };
   var sleep = opts.sleep || function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
   var FV = firebase.firestore.FieldValue;
-  var events = db.collection('events'), slots = db.collection('slots'), res = db.collection('reservations'), apps = db.collection('applicants');
+  var events = db.collection('events'), slots = db.collection('slots'), res = db.collection('reservations'), apps = db.collection('applicants'), eimgs = db.collection('eventImages');
 
   var fail = function (m) { return { ok: false, msg: m }; };
   var ok = function (x) { var o = { ok: true }; for (var k in (x || {})) o[k] = x[k]; return o; };
@@ -241,12 +241,22 @@ function makeCore(firebase, db, opts) {
     if (o.allday) return [['00:00', '24:00']];
     var toM = function (t) { var p = t.split(':'); return +p[0] * 60 + +p[1]; };
     var fmt = function (m) { return ('0' + Math.floor(m / 60)).slice(-2) + ':' + ('0' + (m % 60)).slice(-2); };
-    var a = toM(o.start), z = toM(o.end), len = +o.minutes, out = [];
     var bs = o.bstart ? toM(o.bstart) : null, be = o.bend ? toM(o.bend) : null;
-    for (var t = a; t + len <= z; ) {
-      if (bs !== null && be !== null && t < be && t + len > bs) { t = be; continue; }
-      out.push([fmt(t), fmt(t + len)]); t += len;
-    }
+    // 時間帯を複数指定できる（例: 10:00〜11:30 と 14:00〜15:30）。ranges が無ければ従来の start/end/minutes
+    var ranges = (o.ranges && o.ranges.length) ? o.ranges : [{ start: o.start, end: o.end, minutes: o.minutes }];
+    var out = [], seen = {};
+    ranges.forEach(function (r) {
+      if (!r.start || !r.end) return;
+      var a = toM(r.start), z = toM(r.end), len = +(r.minutes || o.minutes);
+      if (!(len > 0)) return;
+      for (var t = a; t + len <= z; ) {
+        if (bs !== null && be !== null && t < be && t + len > bs) { t = be; continue; }
+        var k = fmt(t) + '-' + fmt(t + len);
+        if (!seen[k]) { seen[k] = 1; out.push([fmt(t), fmt(t + len)]); }
+        t += len;
+      }
+    });
+    out.sort(function (p, q) { return p[0] < q[0] ? -1 : p[0] > q[0] ? 1 : 0; });
     return out;
   }
   async function createSlots(eventId, ev, dates, o) {
@@ -267,13 +277,14 @@ function makeCore(firebase, db, opts) {
     var ss = await slots.where('eventId', '==', eventId).get();
     var ops = ss.docs.map(function (d) { return function (b) { b.delete(slots.doc(d.id)); }; });
     ops.push(function (b) { b.delete(events.doc(eventId)); });
+    ops.push(function (b) { b.delete(eimgs.doc(eventId)); });
     await chunked(ops);
     return ok({});
   }
 
   return { book: book, lookup: lookup, cancel: cancel, change: change, promote: promote, runLottery: runLottery, recount: recount,
     createSlots: createSlots, makeTimes: makeTimes, deleteEvent: deleteEvent, newId: newId, normMail: normMail, isFixed: isFixed, ms: ms,
-    events: events, slots: slots, res: res, apps: apps };
+    events: events, slots: slots, res: res, apps: apps, eimgs: eimgs };
 }
 root.makeCore = makeCore;
 root.RV = { STORES: STORES, LAP_TEXT: LAP_TEXT };
