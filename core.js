@@ -128,7 +128,7 @@ function makeCore(firebase, db, opts) {
         var moving = newSlotId && newSlotId !== r.slotId, newRef = null, newS = null;
         if (moving) { newRef = slots.doc(newSlotId); newS = await tx.get(newRef); }
         var eS = await tx.get(events.doc(r.eventId)), ev = eS.exists ? eS.data() : {};
-        var upd = {};
+        var upd = {}, waited = 0;
         EDIT.forEach(function (k) { if (patch && patch[k] !== undefined) upd[k] = patch[k]; });
         var m2 = Object.assign({}, r, upd);
         var n = (+m2.a || 0) + (+m2.k || 0) + (+m2.s || 0) + (+m2.m || 0);
@@ -141,11 +141,17 @@ function makeCore(firebase, db, opts) {
           if (t.eventId !== r.eventId) return fail('別のイベントの枠には変更できません');
           if (r.status === 'wait') return fail('キャンセル待ちの方は時間帯を変更できません。いったんキャンセルして申し込み直してください');
           if (ev.method === '抽選' && ev.drawn) return fail('抽選後は時間帯を変更できません');
-          if (isFixed(r.status) && !fits(t, n)) return fail('変更先の枠は満席です');
+          var toWait = false, newWaitNo = 0;
+          if (isFixed(r.status) && !fits(t, n)) {
+            // 変更先が満席: キャンセル待ちを受け付けるイベントなら、並び直してキャンセル待ちへ。受け付けないイベントは変更不可（元の予約はそのまま）
+            if (ev.wait !== false && ev.method !== '抽選') { toWait = true; newWaitNo = (t.waitSeq || 0) + 1; }
+            else return fail('変更先の時間帯は満席のため、変更できませんでした。現在のご予約はそのままです');
+          }
           if (isFixed(r.status)) {
             var o = oldS.data();
             tx.update(oldRef, { booked: Math.max(0, (o.booked || 0) - 1), people: Math.max(0, (o.people || 0) - r.n) });
-            tx.update(newRef, { booked: (t.booked || 0) + 1, people: (t.people || 0) + n });
+            if (toWait) { tx.update(newRef, { waitSeq: newWaitNo }); upd.status = 'wait'; upd.waitNo = newWaitNo; waited = newWaitNo; }
+            else tx.update(newRef, { booked: (t.booked || 0) + 1, people: (t.people || 0) + n });
           }
           Object.assign(upd, { slotId: newSlotId, date: t.date, start: t.start, end: t.end });
         } else if (isFixed(r.status) && n !== r.n) {
@@ -154,7 +160,7 @@ function makeCore(firebase, db, opts) {
         }
         upd.updatedAt = FV.serverTimestamp();
         tx.update(rRef, upd);
-        return ok({});
+        return ok({ waitlisted: !!waited, waitNo: waited });
       });
     });
   }

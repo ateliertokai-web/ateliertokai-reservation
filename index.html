@@ -247,9 +247,17 @@ async function submit(){
     var r;
     if(S.mode==='edit'){
       var ns=q('ns')?q('ns').value:S.slot.id;
+      if(ns!==S.slot.id){
+        var tg=S.slots.filter(function(x){return x.id===ns})[0],nn=g.d.a+g.d.k+g.d.s+g.d.m;
+        var fullT=tg&&((tg.booked||0)>=tg.capG||(tg.capP&&(tg.people||0)+nn>tg.capP));
+        if(fullT&&S.rec.status==='confirmed'){
+          if(S.ev.wait===false||S.ev.method==='抽選'){alert('恐れ入ります。ご希望の時間帯は満席のため、変更をお受けできません。現在のご予約はそのままです。');return}
+          if(!confirm('ご希望の時間帯は、現在満席です。\n\n変更をお進めいただくと「キャンセル待ち」となり、元のお時間のご予約は解放されます。空きが出なかった場合、ご参加いただけないこともございます。\n\nこのまま変更しますか？'))return;
+        }
+      }
       var patch=Object.assign({},g.d);delete patch.mail;
       r=await C.change(S.rec.id,S.rec.mail,patch,ns);
-      if(r.ok){var l=await C.lookup(S.rec.id,S.rec.mail);S.rec=Object.assign({id:S.rec.id},l.r);S.msg='変更を保存しました';return detailView()}
+      if(r.ok){var l=await C.lookup(S.rec.id,S.rec.mail);S.rec=Object.assign({id:S.rec.id},l.r);S.msg=r.waitlisted?'ご希望の時間帯は満席のため、キャンセル待ち（'+r.waitNo+'番目）として受け付けました。元のお時間のご予約は解放されています。空きが出た場合は、店舗からご連絡します。':'変更を保存しました';return detailView()}
     }else{
       r=await C.book(S.slot.id,g.d);
       if(r.ok){myAdd(r.id,g.d.mail);return doneView(r,g.d)}
@@ -304,7 +312,11 @@ function detailView(){
   if(can)h+='<button class="p" id="ed">内容を変更する</button><div style="text-align:center;margin-top:16px"><button class="s d" id="cx">この予約をキャンセルする</button></div>';
   app.innerHTML=h;
   q('bk').onclick=home;
-  if(can){q('ed').onclick=function(){S.mode='edit';formView()};q('cx').onclick=cancelView}
+  if(can){q('ed').onclick=function(){
+      if(S.rec.status==='confirmed'||S.rec.status==='won'){
+        if(!confirm('ご予約内容の変更について\n\n時間帯を変更される場合、変更先に空きがあれば、そのままお手続きいただけます。\n\n変更先が満席の場合は、順番の並び直しとなり、「キャンセル待ち」となる、またはご変更をお受けできない場合がございます。（キャンセル待ちとなった場合、元のお時間のご予約は解放されます。）\n\n内容を変更しますか？'))return;
+      }
+      S.mode='edit';formView()};q('cx').onclick=cancelView}
 }
 function cancelView(){
   var r=S.rec;
