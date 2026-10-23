@@ -91,7 +91,7 @@ function wireKeep(rec){
       ['Outlook',function(){
         var w='https://outlook.live.com/mail/0/deeplink/compose?'+qs([['to',to],['subject',subj],['body',body]]);
         tryApp('ms-outlook://compose?'+qs([['to',to],['subject',subj],['body',body]]),w)}],
-      ['Yahoo!メール',function(){web('https://compose.mail.yahoo.co.jp/ym/Compose?'+qs([['To',to],['Subject',subj],['Body',body]]))}],
+      ['Yahoo!メール（本文をコピーして開く）',function(){copyText('宛先：'+to+'\n件名：'+subj+'\n\n'+body).catch(function(){});web('https://mail.yahoo.co.jp/');setTimeout(function(){alert('本文をコピーしました。Yahoo!メールで「新規作成」を開き、貼り付けて、ご自分宛に送ってください。')},300)}],
       ['本文をコピー',function(){var self=this;copyText(subj+'\n\n'+body).then(function(){alert('コピーしました。お使いのメールに貼り付けて、ご自分宛に送ってください。')}).catch(function(){alert('コピーできませんでした。')})}]
     ];
     box=document.createElement('div');box.id='mp';box.className='box';box.style.marginTop='10px';
