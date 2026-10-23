@@ -54,11 +54,15 @@ async function home(){
     var evs=snap.docs.map(function(d){return Object.assign({id:d.id},d.data())}).sort(function(a,b){return a.name<b.name?-1:1});
     var h='<h2>ご予約・お申し込み<small>ご希望のイベントを選んでください</small></h2>';
     if(!evs.length)h+='<div class="card note">現在、受付中のイベントはありません。</div>';
+    var soon=0;
     evs.forEach(function(e,i){
+      var notYet=e.openAtMs&&Date.now()<e.openAtMs;
+      if(notYet&&(!soon||e.openAtMs<soon))soon=e.openAtMs;
       var closed=e.method==='抽選'&&(e.drawn||(e.deadlineMs&&Date.now()>e.deadlineMs));
       var inner='<b>'+esc(e.name)+'</b>'+
-        (e.method==='抽選'?'<span class="tag k">抽選</span><span>'+(closed?'受付は終了しました':'締切 '+dl(e))+'</span>':'<span class="tag">先着順</span>');
-      h+='<button class="ev" data-i="'+i+'"'+(closed?' disabled style="opacity:.55"':'')+'>'+(e.thumb?'<div class="evr"><img class="evimg" src="'+e.thumb+'" alt=""><div>'+inner+'</div></div>':inner)+'</button>';
+        (e.method==='抽選'?'<span class="tag k">抽選</span><span>'+(closed?'受付は終了しました':'締切 '+dl(e))+'</span>':'<span class="tag">先着順</span>')+
+        (notYet?'<br><span class="tag w">受付開始 '+new Date(e.openAtMs).toLocaleString('ja-JP',{month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'})+'</span>':'');
+      h+='<button class="ev" data-i="'+i+'"'+((closed||notYet)?' disabled style="opacity:.55"':'')+'>'+(e.thumb?'<div class="evr"><img class="evimg" src="'+e.thumb+'" alt=""><div>'+inner+'</div></div>':inner)+'</button>';
     });
     var mine=myGet();
     if(mine.length){
@@ -69,6 +73,8 @@ async function home(){
     app.querySelectorAll('.ev').forEach(function(b){b.onclick=function(){S.ev=evs[+b.dataset.i];pickSlot()}});
     q('lk').onclick=lookupView;
     if(mine.length)loadMine(mine);
+    // 受付開始の時刻になったら、自動で画面を更新する
+    if(soon){var wait=soon-Date.now()+1500;if(wait>0&&wait<2147483000)setTimeout(function(){if(q('lk'))home()},wait)}
   }catch(e){app.innerHTML='<div class="card err">読み込めませんでした。電波の良い場所で、もう一度お試しください。</div>'}
 }
 

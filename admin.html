@@ -197,6 +197,7 @@ async function saveImages(evId,p){
 function optHTML(p,e){
   return '<div class="row"><label>方式<select id="'+p+'m"><option'+(e.method!=='抽選'?' selected':'')+'>先着</option><option'+(e.method==='抽選'?' selected':'')+'>抽選</option></select></label>'+
    '<label>抽選の締切<input type="datetime-local" id="'+p+'d" value="'+dtl(e.deadlineMs)+'"></label>'+
+   '<label>受付の開始日時（空欄なら、今すぐ受付）<input type="datetime-local" id="'+p+'a" value="'+dtl(e.openAtMs)+'"></label>'+
    '<label>同一イベントグループ名（連日予約防止用）<input id="'+p+'g" value="'+esc(e.group)+'" placeholder="例：サッカー観戦"></label></div>'+
    '<div>'+chk(p+'v',e.visible!==false,'お客様画面に表示する')+chk(p+'w',e.wait!==false,'満席時にキャンセル待ちを受け付ける')+chk(p+'l',!!e.lap,'未就学児の注意文を表示')+chk(p+'n',!!e.names,'参加者名の入力欄を表示')+chk(p+'gf',!!e.golf,'ゴルフ（お子様の選択なし・参加者名を自動で表示）')+chk(p+'o',!!e.order,'ご注文中・新規のお客様チェック欄を表示')+chk(p+'t',!!e.note,'お客様ページに備考欄を作成')+'</div>'+
    '<label>お客様画面に出すメッセージ（空欄なら非表示）<textarea id="'+p+'s" rows="2">'+esc(e.msg)+'</textarea></label>'+
@@ -207,6 +208,7 @@ function readOpt(p,name){
   var o={name:name,method:m,visible:q(p+'v').checked,wait:q(p+'w').checked,lap:q(p+'l').checked,names:q(p+'n').checked,golf:q(p+'gf').checked,order:q(p+'o').checked,note:q(p+'t').checked,
     group:q(p+'g').value.trim(),msg:q(p+'s').value.trim(),lapText:q(p+'p').value.trim()};
   o.deadlineMs=(m==='抽選'&&dv)?new Date(dv).getTime():0;
+  var av=q(p+'a').value;o.openAtMs=av?new Date(av).getTime():0;
   return o;
 }
 function rgRow(s,e,m){return '<div class="row rg"><label>開始<input type="time" class="rs" value="'+(s||'')+'"></label><label>終了<input type="time" class="re" value="'+(e||'')+'"></label><label>1枠の長さ(分)<input type="number" class="rm" value="'+(m||60)+'" min="5" style="width:80px"></label><button type="button" class="s d rx">削除</button></div>'}
