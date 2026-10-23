@@ -70,8 +70,34 @@ function wireKeep(rec){
   var ev=rec.eventName||'ご予約';
   q('kc').onclick=function(){var b=this;copyText(fmtCode(rec.id)).then(function(){b.textContent='コピーしました'}).catch(function(){b.textContent='コピーできませんでした'})};
   q('km').onclick=function(){
+    var box=q('mp');if(box){box.remove();return}
     var body=ev+'\n'+slotText(rec)+'\n予約番号：'+fmtCode(rec.id)+'\n\n▼ご予約の確認・変更・キャンセル\n'+myLink(rec)+'\n\n※ このリンクを開くと、ご予約の内容を確認できます。他の方には、送らないでください。';
-    location.href='mailto:'+encodeURIComponent(rec.mail)+'?subject='+encodeURIComponent('【予約の控え】'+ev)+'&body='+encodeURIComponent(body);
+    var subj='【予約の控え】'+ev,to=rec.mail,E=encodeURIComponent;
+    var mobile=/iPhone|iPad|iPod|Android/i.test(navigator.userAgent),ios=/iPhone|iPad|iPod/i.test(navigator.userAgent);
+    var qs=function(k){return k.map(function(p){return p[0]+'='+E(p[1])}).join('&')};
+    var web=function(u){window.open(u,'_blank')};
+    // アプリを開く方式は、入っていないと何も起きないので、少し待っても画面が残っていたら、ウェブ版を開く
+    var tryApp=function(appUrl,webUrl){
+      if(!mobile){web(webUrl);return}
+      var t=setTimeout(function(){if(document.visibilityState==='visible')web(webUrl)},1500);
+      document.addEventListener('visibilitychange',function f(){if(document.hidden){clearTimeout(t);document.removeEventListener('visibilitychange',f)}});
+      location.href=appUrl;
+    };
+    var opts2=[
+      ['標準のメールアプリ',function(){location.href='mailto:'+E(to)+'?'+qs([['subject',subj],['body',body]])}],
+      ['Gmail',function(){
+        var w='https://mail.google.com/mail/?view=cm&fs=1&'+qs([['to',to],['su',subj],['body',body]]);
+        if(ios)tryApp('googlegmail:///co?'+qs([['to',to],['subject',subj],['body',body]]),w);else web(w)}],
+      ['Outlook',function(){
+        var w='https://outlook.live.com/mail/0/deeplink/compose?'+qs([['to',to],['subject',subj],['body',body]]);
+        tryApp('ms-outlook://compose?'+qs([['to',to],['subject',subj],['body',body]]),w)}],
+      ['Yahoo!メール',function(){web('https://compose.mail.yahoo.co.jp/ym/Compose?'+qs([['To',to],['Subject',subj],['Body',body]]))}],
+      ['本文をコピー',function(){var self=this;copyText(subj+'\n\n'+body).then(function(){alert('コピーしました。お使いのメールに貼り付けて、ご自分宛に送ってください。')}).catch(function(){alert('コピーできませんでした。')})}]
+    ];
+    box=document.createElement('div');box.id='mp';box.className='box';box.style.marginTop='10px';
+    box.innerHTML='<b style="font-size:14px">どのメールで控えますか？</b><div class="tools" style="margin:8px 0 0"></div><p class="note" style="margin:8px 0 0">宛先は、お申し込みのメールアドレスです。送信するまで、メールは送られません。</p>';
+    opts2.forEach(function(o){var bt=document.createElement('button');bt.type='button';bt.className='s';bt.textContent=o[0];bt.onclick=function(){o[1].call(bt)};box.querySelector('.tools').appendChild(bt)});
+    q('km').closest('.box').appendChild(box);
   };
   q('kd').onclick=function(){
     var p2=function(n){return ('0'+n).slice(-2)},ymd=rec.date.replace(/-/g,''),allday=rec.start==='00:00'&&rec.end==='24:00';
@@ -214,6 +240,7 @@ function formView(){
    '<label>法人名（法人の場合のみ）<input id="rc" maxlength="50" value="'+esc(r.corp)+'"></label>'+
    '<label>連絡先（電話番号）<input id="rt" type="tel" required autocomplete="tel" value="'+esc(r.tel)+'"></label>'+
    '<label>メールアドレス<input id="rm" type="email" required autocomplete="email" value="'+esc(r.mail)+'"'+(edit?' disabled':'')+'></label>'+
+   '<label>オーナーズカードID（お持ちの方）<input id="oc" maxlength="30" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="latin" placeholder="お持ちでなければ、空欄で結構です" value="'+esc(r.owner)+'"></label>'+
    '<h2 style="font-size:16px">来場人数</h2><div class="g"><label>合計（1〜'+max+'名）<select id="tt"></select></label><label>うち大人<select id="ad"></select></label></div>'+
    '<div class="note" id="kd"></div><div id="bd" class="g3" hidden></div><div class="note" id="bh"></div>'+
    (ev.lap?'<p class="box">'+esc(ev.lapText||RV.LAP_TEXT)+'</p>':'')+
@@ -287,7 +314,7 @@ function gather(){
   var T=+q('tt').value,A=+q('ad').value,kids=T-A;
   var kk=q('bk_')?+q('bk_').value:0,ks=q('bs_')?+q('bs_').value:0,km=q('bm_')?+q('bm_').value:0;
   if(kids&&kk+ks+km!==kids)er.push('お子様の内訳の合計を、お子様の人数（'+kids+'名）に合わせてください');
-  var d={name:get('rn'),corp:get('rc'),tel:get('rt'),mail:edit?S.rec.mail:get('rm'),a:A,k:kk,s:ks,m:km,note:get('nt'),participants:[],car:{},order:!!(q('od')&&q('od').checked),stores:[],staff:{}};
+  var d={owner:get('oc'),name:get('rn'),corp:get('rc'),tel:get('rt'),mail:edit?S.rec.mail:get('rm'),a:A,k:kk,s:ks,m:km,note:get('nt'),participants:[],car:{},order:!!(q('od')&&q('od').checked),stores:[],staff:{}};
   if(!d.name)er.push('代表申込者を入力してください');
   if(!/^[0-9０-９+\-ー－\s]{9,15}$/.test(d.tel))er.push('連絡先（電話番号）を正しく入力してください');
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.mail))er.push('メールアドレスを正しく入力してください');
@@ -350,7 +377,9 @@ function doneView(r,d){
 function lookupView(){
   top();
   app.innerHTML='<button class="l" id="bk">← 戻る</button><h2>ご予約の確認・変更・キャンセル</h2><form id="f"><label>予約番号<input id="lc" autocomplete="off" autocapitalize="characters" placeholder="XXXX-XXXX-XXXX" required></label>'+
-   '<label>メールアドレス（お申し込み時のもの）<input id="lm" type="email" autocomplete="email" required></label><div class="err" id="er"></div><button class="p" id="go" type="submit">確認する</button></form>';
+   '<label>メールアドレス（お申し込み時のもの）<input id="lm" type="email" autocomplete="email" required></label><div class="err" id="er"></div><button class="p" id="go" type="submit">確認する</button></form>'+
+   '<div style="margin-top:22px;text-align:center"><button class="l" id="fo">予約番号がわからない方は、オーナーズカードIDで探す</button></div>';
+  q('fo').onclick=ownerFindView;
   q('bk').onclick=home;
   q('f').onsubmit=async function(e){
     e.preventDefault();busy(true,q('go'),'確認中…');
@@ -359,6 +388,26 @@ function lookupView(){
       if(!r.ok){q('er').textContent=r.msg;busy(false,q('go'),'確認する');return}
       S.rec=Object.assign({id:r.id},r.r);myAdd(r.id,S.rec.mail);S.msg='';await loadForRec();detailView();
     }catch(x){q('er').textContent='通信に失敗しました。もう一度お試しください。（'+(x.code||x.message||'')+'）';busy(false,q('go'),'確認する')}
+  };
+}
+function ownerFindView(){
+  top();
+  app.innerHTML='<button class="l" id="bk">← 戻る</button><h2>オーナーズカードIDで探す<small>お申し込みのときに、オーナーズカードIDを入力された方が、探せます</small></h2><form id="f"><label>オーナーズカードID<input id="fo_id" maxlength="30" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="latin" required></label>'+
+   '<label>メールアドレス（お申し込み時のもの）<input id="fo_m" type="email" autocomplete="email" required></label><div class="err" id="er"></div><button class="p" id="go" type="submit">探す</button></form><div id="fl"></div>';
+  q('bk').onclick=lookupView;
+  q('f').onsubmit=async function(e){
+    e.preventDefault();busy(true,q('go'),'探しています…');q('fl').innerHTML='';
+    try{
+      var r=await C.findByOwner(q('fo_id').value,q('fo_m').value);
+      busy(false,q('go'),'探す');
+      if(!r.ok){q('er').textContent=r.msg;return}
+      q('er').textContent='';
+      q('fl').innerHTML='<h2 style="font-size:16px">見つかったご予約</h2>'+r.list.map(function(x,i){var v=x.r;
+        return '<div class="card"><div>'+stBadge(v)+'</div><p style="margin:8px 0 0"><b>'+esc(v.eventName)+'</b><br>'+day(v.date)+' '+rng(v)+'<br>'+esc(v.name)+' 様　'+v.n+'名<br><span class="note">予約番号 '+fmtCode(x.id)+'</span></p><button class="s" data-o="'+i+'">開く（変更・キャンセル）</button></div>'}).join('');
+      q('fl').querySelectorAll('[data-o]').forEach(function(b){b.onclick=async function(){
+        var x=r.list[+b.dataset.o];S.rec=Object.assign({id:x.id},x.r);myAdd(x.id,S.rec.mail);S.msg='';b.disabled=true;
+        try{await loadForRec();detailView()}catch(er){b.disabled=false;alert('通信に失敗しました。もう一度お試しください。')}}});
+    }catch(x){busy(false,q('go'),'探す');q('er').textContent='通信に失敗しました。もう一度お試しください。（'+(x.code||x.message||'')+'）'}
   };
 }
 async function loadForRec(){
