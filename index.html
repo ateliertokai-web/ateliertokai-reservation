@@ -27,6 +27,20 @@ function dl(ev){return ev.deadlineMs?new Date(ev.deadlineMs).toLocaleString('ja-
 function opts(a,b,sel){var o='';for(var i=a;i<=b;i++)o+='<option'+(i===sel?' selected':'')+'>'+i+'</option>';return o}
 function busy(on,btn,txt){if(btn){btn.disabled=on;if(txt)btn.textContent=txt}}
 function top(){window.scrollTo(0,0)}
+/* サーバーの時刻に合わせる（お客様のスマホの時計がずれていても、受付開始の判定がずれないように） */
+var TOFF=0;
+function nowS(){return Date.now()+TOFF}
+function syncTime(){
+  return Promise.race([
+    fetch(location.pathname,{method:'HEAD',cache:'no-store'}).then(function(r){var d=r.headers.get('Date');if(d){var t=new Date(d).getTime();if(t)TOFF=t-Date.now()}}).catch(function(){}),
+    new Promise(function(res){setTimeout(res,2500)})
+  ]);
+}
+function openText(ms){
+  var d=new Date(ms),n=new Date(nowS()),p=function(x){return ('0'+x).slice(-2)},t=d.getHours()+':'+p(d.getMinutes());
+  var same=d.getFullYear()===n.getFullYear()&&d.getMonth()===n.getMonth()&&d.getDate()===n.getDate();
+  return same?'本日 '+t:(d.getMonth()+1)+'月'+d.getDate()+'日（'+WD[d.getDay()]+'） '+t;
+}
 /* 車種：全角英数を半角にする（大文字・小文字はそのまま） */
 function fixModel(v){return v.replace(/[ａ-ｚＡ-Ｚ０-９]/g,function(c){return String.fromCharCode(c.charCodeAt(0)-65248)})}
 /* この端末に予約番号を覚えておく（メールアドレスも一緒に保存。共用端末では「この端末から消す」で削除できます） */
@@ -56,12 +70,12 @@ async function home(){
     if(!evs.length)h+='<div class="card note">現在、受付中のイベントはありません。</div>';
     var soon=0;
     evs.forEach(function(e,i){
-      var notYet=e.openAtMs&&Date.now()<e.openAtMs;
+      var notYet=e.openAtMs&&nowS()<e.openAtMs;
       if(notYet&&(!soon||e.openAtMs<soon))soon=e.openAtMs;
-      var closed=e.method==='抽選'&&(e.drawn||(e.deadlineMs&&Date.now()>e.deadlineMs));
+      var closed=e.method==='抽選'&&(e.drawn||(e.deadlineMs&&nowS()>e.deadlineMs));
       var inner='<b>'+esc(e.name)+'</b>'+
         (e.method==='抽選'?'<span class="tag k">抽選</span><span>'+(closed?'受付は終了しました':'締切 '+dl(e))+'</span>':'<span class="tag">先着順</span>')+
-        (notYet?'<br><span class="tag w">受付開始 '+new Date(e.openAtMs).toLocaleString('ja-JP',{month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'})+'</span>':'');
+        (notYet?'<div class="note" style="margin-top:6px;color:#8a6d2f"><b>ご予約は '+openText(e.openAtMs)+' からです</b><br><span class="cd" data-t="'+e.openAtMs+'"></span></div>':'');
       h+='<button class="ev" data-i="'+i+'"'+((closed||notYet)?' disabled style="opacity:.55"':'')+'>'+(e.thumb?'<div class="evr"><img class="evimg" src="'+e.thumb+'" alt=""><div>'+inner+'</div></div>':inner)+'</button>';
     });
     var mine=myGet();
@@ -74,7 +88,19 @@ async function home(){
     q('lk').onclick=lookupView;
     if(mine.length)loadMine(mine);
     // 受付開始の時刻になったら、自動で画面を更新する
-    if(soon){var wait=soon-Date.now()+1500;if(wait>0&&wait<2147483000)setTimeout(function(){if(q('lk'))home()},wait)}
+    if(soon){
+      var tick=function(){
+        if(!q('lk')){clearInterval(iv);return}
+        var left=soon-nowS();
+        if(left<=0){clearInterval(iv);home();return}
+        app.querySelectorAll('.cd').forEach(function(s){
+          var l=(+s.dataset.t)-nowS();
+          if(l<=0){s.textContent='';return}
+          if(l<=3600000){var m=Math.floor(l/60000),sec=Math.floor(l%60000/1000);s.textContent='受付開始まで あと '+m+'分'+('0'+sec).slice(-2)+'秒'}else s.textContent='';
+        });
+      };
+      var iv=setInterval(tick,1000);tick();
+    }
   }catch(e){app.innerHTML='<div class="card err">読み込めませんでした。電波の良い場所で、もう一度お試しください。</div>'}
 }
 
@@ -104,6 +130,7 @@ async function loadMine(mine){
 
 /* ---------- 日時の選択 ---------- */
 async function pickSlot(){
+  if(S.ev&&S.ev.openAtMs&&nowS()<S.ev.openAtMs){home();return}
   top();
   app.innerHTML='<p class="note" style="text-align:center;padding:40px 0">読み込み中…</p>';
   try{
@@ -269,7 +296,7 @@ async function submit(){
       if(r.ok){myAdd(r.id,g.d.mail);return doneView(r,g.d)}
     }
     er.textContent=r.msg||'処理できませんでした';
-  }catch(e){er.textContent='通信に失敗しました。電波の良い場所で、もう一度お試しください。（'+(e.code||e.message||'')+'）'}
+  }catch(e){er.textContent=e.code==='permission-denied'?'お申し込みを受け付けられませんでした。受付開始前、または受付が終了している可能性があります。画面を更新して、もう一度お試しください。':'通信に失敗しました。電波の良い場所で、もう一度お試しください。（'+(e.code||e.message||'')+'）'}
   busy(false,btn,S.mode==='edit'?'変更を保存する':S.ev.method==='抽選'?'抽選に申し込む':'予約する');
 }
 
@@ -340,7 +367,7 @@ if(typeof firebase==='undefined'||!window.FIREBASE_CONFIG||/ここに/.test(FIRE
 }else{
   firebase.initializeApp(FIREBASE_CONFIG);
   C=makeCore(firebase,firebase.firestore());
-  home();
+  syncTime().then(home);
 }
 })();
 </script>
