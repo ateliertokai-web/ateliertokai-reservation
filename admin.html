@@ -241,7 +241,7 @@ function evView(){
   q('ar').onclick=function(){var rows=app.querySelectorAll('.rg'),m=rows[0]?rows[0].querySelector('.rm').value:60,d=document.createElement('div');d.innerHTML=rgRow('','',m);q('rngs').appendChild(d.firstChild);rgWire()};
   q('cad').onchange=function(){var on=q('cad').checked;['cbs','cbe','cbc','ar'].forEach(function(i){q(i).disabled=on});app.querySelectorAll('.rs,.re,.rm,.rx').forEach(function(x){x.disabled=on})};
   wireImgs('nw',[]);
-  var syncCx=function(){var g=+q('cg').value,p=+q('cp').value;if(!g&&p>0){q('cx').value=p;q('cx').readOnly=true}else{q('cx').readOnly=false}};q('cg').oninput=syncCx;q('cp').oninput=syncCx;syncCx();
+  var cxMan=false;q('cx').oninput=function(){cxMan=true};var syncCx=function(){var g=+q('cg').value,p=+q('cp').value;if(!cxMan&&!g&&p>0)q('cx').value=p};q('cg').oninput=syncCx;q('cp').oninput=syncCx;syncCx();
   q('cn').oninput=function(){var ex=S.events.some(function(e){return e.name===q('cn').value.trim()});q('newopt').hidden=ex};
   q('cf').onsubmit=async function(e){
     e.preventDefault();q('cer').textContent='';
@@ -270,6 +270,9 @@ async function openEv(i){
      return '<tr data-s="'+s.id+'"><td>'+md(s.date)+' '+rng(s)+'</td><td><input type="number" data-k="g" value="'+s.capG+'"></td><td><input type="number" data-k="p" value="'+(s.capP||0)+'"></td><td><input type="number" data-k="x" value="'+s.maxPer+'"></td><td>'+(s.booked||0)+'組・'+(s.people||0)+'名</td><td><button class="s" data-a="ss">保存</button> <button class="s d" data-a="sd">削除</button></td></tr>';
    }).join('')+'</table></div></details>';
   try{var ei=await C.eimgs.doc(e.id).get();wireImgs('e'+i,ei.exists?ei.data().imgs:[])}catch(x){wireImgs('e'+i,[])}
+  box.addEventListener('input',function(ev){var t=ev.target,tr=t.closest&&t.closest('tr[data-s]');if(!tr||!t.dataset.k)return;
+    if(t.dataset.k==='x'){tr.dataset.xm='1';return}
+    if(tr.dataset.xm)return;var gv=+tr.querySelector('[data-k=g]').value,pv=+tr.querySelector('[data-k=p]').value;if(!gv&&pv>0)tr.querySelector('[data-k=x]').value=pv});
   box.onclick=async function(ev){
     var b=ev.target.closest('[data-a]');if(!b)return;var a=b.dataset.a;
     try{
@@ -282,7 +285,7 @@ async function openEv(i){
         await C.deleteEvent(e.id);say('削除しました');await go()
       }else if(a==='ss'){
         var tr=b.closest('tr'),g=function(k){return +tr.querySelector('[data-k='+k+']').value};
-        var mx=(g('g')===0&&g('p')>0)?g('p'):g('x');await C.slots.doc(tr.dataset.s).update({capG:g('g'),capP:g('p'),maxPer:mx});tr.querySelector('[data-k=x]').value=mx;say('枠を保存しました')
+        var mx=g('x');await C.slots.doc(tr.dataset.s).update({capG:g('g'),capP:g('p'),maxPer:mx});tr.querySelector('[data-k=x]').value=mx;say('枠を保存しました')
       }else if(a==='sd'){
         var tr2=b.closest('tr');if(!confirm('この枠を削除します。この枠への予約が残っている場合は、先に取り消してください。'))return;
         await C.slots.doc(tr2.dataset.s).delete();tr2.remove();say('枠を削除しました')

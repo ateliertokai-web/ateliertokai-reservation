@@ -299,7 +299,7 @@ function makeCore(firebase, db, opts) {
     dates.forEach(function (date) {
       times.forEach(function (t) {
         var sid = newId();
-        ops.push(function (b) { b.set(slots.doc(sid), { eventId: eventId, eventName: ev.name, date: date, start: t[0], end: t[1], capG: +o.capG || 0, capP: +o.capP || 0, maxPer: (!(+o.capG) && +o.capP) ? +o.capP : (+o.maxPer || 4), booked: 0, people: 0, waitSeq: 0 }); });
+        ops.push(function (b) { b.set(slots.doc(sid), { eventId: eventId, eventName: ev.name, date: date, start: t[0], end: t[1], capG: +o.capG || 0, capP: +o.capP || 0, maxPer: +o.maxPer || ((!(+o.capG) && +o.capP) ? +o.capP : 4), booked: 0, people: 0, waitSeq: 0 }); });
       });
     });
     await chunked(ops);
