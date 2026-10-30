@@ -203,7 +203,8 @@ async function pickSlot(){
   if(!S.slots.length)h+='<div class="card note">現在、選べる日時がありません。</div>';
   S.slots.forEach(function(s,i){
     if(s.date!==cur){cur=s.date;h+='<h2 style="font-size:16px">'+day(s.date)+'</h2>'}
-    var full=!ev.method||ev.method==='先着'?((s.capG&&(s.booked||0)>=s.capG)||(s.capP&&(s.people||0)>=s.capP)):false;ev.method==='抽選'?'<em>抽選受付中</em>':full?(ev.wait?'<em class="f">満席・キャンセル待ち</em>':'<em class="f">満席</em>'):(s.capG?'<em>残り '+Math.max(0,s.capG-(s.booked||0))+'組</em>':s.capP?'<em>残り '+Math.max(0,s.capP-(s.people||0))+'名</em>':'<em>受付中</em>');
+    var full=!ev.method||ev.method==='先着'?((s.capG&&(s.booked||0)>=s.capG)||(s.capP&&(s.people||0)>=s.capP)):false;
+    var lab=ev.method==='抽選'?'<em>抽選受付中</em>':full?(ev.wait?'<em class="f">満席・キャンセル待ち</em>':'<em class="f">満席</em>'):(s.capG?'<em>残り '+Math.max(0,s.capG-(s.booked||0))+'組</em>':s.capP?'<em>残り '+Math.max(0,s.capP-(s.people||0))+'名</em>':'<em>受付中</em>');
     h+='<button class="slot" data-i="'+i+'"'+(full&&!ev.wait?' disabled':'')+'><b>'+rng(s)+'</b>'+lab+'</button>';
   });
   app.innerHTML=h;
