@@ -11,7 +11,7 @@ function makeCore(firebase, db, opts) {
   var now = opts.now || function () { return Date.now(); };
   var sleep = opts.sleep || function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
   var FV = firebase.firestore.FieldValue;
-  var events = db.collection('events'), slots = db.collection('slots'), res = db.collection('reservations'), apps = db.collection('applicants'), eimgs = db.collection('eventImages');
+  var events = db.collection('events'), slots = db.collection('slots'), res = db.collection('reservations'), apps = db.collection('applicants'), eimgs = db.collection('eventImages'), owners = db.collection('owners');
 
   var fail = function (m) { return { ok: false, msg: m }; };
   var ok = function (x) { var o = { ok: true }; for (var k in (x || {})) o[k] = x[k]; return o; };
@@ -27,6 +27,12 @@ function makeCore(firebase, db, opts) {
     return Array.prototype.map.call(new Uint8Array(b), function (x) { return ('0' + x.toString(16)).slice(-2); }).join('');
   }
   // 同じイベント（同一イベントグループ）には、同じメールアドレスで1回だけ申し込める
+  // オーナーズカードID: 全角→半角、空白・ハイフンを除く（大文字小文字はそのまま）
+  function normOwner(s) {
+    return String(s || '').replace(/[Ａ-Ｚａ-ｚ０-９]/g, function (ch) { return String.fromCharCode(ch.charCodeAt(0) - 65248); }).replace(/[\s\-ー－‐]/g, '');
+  }
+  // 「オーナーズカードID＋メールアドレス」を知っている人だけが引ける目印（予約番号の一覧）
+  function ownerKey(owner, mail) { return sha('o:' + normOwner(owner) + '|' + normMail(mail)); }
   function appKey(ev, eventId, mail) { return sha((ev && ev.group ? 'g:' + ev.group : 'e:' + eventId) + '|' + normMail(mail)); }
 
   async function withRetry(fn, onRetry) {
@@ -45,12 +51,13 @@ function makeCore(firebase, db, opts) {
     return fail('混み合っていて処理できませんでした。少し待ってもう一度お試しください');
   }
 
-  var fits = function (s, n, extraGroups) { return (s.booked || 0) + (extraGroups || 1) <= s.capG && (!s.capP || (s.people || 0) + n <= s.capP); };
+  var fits = function (s, n, extraGroups) { return (!s.capG || (s.booked || 0) + (extraGroups || 1) <= s.capG) && (!s.capP || (s.people || 0) + n <= s.capP); };
 
   /* ---------- お客様: 申し込み ---------- */
   async function book(slotId, d) {
     var id = newId();
-    d = Object.assign({}, d, { mail: normMail(d.mail) });
+    d = Object.assign({}, d, { mail: normMail(d.mail), owner: normOwner(d.owner) });
+    var okey = d.owner ? await ownerKey(d.owner, d.mail) : '';
     return withRetry(function () {
       return db.runTransaction(async function (tx) {
         var sRef = slots.doc(slotId), sS = await tx.get(sRef);
@@ -76,6 +83,7 @@ function makeCore(firebase, db, opts) {
         var doc = Object.assign({}, d, { n: n, eventId: s.eventId, eventName: ev.name, slotId: slotId, date: s.date, start: s.start, end: s.end,
           status: status, waitNo: waitNo, fav: false, createdAt: FV.serverTimestamp(), updatedAt: FV.serverTimestamp() });
         tx.set(res.doc(id), doc);
+        if (okey) tx.set(owners.doc(okey), { ids: FV.arrayUnion(id) }, { merge: true });
         tx.set(aRef, { resId: id, at: now() });
         if (upd) tx.update(sRef, upd);
         return ok({ id: id, status: status, waitNo: waitNo });
@@ -89,6 +97,23 @@ function makeCore(firebase, db, opts) {
     var s = await res.doc(id).get();
     if (!s.exists || s.data().mail !== normMail(mail)) return fail('予約番号またはメールアドレスが違います');
     return ok({ id: id, r: s.data() });
+  }
+
+  /* ---------- 予約番号を忘れたとき: オーナーズカードID＋メールアドレスで探す ---------- */
+  async function findByOwner(owner, mail) {
+    owner = normOwner(owner); mail = normMail(mail);
+    var NG = '見つかりませんでした。オーナーズカードIDとメールアドレスを、お申し込みのときと同じ内容で、ご確認ください';
+    if (!owner || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)) return fail(NG);
+    var s = await owners.doc(await ownerKey(owner, mail)).get();
+    var ids = (s.exists && s.data().ids) || [], out = [];
+    ids = ids.slice(-30);
+    for (var i = 0; i < ids.length; i++) {
+      var r = await res.doc(ids[i]).get();
+      if (r.exists && r.data().mail === mail) out.push({ id: ids[i], r: r.data() });
+    }
+    if (!out.length) return fail(NG);
+    out.sort(function (p, q) { return (q.r.date + q.r.start) < (p.r.date + p.r.start) ? -1 : 1; });
+    return ok({ list: out });
   }
 
   /* ---------- キャンセル（お客様・管理者） ---------- */
@@ -115,7 +140,7 @@ function makeCore(firebase, db, opts) {
   }
 
   /* ---------- お客様: 内容の変更（人数・名前・連絡先・時間帯） ---------- */
-  var EDIT = ['name', 'corp', 'tel', 'a', 'k', 's', 'm', 'participants', 'note', 'car', 'order', 'stores', 'staff'];
+  var EDIT = ['owner', 'name', 'corp', 'tel', 'a', 'k', 's', 'm', 'participants', 'note', 'car', 'order', 'stores', 'staff'];
   async function change(id, mail, patch, newSlotId) {
     return withRetry(function () {
       return db.runTransaction(async function (tx) {
@@ -129,7 +154,9 @@ function makeCore(firebase, db, opts) {
         if (moving) { newRef = slots.doc(newSlotId); newS = await tx.get(newRef); }
         var eS = await tx.get(events.doc(r.eventId)), ev = eS.exists ? eS.data() : {};
         var upd = {}, waited = 0;
+        if (patch && patch.owner !== undefined) patch = Object.assign({}, patch, { owner: normOwner(patch.owner) });
         EDIT.forEach(function (k) { if (patch && patch[k] !== undefined) upd[k] = patch[k]; });
+        if (upd.owner && upd.owner !== r.owner) tx.set(owners.doc(await ownerKey(upd.owner, r.mail)), { ids: FV.arrayUnion(id) }, { merge: true });
         var m2 = Object.assign({}, r, upd);
         var n = (+m2.a || 0) + (+m2.k || 0) + (+m2.s || 0) + (+m2.m || 0);
         upd.n = n;
@@ -207,7 +234,7 @@ function makeCore(firebase, db, opts) {
       var favs = shuffle(list.filter(function (x) { return x.r.fav; })), rest = shuffle(list.filter(function (x) { return !x.r.fav; }));
       var booked = s.booked || 0, people = s.people || 0, seq = s.waitSeq || 0, over = [];
       favs.concat(rest).forEach(function (x) {
-        if (booked + 1 <= s.capG && (!s.capP || people + x.r.n <= s.capP)) {
+        if ((!s.capG || booked + 1 <= s.capG) && (!s.capP || people + x.r.n <= s.capP)) {
           booked++; people += x.r.n; win++;
           ops.push(function (b) { b.update(res.doc(x.id), { status: 'won', updatedAt: FV.serverTimestamp() }); });
         } else over.push(x);
@@ -272,7 +299,7 @@ function makeCore(firebase, db, opts) {
     dates.forEach(function (date) {
       times.forEach(function (t) {
         var sid = newId();
-        ops.push(function (b) { b.set(slots.doc(sid), { eventId: eventId, eventName: ev.name, date: date, start: t[0], end: t[1], capG: +o.capG, capP: +o.capP || 0, maxPer: +o.maxPer || 4, booked: 0, people: 0, waitSeq: 0 }); });
+        ops.push(function (b) { b.set(slots.doc(sid), { eventId: eventId, eventName: ev.name, date: date, start: t[0], end: t[1], capG: +o.capG || 0, capP: +o.capP || 0, maxPer: (!(+o.capG) && +o.capP) ? +o.capP : (+o.maxPer || 4), booked: 0, people: 0, waitSeq: 0 }); });
       });
     });
     await chunked(ops);
@@ -289,6 +316,7 @@ function makeCore(firebase, db, opts) {
   }
 
   return { book: book, lookup: lookup, cancel: cancel, change: change, promote: promote, runLottery: runLottery, recount: recount,
+    findByOwner: findByOwner, normOwner: normOwner, owners: owners,
     createSlots: createSlots, makeTimes: makeTimes, deleteEvent: deleteEvent, newId: newId, normMail: normMail, isFixed: isFixed, ms: ms,
     events: events, slots: slots, res: res, apps: apps, eimgs: eimgs };
 }

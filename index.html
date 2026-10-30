@@ -203,8 +203,7 @@ async function pickSlot(){
   if(!S.slots.length)h+='<div class="card note">現在、選べる日時がありません。</div>';
   S.slots.forEach(function(s,i){
     if(s.date!==cur){cur=s.date;h+='<h2 style="font-size:16px">'+day(s.date)+'</h2>'}
-    var full=!ev.method||ev.method==='先着'?((s.booked||0)>=s.capG||(s.capP&&(s.people||0)>=s.capP)):false;
-    var lab=ev.method==='抽選'?'<em>抽選受付中</em>':full?(ev.wait?'<em class="f">満席・キャンセル待ち</em>':'<em class="f">満席</em>'):'<em>残り '+Math.max(0,s.capG-(s.booked||0))+'組</em>';
+    var full=!ev.method||ev.method==='先着'?((s.capG&&(s.booked||0)>=s.capG)||(s.capP&&(s.people||0)>=s.capP)):false;ev.method==='抽選'?'<em>抽選受付中</em>':full?(ev.wait?'<em class="f">満席・キャンセル待ち</em>':'<em class="f">満席</em>'):(s.capG?'<em>残り '+Math.max(0,s.capG-(s.booked||0))+'組</em>':s.capP?'<em>残り '+Math.max(0,s.capP-(s.people||0))+'名</em>':'<em>受付中</em>');
     h+='<button class="slot" data-i="'+i+'"'+(full&&!ev.wait?' disabled':'')+'><b>'+rng(s)+'</b>'+lab+'</button>';
   });
   app.innerHTML=h;
@@ -231,7 +230,7 @@ function formView(){
    '<h2>'+esc(ev.name)+'<small>'+day(s.date)+' '+rng(s)+'</small></h2>';
   if(ev.msg)h+='<div class="box">'+esc(ev.msg).replace(/\n/g,'<br>')+'</div>';
   if(!edit&&ev.method==='抽選')h+='<p class="box">抽選のお申し込みです。'+dl(ev)+'に締め切ります。結果は「ご予約の確認・変更」で、予約番号とメールアドレスを入力してご確認ください。</p>';
-  if(!edit&&ev.method!=='抽選'&&((s.booked||0)>=s.capG||(s.capP&&(s.people||0)>=s.capP)))h+='<p class="box">この枠は満席です。キャンセル待ちとして受け付けます。空きが出た場合は、店舗からご連絡します。</p>';
+  if(!edit&&ev.method!=='抽選'&&((s.capG&&(s.booked||0)>=s.capG)||(s.capP&&(s.people||0)>=s.capP)))h+='<p class="box">この枠は満席です。キャンセル待ちとして受け付けます。空きが出た場合は、店舗からご連絡します。</p>';
   if(edit&&S.slots.length>1){
     h+='<label>時間帯を変更する<select id="ns">'+S.slots.map(function(x){return '<option value="'+x.id+'"'+(x.id===s.id?' selected':'')+'>'+day(x.date)+' '+rng(x)+'</option>'}).join('')+'</select></label>';
   }
@@ -342,7 +341,7 @@ async function submit(){
       var ns=q('ns')?q('ns').value:S.slot.id;
       if(ns!==S.slot.id){
         var tg=S.slots.filter(function(x){return x.id===ns})[0],nn=g.d.a+g.d.k+g.d.s+g.d.m;
-        var fullT=tg&&((tg.booked||0)>=tg.capG||(tg.capP&&(tg.people||0)+nn>tg.capP));
+        var fullT=tg&&((tg.capG&&(tg.booked||0)>=tg.capG)||(tg.capP&&(tg.people||0)+nn>tg.capP));
         if(fullT&&S.rec.status==='confirmed'){
           if(S.ev.wait===false||S.ev.method==='抽選'){alert('恐れ入ります。ご希望の時間帯は満席のため、変更をお受けできません。現在のご予約はそのままです。');return}
           if(!confirm('ご希望の時間帯は、現在満席です。\n\n変更をお進めいただくと「キャンセル待ち」となり、元のお時間のご予約は解放されます。空きが出なかった場合、ご参加いただけないこともございます。\n\nこのまま変更しますか？'))return;
