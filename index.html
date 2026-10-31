@@ -251,7 +251,7 @@ function formView(){
    '<label>代表申込者（個人名）<input id="rn" required maxlength="50" autocomplete="name" value="'+esc(r.name)+'"></label>'+
    '<label>法人名（法人の場合のみ）<input id="rc" maxlength="50" value="'+esc(r.corp)+'"></label>'+
    '<label>連絡先（電話番号）<input id="rt" type="tel" required autocomplete="tel" value="'+esc(r.tel)+'"></label>'+
-   '<label>メールアドレス<input id="rm" type="email" required autocomplete="email" value="'+esc(r.mail)+'"'+(edit?' disabled':'')+'></label>'+
+   '<label>メールアドレス'+(ev.mailOpt?'（任意）':'')+'<input id="rm" type="email" '+(ev.mailOpt?'':'required ')+'autocomplete="email" value="'+esc(r.mail)+'"'+(edit?' disabled':'')+'></label>'+
    '<label>オーナーズカードID（お持ちの方）<input id="oc" maxlength="30" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="latin" placeholder="お持ちでなければ、空欄で結構です" value="'+esc(r.owner)+'"></label>'+
    '<h2 style="font-size:16px">来場人数</h2><div class="g"><label>合計（1〜'+max+'名）<select id="tt"></select></label><label>うち大人<select id="ad"></select></label></div>'+
    '<div class="note" id="kd"></div><div id="bd" class="g3" hidden></div><div class="note" id="bh"></div>'+
@@ -329,7 +329,7 @@ function gather(){
   var d={owner:get('oc'),name:get('rn'),corp:get('rc'),tel:get('rt'),mail:edit?S.rec.mail:get('rm'),a:A,k:kk,s:ks,m:km,note:get('nt'),participants:[],car:{},order:!!(q('od')&&q('od').checked),stores:[],staff:{}};
   if(!d.name)er.push('代表申込者を入力してください');
   if(!/^[0-9０-９+\-ー－\s]{9,15}$/.test(d.tel))er.push('連絡先（電話番号）を正しく入力してください');
-  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.mail))er.push('メールアドレスを正しく入力してください');
+  if(d.mail?!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.mail):(!S.ev.mailOpt&&S.mode!=='edit'))er.push('メールアドレスを正しく入力してください');
   if(q('pn'))d.participants=[].map.call(q('pn').querySelectorAll('input'),function(i){return i.value.trim()});
   if(!d.order){
     d.car={pref:get('pf'),cls:get('cl'),kana:get('kn'),num:get('nm'),model:fixModel(get('md'))};
@@ -390,7 +390,7 @@ function doneView(r,d){
 function lookupView(){
   top();
   app.innerHTML='<button class="l" id="bk">← 戻る</button><h2>ご予約の確認・変更・キャンセル</h2><form id="f"><label>予約番号<input id="lc" autocomplete="off" autocapitalize="characters" placeholder="XXXX-XXXX-XXXX" required></label>'+
-   '<label>メールアドレス（お申し込み時のもの）<input id="lm" type="email" autocomplete="email" required></label><div class="err" id="er"></div><button class="p" id="go" type="submit">確認する</button></form>'+
+   '<label>メールアドレス（お申し込み時に入力した方のみ）<input id="lm" type="email" autocomplete="email"></label><div class="err" id="er"></div><button class="p" id="go" type="submit">確認する</button></form>'+
    '<div style="margin-top:22px;text-align:center"><button class="l" id="fo">予約番号がわからない方は、オーナーズカードIDで探す</button></div>';
   q('fo').onclick=ownerFindView;
   q('bk').onclick=home;
@@ -460,7 +460,7 @@ function cancelView(){
 
 /* ---------- メールの控えのリンクから開く（#r=予約番号&m=メール） ---------- */
 async function openFromLink(){
-  var m=/^#r=([A-Za-z0-9]{12})&m=(.+)$/.exec(location.hash||'');
+  var m=/^#r=([A-Za-z0-9]{12})&m=(.*)$/.exec(location.hash||'');
   if(!m)return home();
   try{history.replaceState(null,'',location.pathname+location.search)}catch(e){}
   try{

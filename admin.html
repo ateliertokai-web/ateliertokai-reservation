@@ -207,13 +207,13 @@ function optHTML(p,e){
    '<label>抽選の締切<input type="datetime-local" id="'+p+'d" value="'+dtl(e.deadlineMs)+'"></label>'+
    '<label>受付の開始日時（空欄なら、今すぐ受付）<input type="datetime-local" id="'+p+'a" value="'+dtl(e.openAtMs)+'"></label>'+
    '<label>同一イベントグループ名（連日予約防止用）<input id="'+p+'g" value="'+esc(e.group)+'" placeholder="例：サッカー観戦"></label></div>'+
-   '<div>'+chk(p+'v',e.visible!==false,'お客様画面に表示する')+chk(p+'w',e.wait!==false,'満席時にキャンセル待ちを受け付ける')+chk(p+'l',!!e.lap,'未就学児の注意文を表示')+chk(p+'n',!!e.names,'参加者名の入力欄を表示')+chk(p+'gf',!!e.golf,'ゴルフ（お子様の選択なし・参加者名を自動で表示）')+chk(p+'o',!!e.order,'ご注文中・新規のお客様チェック欄を表示')+chk(p+'t',!!e.note,'お客様ページに備考欄を作成')+'</div>'+
+   '<div>'+chk(p+'v',e.visible!==false,'お客様画面に表示する')+chk(p+'w',e.wait!==false,'満席時にキャンセル待ちを受け付ける')+chk(p+'l',!!e.lap,'未就学児の注意文を表示')+chk(p+'n',!!e.names,'参加者名の入力欄を表示')+chk(p+'gf',!!e.golf,'ゴルフ（お子様の選択なし・参加者名を自動で表示）')+chk(p+'mo',!!e.mailOpt,'メールアドレスを任意にする（空欄でも予約できます）')+chk(p+'o',!!e.order,'ご注文中・新規のお客様チェック欄を表示')+chk(p+'t',!!e.note,'お客様ページに備考欄を作成')+'</div>'+
    '<label>お客様画面に出すメッセージ（空欄なら非表示）<textarea id="'+p+'s" rows="2">'+esc(e.msg)+'</textarea></label>'+
    '<label>未就学児の注意文（空欄なら標準の文）<textarea id="'+p+'p" rows="2">'+esc(e.lapText)+'</textarea></label>'+imgHTML(p);
 }
 function readOpt(p,name){
   var m=q(p+'m').value,dv=q(p+'d').value;
-  var o={name:name,method:m,visible:q(p+'v').checked,wait:q(p+'w').checked,lap:q(p+'l').checked,names:q(p+'n').checked,golf:q(p+'gf').checked,order:q(p+'o').checked,note:q(p+'t').checked,
+  var o={name:name,method:m,visible:q(p+'v').checked,wait:q(p+'w').checked,lap:q(p+'l').checked,names:q(p+'n').checked,golf:q(p+'gf').checked,mailOpt:q(p+'mo').checked,order:q(p+'o').checked,note:q(p+'t').checked,
     group:q(p+'g').value.trim(),msg:q(p+'s').value.trim(),lapText:q(p+'p').value.trim()};
   o.deadlineMs=(m==='抽選'&&dv)?new Date(dv).getTime():0;
   var av=q(p+'a').value;o.openAtMs=av?new Date(av).getTime():0;
@@ -276,7 +276,7 @@ async function openEv(i){
     if(tr.dataset.xm)return;var gv=+tr.querySelector('[data-k=g]').value,pv=+tr.querySelector('[data-k=p]').value;if(!gv&&pv>0)tr.querySelector('[data-k=x]').value=pv});
   box.onclick=async function(ev){
     var b=ev.target.closest('[data-a]');if(!b)return;var a=b.dataset.a;
-    if(a==='pv'){window.open('index.html?pv=1','_blank');return}
+    if(a==='pv'){window.open('./?pv=1&t='+Date.now(),'_blank');return}
     try{
       if(a==='save'){
         var o=readOpt('e'+i,e.name);

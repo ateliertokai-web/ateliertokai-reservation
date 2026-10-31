@@ -33,7 +33,7 @@ function makeCore(firebase, db, opts) {
   }
   // 「オーナーズカードID＋メールアドレス」を知っている人だけが引ける目印（予約番号の一覧）
   function ownerKey(owner, mail) { return sha('o:' + normOwner(owner) + '|' + normMail(mail)); }
-  function appKey(ev, eventId, mail) { return sha((ev && ev.group ? 'g:' + ev.group : 'e:' + eventId) + '|' + normMail(mail)); }
+  function appKey(ev, eventId, mail, tel) { return sha((ev && ev.group ? 'g:' + ev.group : 'e:' + eventId) + '|' + (normMail(mail) || ('tel:' + String(tel || '').replace(/\D/g, '')))); }
 
   async function withRetry(fn, onRetry) {
     for (var i = 0; i < 10; i++) {
@@ -57,7 +57,7 @@ function makeCore(firebase, db, opts) {
   async function book(slotId, d) {
     var id = newId();
     d = Object.assign({}, d, { mail: normMail(d.mail), owner: normOwner(d.owner) });
-    var okey = d.owner ? await ownerKey(d.owner, d.mail) : '';
+    var okey = d.owner && d.mail ? await ownerKey(d.owner, d.mail) : '';
     return withRetry(function () {
       return db.runTransaction(async function (tx) {
         var sRef = slots.doc(slotId), sS = await tx.get(sRef);
@@ -73,8 +73,8 @@ function makeCore(firebase, db, opts) {
         }
         var n = (+d.a || 0) + (+d.k || 0) + (+d.s || 0) + (+d.m || 0);
         if (n < 1 || n > s.maxPer) return fail('人数は1〜' + s.maxPer + '名で入力してください');
-        var ak = await appKey(ev, s.eventId, d.mail), aRef = apps.doc(ak), aS = await tx.get(aRef);
-        if (aS.exists) return fail('このメールアドレスは、すでにこのイベントにお申し込み済みです。内容の変更・キャンセルは「予約の確認・変更」から行えます');
+        var ak = await appKey(ev, s.eventId, d.mail, d.tel), aRef = apps.doc(ak), aS = await tx.get(aRef);
+        if (aS.exists) return fail('このメールアドレス（メールなしの場合は連絡先）は、すでにこのイベントにお申し込み済みです。内容の変更・キャンセルは「予約の確認・変更」から行えます');
         var status, upd = null, waitNo = 0;
         if (lot) status = 'lottery';
         else if (fits(s, n)) { status = 'confirmed'; upd = { booked: (s.booked || 0) + 1, people: (s.people || 0) + n }; }
@@ -126,7 +126,7 @@ function makeCore(firebase, db, opts) {
         if (!admin && r.mail !== normMail(mail)) return fail('予約番号またはメールアドレスが違います');
         if (r.status === 'cancel') return fail('すでにキャンセル済みです');
         var sRef = slots.doc(r.slotId), sS = await tx.get(sRef), eS = await tx.get(events.doc(r.eventId));
-        var ak = await appKey(eS.exists ? eS.data() : null, r.eventId, r.mail);
+        var ak = await appKey(eS.exists ? eS.data() : null, r.eventId, r.mail, r.tel);
         tx.update(rRef, { status: 'cancel', updatedAt: FV.serverTimestamp() });
         var freed = false;
         if (sS.exists && isFixed(r.status)) {
@@ -156,7 +156,7 @@ function makeCore(firebase, db, opts) {
         var upd = {}, waited = 0;
         if (patch && patch.owner !== undefined) patch = Object.assign({}, patch, { owner: normOwner(patch.owner) });
         EDIT.forEach(function (k) { if (patch && patch[k] !== undefined) upd[k] = patch[k]; });
-        if (upd.owner && upd.owner !== r.owner) tx.set(owners.doc(await ownerKey(upd.owner, r.mail)), { ids: FV.arrayUnion(id) }, { merge: true });
+        if (upd.owner && r.mail && upd.owner !== r.owner) tx.set(owners.doc(await ownerKey(upd.owner, r.mail)), { ids: FV.arrayUnion(id) }, { merge: true });
         var m2 = Object.assign({}, r, upd);
         var n = (+m2.a || 0) + (+m2.k || 0) + (+m2.s || 0) + (+m2.m || 0);
         upd.n = n;
