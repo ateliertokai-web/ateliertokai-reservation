@@ -23,6 +23,7 @@
 <script>
 (function(){
 'use strict';
+var PV=/[?&]pv=1(&|$)/.test(location.search);
 var app=document.getElementById('app'),C,S={ev:null,slots:[],slot:null,mode:'new',rec:null};
 var esc=function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})};
 var q=function(id){return document.getElementById(id)};
@@ -124,21 +125,21 @@ async function home(){
   top();
   app.innerHTML='<p class="note" style="text-align:center;padding:40px 0">読み込み中…</p>';
   try{
-    var snap=await tmo(C.events.where('visible','==',true).get());
+    var snap=await tmo(PV?C.events.get():C.events.where('visible','==',true).get());
     var evs=snap.docs.map(function(d){return Object.assign({id:d.id},d.data())}).sort(function(a,b){return a.name<b.name?-1:1});
-    var h='<h2>ご予約・お申し込み<small>ご希望のイベントを選んでください</small></h2>';
+    var h=(PV?'<div class="box" style="border-color:#c0392b"><b>【練習モード】</b>お客様には見えない「非表示」のイベントも表示しています。ここで予約しても、保存されません。</div>':'')+'<h2>ご予約・お申し込み<small>ご希望のイベントを選んでください</small></h2>';
     if(!evs.length)h+='<div class="card note">現在、受付中のイベントはありません。</div>';
     var soon=0;
     evs.forEach(function(e,i){
       var notYet=e.openAtMs&&nowS()<e.openAtMs;
       if(notYet&&(!soon||e.openAtMs<soon))soon=e.openAtMs;
       var closed=e.method==='抽選'&&(e.drawn||(e.deadlineMs&&nowS()>e.deadlineMs));
-      var inner='<b>'+esc(e.name)+'</b>'+
+      var inner='<b>'+esc(e.name)+'</b>'+(PV&&e.visible===false?'<span class="tag w">非表示（練習用）</span>':'')+
         (e.method==='抽選'?'<span class="tag k">抽選</span><span>'+(closed?'受付は終了しました':'締切 '+dl(e))+'</span>':'<span class="tag">先着順</span>')+
         (notYet?'<div class="note" style="margin-top:6px;color:#8a6d2f"><b>ご予約は '+openText(e.openAtMs)+' からです</b><br><span class="cd" data-t="'+e.openAtMs+'"></span></div>':'');
       h+='<button class="ev" data-i="'+i+'"'+((closed||notYet)?' disabled style="opacity:.55"':'')+'>'+(e.thumb?'<div class="evr"><img class="evimg" src="'+e.thumb+'" alt=""><div>'+inner+'</div></div>':inner)+'</button>';
     });
-    var mine=myGet();
+    var mine=PV?[]:myGet();
     if(mine.length){
       h+='<h2 style="margin-top:28px">あなたの予約<small>この端末に保存されています</small></h2><div id="my"><p class="note">読み込み中…</p></div>';
     }
@@ -353,6 +354,7 @@ async function submit(){
       r=await C.change(S.rec.id,S.rec.mail,patch,ns);
       if(r.ok){var l=await C.lookup(S.rec.id,S.rec.mail);S.rec=Object.assign({id:S.rec.id},l.r);S.msg=r.waitlisted?'ご希望の時間帯は満席のため、キャンセル待ち（'+r.waitNo+'番目）として受け付けました。元のお時間のご予約は解放されています。空きが出た場合は、店舗からご連絡します。':'変更を保存しました';return detailView()}
     }else{
+      if(PV){r={ok:true,id:'PRACTICE0000',status:'confirmed'};return doneView(r,g.d)}
       r=await C.book(S.slot.id,g.d);
       if(r.ok){myAdd(r.id,g.d.mail);return doneView(r,g.d)}
     }
@@ -366,7 +368,7 @@ function doneView(r,d){
   top();
   var s=S.slot,ev=S.ev;
   var msg=r.status==='confirmed'?'ご予約が完了しました。':r.status==='wait'?'キャンセル待ちとして受け付けました（'+r.waitNo+'番目）。空きが出た場合は、店舗からご連絡します。':'抽選のお申し込みを受け付けました。';
-  app.innerHTML='<h2>'+msg+'</h2><div class="card"><b>'+esc(ev.name)+'</b><br>'+day(s.date)+' '+rng(s)+'<br>'+esc(d.name)+' 様　'+(d.a+d.k+d.s+d.m)+'名</div>'+
+  app.innerHTML=(PV?'<div class="box" style="border-color:#c0392b"><b>【練習モード】</b>お客様には見えない「非表示」のイベントも表示しています。この画面は練習用で、予約は保存されていません。</div>':'')+'<h2>'+msg+'</h2><div class="card"><b>'+esc(ev.name)+'</b><br>'+day(s.date)+' '+rng(s)+'<br>'+esc(d.name)+' 様　'+(d.a+d.k+d.s+d.m)+'名</div>'+
    '<p class="note" style="margin:14px 0 0">予約番号（変更・キャンセル'+(ev.method==='抽選'?'・抽選結果の確認':'')+'に必要です）</p><div class="code">'+fmtCode(r.id)+'</div>'+
    '<div class="box">この予約番号は、この端末のトップ画面「あなたの予約」にも表示されます。別の端末で確認する場合に備えて、スクリーンショットを保存するか、予約番号をメモしてください。予約確認のメールは送信されません。</div>'+
    keepHTML()+'<button class="p" id="hm" style="margin-top:14px">トップへ戻る</button>';
