@@ -16,8 +16,17 @@
 <body>
 <header class="top"><h1>Atelier Tokai reservation</h1></header>
 <main id="app"><p class="note" style="text-align:center;padding:40px 0">読み込み中…</p></main>
+<script>
+(function(){var er=[];window.__er=er;
+window.addEventListener('error',function(e){var t=e.target;er.push(t&&t.src?'読込失敗:'+t.src.split('/').pop():(e.message||'error'))},true);
+setTimeout(function(){var a=document.getElementById('app');
+if(a&&a.children.length===1&&/読み込み中/.test(a.textContent)){
+a.innerHTML='<div class="card err">読み込みに時間がかかっています。<br><small>状態: firebase='+(typeof firebase)+' / core='+(typeof makeCore)+(er.length?' / '+er.join(', '):'')+'</small><br><button class="s" style="margin-top:10px" onclick="location.reload()">もう一度読み込む</button></div>'}},15000)})();
+</script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script>window.firebase||document.write('<script src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-app-compat.js"><\/script>')</script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>(window.firebase&&firebase.firestore)||document.write('<script src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-firestore-compat.js"><\/script>')</script>
 <script src="firebase-config.js"></script>
 <script src="core.js"></script>
 <script>
@@ -462,7 +471,9 @@ async function openFromLink(){
 
 /* ---------- 起動 ---------- */
 var RV=window.RV;
-if(typeof firebase==='undefined'||!window.FIREBASE_CONFIG||/ここに/.test(FIREBASE_CONFIG.apiKey)){
+if(typeof firebase==='undefined'||typeof makeCore==='undefined'){
+  app.innerHTML='<div class="card err">必要なファイルを読み込めませんでした。電波の良い場所で、もう一度お試しください。<br><button class="s" style="margin-top:10px" onclick="location.reload()">もう一度読み込む</button></div>';
+}else if(!window.FIREBASE_CONFIG||/ここに/.test(FIREBASE_CONFIG.apiKey)){
   app.innerHTML='<div class="card err">Firebaseの設定が未入力です（firebase-config.js）。</div>';
 }else{
   firebase.initializeApp(FIREBASE_CONFIG);
