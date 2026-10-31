@@ -16,13 +16,24 @@
 <body>
 <header class="top"><h1>Atelier Tokai reservation</h1></header>
 <main id="app"><p class="note" style="text-align:center;padding:40px 0">読み込み中…</p></main>
+<script>
+(function(){var er=[];window.__er=er;
+window.addEventListener('error',function(e){var t=e.target;er.push(t&&t.src?'読込失敗:'+t.src.split('/').pop():(e.message||'error'))},true);
+setTimeout(function(){var a=document.getElementById('app');
+if(a&&a.children.length===1&&/読み込み中/.test(a.textContent)){
+a.innerHTML='<div class="card err">読み込みに時間がかかっています。<br><small>状態: firebase='+(typeof firebase)+' / core='+(typeof makeCore)+(er.length?' / '+er.join(', '):'')+'</small><br><button class="s" style="margin-top:10px" onclick="location.reload()">もう一度読み込む</button></div>'}},15000)})();
+</script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script>window.firebase||document.write('<script src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-app-compat.js"><\/script>')</script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>(window.firebase&&firebase.firestore)||document.write('<script src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-firestore-compat.js"><\/script>')</script>
 <script src="firebase-config.js"></script>
 <script src="core.js"></script>
 <script>
 (function(){
 'use strict';
+var PV=/[?&#]pv=1(&|$)/.test(location.search+location.hash);
+if(PV){var pvb=document.createElement('div');pvb.id='pvbar';pvb.style.cssText='position:sticky;top:0;z-index:50;background:#c0392b;color:#fff;text-align:center;padding:12px 10px;line-height:1.4';pvb.innerHTML='<div style="font-size:22px;font-weight:700;letter-spacing:.05em">確認画面中です</div><div style="font-size:13px;margin-top:2px">練習用の画面です。お客様には見えません。予約は保存されません。</div>';var pm=document.getElementById('app');pm.parentNode.insertBefore(pvb,pm)}
 var app=document.getElementById('app'),C,S={ev:null,slots:[],slot:null,mode:'new',rec:null};
 var esc=function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})};
 var q=function(id){return document.getElementById(id)};
@@ -37,6 +48,7 @@ function top(){window.scrollTo(0,0)}
 /* サーバーの時刻に合わせる（お客様のスマホの時計がずれていても、受付開始の判定がずれないように） */
 var TOFF=0;
 function nowS(){return Date.now()+TOFF}
+function tmo(p,ms){return Promise.race([p,new Promise(function(_,rej){setTimeout(function(){rej(new Error('timeout'))},ms||12000)})])}
 function syncTime(){
   return Promise.race([
     fetch(location.pathname,{method:'HEAD',cache:'no-store'}).then(function(r){var d=r.headers.get('Date');if(d){var t=new Date(d).getTime();if(t)TOFF=t-Date.now()}}).catch(function(){}),
@@ -123,7 +135,7 @@ async function home(){
   top();
   app.innerHTML='<p class="note" style="text-align:center;padding:40px 0">読み込み中…</p>';
   try{
-    var snap=await C.events.where('visible','==',true).get();
+    var snap=await tmo(PV?C.events.get():C.events.where('visible','==',true).get());
     var evs=snap.docs.map(function(d){return Object.assign({id:d.id},d.data())}).sort(function(a,b){return a.name<b.name?-1:1});
     var h='<h2>ご予約・お申し込み<small>ご希望のイベントを選んでください</small></h2>';
     if(!evs.length)h+='<div class="card note">現在、受付中のイベントはありません。</div>';
@@ -132,12 +144,12 @@ async function home(){
       var notYet=e.openAtMs&&nowS()<e.openAtMs;
       if(notYet&&(!soon||e.openAtMs<soon))soon=e.openAtMs;
       var closed=e.method==='抽選'&&(e.drawn||(e.deadlineMs&&nowS()>e.deadlineMs));
-      var inner='<b>'+esc(e.name)+'</b>'+
+      var inner='<b>'+esc(e.name)+'</b>'+(PV&&e.visible===false?'<span class="tag w">非表示（練習用）</span>':'')+
         (e.method==='抽選'?'<span class="tag k">抽選</span><span>'+(closed?'受付は終了しました':'締切 '+dl(e))+'</span>':'<span class="tag">先着順</span>')+
         (notYet?'<div class="note" style="margin-top:6px;color:#8a6d2f"><b>ご予約は '+openText(e.openAtMs)+' からです</b><br><span class="cd" data-t="'+e.openAtMs+'"></span></div>':'');
       h+='<button class="ev" data-i="'+i+'"'+((closed||notYet)?' disabled style="opacity:.55"':'')+'>'+(e.thumb?'<div class="evr"><img class="evimg" src="'+e.thumb+'" alt=""><div>'+inner+'</div></div>':inner)+'</button>';
     });
-    var mine=myGet();
+    var mine=PV?[]:myGet();
     if(mine.length){
       h+='<h2 style="margin-top:28px">あなたの予約<small>この端末に保存されています</small></h2><div id="my"><p class="note">読み込み中…</p></div>';
     }
@@ -160,7 +172,7 @@ async function home(){
       };
       var iv=setInterval(tick,1000);tick();
     }
-  }catch(e){app.innerHTML='<div class="card err">読み込めませんでした。電波の良い場所で、もう一度お試しください。</div>'}
+  }catch(e){app.innerHTML='<div class="card err">読み込めませんでした。電波の良い場所で、もう一度お試しください。<br><button class="s" id="rt" style="margin-top:10px">もう一度読み込む</button></div>';var rt=q('rt');if(rt)rt.onclick=home}
 }
 
 async function loadMine(mine){
@@ -193,9 +205,9 @@ async function pickSlot(){
   top();
   app.innerHTML='<p class="note" style="text-align:center;padding:40px 0">読み込み中…</p>';
   try{
-    var snap=await C.slots.where('eventId','==',S.ev.id).get();
+    var snap=await tmo(C.slots.where('eventId','==',S.ev.id).get());
     S.slots=snap.docs.map(function(d){return Object.assign({id:d.id},d.data())}).sort(function(a,b){return (a.date+a.start)<(b.date+b.start)?-1:1});
-  }catch(e){app.innerHTML='<div class="card err">読み込めませんでした。</div>';return}
+  }catch(e){app.innerHTML='<div class="card err">読み込めませんでした。電波の良い場所で、もう一度お試しください。<br><button class="s" id="rt" style="margin-top:10px">もう一度読み込む</button></div>';var rt=q('rt');if(rt)rt.onclick=pickSlot;return}
   var ev=S.ev,h='<button class="l" id="bk">← イベント一覧へ</button><h2>'+esc(ev.name)+'<small>'+(ev.method==='抽選'?'抽選のお申し込みです（締切 '+dl(ev)+'）':'先着順のお申し込みです')+'</small></h2>';
   if(ev.msg)h+='<div class="box">'+esc(ev.msg).replace(/\n/g,'<br>')+'</div>';
   if(ev.imgN>0){h+=(ev.thumb?'<img class="gthumb" id="gt" src="'+ev.thumb+'" alt="">':'')+'<div id="gal"><button class="s" id="gb">写真・パンフレットを見る（'+ev.imgN+'枚）</button></div>'}
@@ -352,6 +364,7 @@ async function submit(){
       r=await C.change(S.rec.id,S.rec.mail,patch,ns);
       if(r.ok){var l=await C.lookup(S.rec.id,S.rec.mail);S.rec=Object.assign({id:S.rec.id},l.r);S.msg=r.waitlisted?'ご希望の時間帯は満席のため、キャンセル待ち（'+r.waitNo+'番目）として受け付けました。元のお時間のご予約は解放されています。空きが出た場合は、店舗からご連絡します。':'変更を保存しました';return detailView()}
     }else{
+      if(PV){r={ok:true,id:'PRACTICE0000',status:'confirmed'};return doneView(r,g.d)}
       r=await C.book(S.slot.id,g.d);
       if(r.ok){myAdd(r.id,g.d.mail);return doneView(r,g.d)}
     }
@@ -459,11 +472,14 @@ async function openFromLink(){
 
 /* ---------- 起動 ---------- */
 var RV=window.RV;
-if(typeof firebase==='undefined'||!window.FIREBASE_CONFIG||/ここに/.test(FIREBASE_CONFIG.apiKey)){
+if(typeof firebase==='undefined'||typeof makeCore==='undefined'){
+  app.innerHTML='<div class="card err">必要なファイルを読み込めませんでした。電波の良い場所で、もう一度お試しください。<br><button class="s" style="margin-top:10px" onclick="location.reload()">もう一度読み込む</button></div>';
+}else if(!window.FIREBASE_CONFIG||/ここに/.test(FIREBASE_CONFIG.apiKey)){
   app.innerHTML='<div class="card err">Firebaseの設定が未入力です（firebase-config.js）。</div>';
 }else{
   firebase.initializeApp(FIREBASE_CONFIG);
-  C=makeCore(firebase,firebase.firestore());
+  var FDB=firebase.firestore();try{FDB.settings({experimentalAutoDetectLongPolling:true,merge:true})}catch(e){}
+  C=makeCore(firebase,FDB);
   syncTime().then(openFromLink);
 }
 })();
