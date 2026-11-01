@@ -10,6 +10,7 @@
 <link rel="manifest" href="admin-manifest.json">
 <meta name="theme-color" content="#111111">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="予約管理">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <link rel="stylesheet" href="style.css">
@@ -71,10 +72,19 @@ async function go(){
   shell();
   try{await loadEvents();await loadSlots()}catch(e){say('読み込めませんでした: '+(e.code==='permission-denied'?'この管理者アカウントには権限がありません（firestore.rules の管理者メールを確認してください）':e.message));return}
   if(S.tab==='res')resView();else evView();
+  scrubOnce();
+}
+/* 古い「申込済みの目印」に残っている予約番号を消す（この端末で1回だけ。失敗しても次回また試す） */
+var scrubbing=false;
+function scrubOnce(){
+  var K='rv_scrub_apps_v1';try{if(localStorage.getItem(K))return}catch(e){}
+  if(scrubbing)return;scrubbing=true;
+  C.scrubApplicants().then(function(r){try{localStorage.setItem(K,'1')}catch(e){}if(r.count)toast('申込記録を整理しました（'+r.count+'件）')}).catch(function(){}).then(function(){scrubbing=false});
 }
 
 /* ---------- 予約一覧 ---------- */
 function resView(){
+  if(S.unsub){S.unsub();S.unsub=null}
   var p=q('pane');
   if(!S.events.length){p.innerHTML='<div class="card note">イベントがまだありません。「イベント・枠」から作成してください。</div>';return}
   p.innerHTML='<div class="row"><label>イベント<select id="se">'+S.events.map(function(e){return '<option value="'+e.id+'"'+(e.id===S.evId?' selected':'')+'>'+esc(e.name)+'</option>'}).join('')+'</select></label>'+
@@ -88,6 +98,7 @@ function resView(){
     S.rs=sn.docs.map(function(d){return Object.assign({id:d.id},d.data())});draw();
   },function(e){say('予約を読み込めませんでした: '+e.message)});
 }
+function kidsN(r){return (+r.k||0)+(+r.s||0)+(+r.m||0)}
 function carTxt(r){if(r.order)return 'ご注文中・新規';var c=r.car||{};return [c.pref,c.cls,c.kana,c.num].join(' ')+' '+(c.model||'')}
 function draw(){
   var ev=S.events.filter(function(e){return e.id===S.evId})[0]||{};
@@ -128,7 +139,7 @@ function draw(){
   var h='<tr><th>予約番号</th><th>受付</th><th>状態</th><th>日時</th><th>代表者</th><th>人数</th><th>連絡先</th><th>メール</th>'+(hasO?'<th>オーナーズカードID</th>':'')+'<th>車両</th><th>店舗・担当</th>'+(hasP?'<th>参加者</th>':'')+(hasN?'<th>備考</th>':'')+(ev.method==='抽選'?'<th>忖度</th>':'')+'<th></th></tr>';
   list.forEach(function(r){
     h+='<tr data-id="'+r.id+'"><td style="white-space:nowrap;font-family:monospace">'+r.id.replace(/(.{4})(?=.)/g,'$1-')+'</td><td>'+ts(r.createdAt)+'</td><td>'+ST[r.status]+(r.status==='wait'?' '+(r.waitNo||''):'')+'</td><td>'+md(r.date)+' '+rng(r)+'</td><td>'+esc(r.name)+(r.corp?'<br><small>'+esc(r.corp)+'</small>':'')+'</td>'+
-     '<td>'+r.n+'（大'+r.a+(r.k+r.s+r.m?' 子'+(r.k+r.s+r.m):'')+'）</td><td>'+esc(r.tel)+'</td><td>'+esc(r.mail)+'</td>'+(hasO?'<td>'+esc(r.owner||'')+'</td>':'')+'<td>'+esc(carTxt(r))+'</td><td>'+(r.stores||[]).map(function(k){return esc(k)+':'+esc((r.staff||{})[k]||'')}).join('<br>')+'</td>'+
+     '<td>'+r.n+'（大'+(+r.a||0)+(kidsN(r)?' 子'+kidsN(r):'')+'）</td><td>'+esc(r.tel)+'</td><td>'+esc(r.mail)+'</td>'+(hasO?'<td>'+esc(r.owner||'')+'</td>':'')+'<td>'+esc(carTxt(r))+'</td><td>'+(r.stores||[]).map(function(k){return esc(k)+':'+esc((r.staff||{})[k]||'')}).join('<br>')+'</td>'+
      (hasP?'<td>'+(r.participants||[]).filter(Boolean).map(esc).join('、')+'</td>':'')+(hasN?'<td style="white-space:normal;min-width:140px">'+esc(r.note)+'</td>':'')+
      (ev.method==='抽選'?'<td>'+(r.status==='lottery'?'<input type="checkbox" data-a="fav"'+(r.fav?' checked':'')+' style="width:auto">':(r.fav?'○':''))+'</td>':'')+
      '<td>'+(r.status==='wait'?'<button class="s" data-a="pro">繰り上げ</button> ':'')+(r.status!=='cancel'&&r.status!=='lost'?'<button class="s d" data-a="cx">取消</button>':'')+'</td></tr>';
@@ -145,9 +156,10 @@ function draw(){
     }catch(er){say('失敗しました: '+er.message)}
   };
   q('csv').onclick=function(){csv(list)};
-  q('rc').onclick=async function(){await C.recount(S.evId);await loadSlots();say('人数を数え直しました');draw()};
+  q('rc').onclick=async function(){var b=this;b.disabled=true;try{await C.recount(S.evId);await loadSlots();say('人数を数え直しました');draw()}catch(er){b.disabled=false;say('失敗しました: '+er.message)}};
   if(q('dr'))q('dr').onclick=async function(){
     if(!confirm('「'+ev.name+'」の抽選を実行します。実行後は新しいお申し込みができなくなり、取り消せません。よろしいですか？'))return;
+    this.disabled=true;
     try{var r=await C.runLottery(S.evId);if(r.ok){say('抽選しました。当選 '+r.win+'組 / キャンセル待ち '+r.wait+'組 / 落選 '+r.lost+'組');await loadEvents();await loadSlots();resView()}else say(r.msg)}catch(er){say('失敗しました: '+er.message)}
   };
 }
@@ -246,7 +258,7 @@ function evView(){
   q('cn').oninput=function(){var ex=S.events.some(function(e){return e.name===q('cn').value.trim()});q('newopt').hidden=ex};
   q('cf').onsubmit=async function(e){
     e.preventDefault();q('cer').textContent='';
-    var name=q('cn').value.trim(),dates=[].map.call(app.querySelectorAll('.dt'),function(i){return i.value}).filter(Boolean);
+    var name=q('cn').value.trim(),dates=[].map.call(app.querySelectorAll('.dt'),function(i){return i.value}).filter(function(v,i,a){return v&&a.indexOf(v)===i});
     if(!name||!dates.length){q('cer').textContent='イベント名と日付を入力してください';return}
     var ex=S.events.filter(function(x){return x.name===name})[0];
     var ranges=[].map.call(app.querySelectorAll('.rg'),function(r){return {start:r.querySelector('.rs').value,end:r.querySelector('.re').value,minutes:r.querySelector('.rm').value}}).filter(function(r){return r.start||r.end});
@@ -258,22 +270,26 @@ function evView(){
     var evId=ex?ex.id:C.newId(),ev=ex?{}:Object.assign(readOpt('nw',name),{drawn:false});
     if(ex)ev={name:name};
     if(!ex&&ev.method==='抽選'&&!ev.deadlineMs){q('cer').textContent='抽選の締切を入力してください';return}
-    try{var r=await C.createSlots(evId,ev,dates,o);if(r.ok){if(!ex){try{await saveImages(evId,'nw')}catch(ix){S.msg='枠は作成しましたが、写真の保存に失敗しました: '+ix.message;S.evId=evId;go();return}}S.msg=r.count+'件の枠を作成しました';S.evId=evId;go()}else q('cer').textContent=r.msg}catch(x){q('cer').textContent='失敗しました: '+x.message}
+    var sb=q('cf').querySelector('button[type=submit]');sb.disabled=true;
+    try{var r=await C.createSlots(evId,ev,dates,o);if(r.ok){if(!ex){try{await saveImages(evId,'nw')}catch(ix){S.msg='枠は作成しましたが、写真の保存に失敗しました: '+ix.message;S.evId=evId;go();return}}S.msg=r.count+'件の枠を作成しました';S.evId=evId;go()}else{q('cer').textContent=r.msg;sb.disabled=false}}catch(x){q('cer').textContent='失敗しました: '+x.message;sb.disabled=false}
   };
-  app.querySelectorAll('[data-open]').forEach(function(b){b.onclick=function(){openEv(+b.dataset.open)}});
+  app.querySelectorAll('[data-open]').forEach(function(b){b.onclick=function(){openEv(+b.dataset.open,b)}});
 }
-async function openEv(i){
+async function openEv(i,btn){
   var e=S.events[i],box=q('ed'+i);
-  var sn=await C.slots.where('eventId','==',e.id).get();
+  if(box.innerHTML){box.innerHTML='';if(btn)btn.textContent='設定・枠を開く';return}
+  if(btn)btn.disabled=true;
+  try{var sn=await C.slots.where('eventId','==',e.id).get()}catch(x){say('読み込めませんでした: '+x.message);if(btn)btn.disabled=false;return}
+  if(btn){btn.disabled=false;btn.textContent='閉じる'}
   var sl=sn.docs.map(function(d){return Object.assign({id:d.id},d.data())}).sort(function(a,b){return (a.date+a.start)<(b.date+b.start)?-1:1});
   box.innerHTML='<div style="margin-top:10px">'+optHTML('e'+i,e)+'<div class="tools"><button class="s" data-a="save">設定を保存</button><button class="s" data-a="pv">お客様画面で確認（練習）</button><button class="s d" data-a="del">イベントを削除</button></div></div>'+
    '<details open><summary>枠 '+sl.length+'件</summary><div class="scroll"><table><tr><th>日時</th><th>定員(組・0で人数管理)</th><th>定員(人数)</th><th>1組上限</th><th>現在</th><th></th></tr>'+sl.map(function(s){
      return '<tr data-s="'+s.id+'"><td>'+md(s.date)+' '+rng(s)+'</td><td><input type="number" data-k="g" value="'+s.capG+'"></td><td><input type="number" data-k="p" value="'+(s.capP||0)+'"></td><td><input type="number" data-k="x" value="'+s.maxPer+'"></td><td>'+(s.booked||0)+'組・'+(s.people||0)+'名</td><td><button class="s" data-a="ss">保存</button> <button class="s d" data-a="sd">削除</button></td></tr>';
    }).join('')+'</table></div></details>';
   try{var ei=await C.eimgs.doc(e.id).get();wireImgs('e'+i,ei.exists?ei.data().imgs:[])}catch(x){wireImgs('e'+i,[])}
-  box.addEventListener('input',function(ev){var t=ev.target,tr=t.closest&&t.closest('tr[data-s]');if(!tr||!t.dataset.k)return;
+  box.oninput=function(ev){var t=ev.target,tr=t.closest&&t.closest('tr[data-s]');if(!tr||!t.dataset.k)return;
     if(t.dataset.k==='x'){tr.dataset.xm='1';return}
-    if(tr.dataset.xm)return;var gv=+tr.querySelector('[data-k=g]').value,pv=+tr.querySelector('[data-k=p]').value;if(!gv&&pv>0)tr.querySelector('[data-k=x]').value=pv});
+    if(tr.dataset.xm)return;var gv=+tr.querySelector('[data-k=g]').value,pv=+tr.querySelector('[data-k=p]').value;if(!gv&&pv>0)tr.querySelector('[data-k=x]').value=pv};
   box.onclick=async function(ev){
     var b=ev.target.closest('[data-a]');if(!b)return;var a=b.dataset.a;
     if(a==='pv'){window.open('./?pv=1&t='+Date.now(),'_blank');return}
@@ -287,9 +303,13 @@ async function openEv(i){
         await C.deleteEvent(e.id);say('削除しました');await go()
       }else if(a==='ss'){
         var tr=b.closest('tr'),g=function(k){return +tr.querySelector('[data-k='+k+']').value};
-        var mx=g('x');await C.slots.doc(tr.dataset.s).update({capG:g('g'),capP:g('p'),maxPer:mx});tr.querySelector('[data-k=x]').value=mx;say('枠を保存しました')
+        var mx=g('x');if(!(mx>=1)||g('g')<0||g('p')<0){say('定員・上限人数を正しく入力してください（1組上限は1以上）');return}
+        await C.slots.doc(tr.dataset.s).update({capG:g('g'),capP:g('p'),maxPer:mx});tr.querySelector('[data-k=x]').value=mx;say('枠を保存しました')
       }else if(a==='sd'){
-        var tr2=b.closest('tr');if(!confirm('この枠を削除します。この枠への予約が残っている場合は、先に取り消してください。'))return;
+        var tr2=b.closest('tr');
+        var left=(await C.res.where('slotId','==',tr2.dataset.s).get()).docs.filter(function(d){var st=d.data().status;return st!=='cancel'&&st!=='lost'}).length;
+        if(left){alert('この枠には、まだ '+left+'件の予約（確定・キャンセル待ち・抽選待ち）があります。先に「予約一覧」で取り消してから、削除してください。');return}
+        if(!confirm('この枠を削除します。よろしいですか？'))return;
         await C.slots.doc(tr2.dataset.s).delete();tr2.remove();say('枠を削除しました')
       }
     }catch(x){say('失敗しました: '+x.message)}

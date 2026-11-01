@@ -1,0 +1,178 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ★ 管理者のメールアドレス（Firebaseコンソール「Authentication」で作ったアカウント）
+    function isAdmin() {
+      return request.auth != null && request.auth.token.email in ['ateliertokai2027@gmail.com'];
+    }
+
+    // ===== 共通 =====
+    function evData(eid) { return get(/databases/$(database)/documents/events/$(eid)).data; }
+    function slotBefore(sid) { return get(/databases/$(database)/documents/slots/$(sid)).data; }
+    function slotAfter(sid) { return getAfter(/databases/$(database)/documents/slots/$(sid)).data; }
+    function resPath(rid) { return /databases/$(database)/documents/reservations/$(rid); }
+    function isFixed(st) { return st == 'confirmed' || st == 'won'; }
+    function nowMs() { return request.time.toMillis(); }
+
+    // 受付中か（受付開始前・締切後・抽選済みは不可）。先着は「確定」か「キャンセル待ち（受け付ける設定のときだけ）」、抽選は「抽選待ち」だけ
+    function eventOk(ev, st) {
+      return ev.visible == true
+        && nowMs() >= ev.get('openAtMs', 0)
+        && ((ev.method == '抽選' && st == 'lottery' && ev.drawn == false && nowMs() <= ev.deadlineMs)
+            || (ev.method != '抽選' && (st == 'confirmed' || (st == 'wait' && ev.get('wait', false) == true))));
+    }
+
+    // イベントの写真（パンフレットなど）。お客様は見るだけ、書き込みは管理者のみ
+    match /eventImages/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /events/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ===== 枠 =====
+    // お客様は「組数・人数・待ち番号」のカウンターだけ更新できる。
+    // そのとき lastRes に「どの予約による変更か」を書き、その予約の変化（新規・キャンセル・人数変更・時間帯変更）と
+    // カウンターの増減が一致しているときだけ通す。予約を伴わない「席を空ける」「数を水増しする」書き込みは通らない
+    function hadSeat(sid, rid) {
+      return exists(resPath(rid)) && get(resPath(rid)).data.slotId == sid && isFixed(get(resPath(rid)).data.status);
+    }
+    function hasSeat(sid, rid) {
+      return getAfter(resPath(rid)).data.slotId == sid && isFixed(getAfter(resPath(rid)).data.status);
+    }
+    function seatPeople(sid, rid, after) {
+      return after
+        ? (hasSeat(sid, rid) ? getAfter(resPath(rid)).data.n : 0)
+        : (hadSeat(sid, rid) ? get(resPath(rid)).data.n : 0);
+    }
+    function counterOk(sid, b, a, rid) {
+      let dB = a.booked - b.booked;
+      let expB = (hasSeat(sid, rid) ? 1 : 0) - (hadSeat(sid, rid) ? 1 : 0);
+      let dP = a.people - b.people;
+      let expP = seatPeople(sid, rid, true) - seatPeople(sid, rid, false);
+      let dW = a.waitSeq - b.waitSeq;
+      // 減らすとき、もともと数がずれていて 0 で止めた場合も通す
+      return (dB == expB || (expB < 0 && a.booked == 0))
+        && (dP == expP || (expP < 0 && a.people == 0))
+        && (dW == 0 || (dW == 1
+              && getAfter(resPath(rid)).data.slotId == sid
+              && getAfter(resPath(rid)).data.status == 'wait'
+              && getAfter(resPath(rid)).data.waitNo == a.waitSeq));
+    }
+    function slotCustomerOk(sid) {
+      let b = resource.data;
+      let a = request.resource.data;
+      return a.diff(b).affectedKeys().hasOnly(['booked', 'people', 'waitSeq', 'lastRes'])
+        && a.lastRes is string && a.lastRes.matches('^[A-HJ-NP-Z2-9]{12}$')
+        && a.booked is int && a.people is int && a.waitSeq is int
+        && a.booked >= 0 && a.people >= 0
+        && (b.capG == 0 || a.booked <= b.capG || a.booked <= b.booked)
+        && (b.capP == 0 || a.people <= b.capP || a.people <= b.people)
+        && counterOk(sid, b, a, a.lastRes);
+    }
+    match /slots/{id} {
+      allow read: if true;
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || slotCustomerOk(id);
+    }
+
+    // ===== 予約 =====
+    // 予約番号（推測できない12文字）を知っている人だけが1件を読める。一覧は管理者のみ
+    function createOk(id) {
+      let d = request.resource.data;
+      let sb = slotBefore(d.slotId);
+      let sa = slotAfter(d.slotId);
+      return id.matches('^[A-HJ-NP-Z2-9]{12}$')
+        && d.status in ['confirmed', 'wait', 'lottery']
+        && d.name is string && d.name.size() > 0 && d.name.size() <= 50
+        && d.mail is string && d.mail.size() <= 100
+        && d.n is int && d.n >= 1 && d.n <= sb.maxPer
+        && d.fav == false                                   // 「忖度」は管理者だけが付けられる
+        && d.waitNo is int
+        && d.createdAt == request.time
+        && sb.eventId == d.eventId                          // 枠がそのイベントのもの
+        && d.date == sb.date && d.start == sb.start && d.end == sb.end
+        && eventOk(evData(d.eventId), d.status)
+        // 「確定」は枠の組数・人数を同時に増やしたときだけ。「キャンセル待ち」は待ち番号を進めたときだけ
+        && (d.status != 'confirmed' || (sa.booked == sb.booked + 1 && sa.people == sb.people + d.n && sa.lastRes == id))
+        && (d.status != 'wait' || (sa.waitSeq == sb.waitSeq + 1 && d.waitNo == sa.waitSeq && sa.lastRes == id));
+    }
+    // お客様による変更：名前・連絡先・人数・時間帯の変更と、キャンセル
+    function customerUpdateOk(id) {
+      let b = resource.data;
+      let a = request.resource.data;
+      let moving = a.slotId != b.slotId;
+      return a.diff(b).affectedKeys().hasOnly(['owner', 'name', 'corp', 'tel', 'a', 'k', 's', 'm', 'participants', 'note', 'car', 'order', 'stores', 'staff',
+                                               'n', 'slotId', 'date', 'start', 'end', 'status', 'waitNo', 'updatedAt'])
+        && a.updatedAt == request.time
+        && b.status != 'cancel'
+        && (
+          // キャンセル（他の項目は変えない）
+          (a.status == 'cancel' && a.diff(b).affectedKeys().hasOnly(['status', 'updatedAt']))
+          // 内容の変更
+          || (a.status != 'cancel' && editOk(id, b, a, moving))
+        );
+    }
+    function editOk(id, b, a, moving) {
+      let sa = slotAfter(a.slotId);
+      let sb = slotBefore(a.slotId);
+      return a.name is string && a.name.size() > 0 && a.name.size() <= 50
+        && a.n is int && a.n >= 1 && a.n <= sa.maxPer
+        && a.date == sa.date && a.start == sa.start && a.end == sa.end
+        && (
+          // 状態はそのまま
+          (a.status == b.status && a.waitNo == b.waitNo)
+          // 時間帯の変更先が満席のとき: 確定 → キャンセル待ち（並び直し）
+          || (moving && b.status == 'confirmed' && a.status == 'wait')
+        )
+        && (!moving || (
+              sa.eventId == b.eventId
+              && (b.status == 'confirmed' || (b.status == 'lottery' && evData(b.eventId).drawn == false))
+           ))
+        // 確定のまま時間帯を移る → 移り先の組数・人数を増やしていること
+        && (!(moving && isFixed(a.status)) || (sa.booked == sb.booked + 1 && sa.people == sb.people + a.n && sa.lastRes == id))
+        // キャンセル待ちへ移る → 移り先の待ち番号を進めていること
+        && (!(moving && a.status == 'wait') || (sa.waitSeq == sb.waitSeq + 1 && a.waitNo == sa.waitSeq && sa.lastRes == id))
+        // 同じ時間帯で人数を変える（確定済み）→ 枠の人数も同じだけ変えていること
+        && (!(!moving && isFixed(a.status) && a.n != b.n) || (sa.people - sb.people == a.n - b.n && sa.lastRes == id));
+    }
+    match /reservations/{id} {
+      allow get: if true;
+      allow list: if isAdmin();
+      allow create: if createOk(id);
+      allow update: if isAdmin() || customerUpdateOk(id);
+      allow delete: if isAdmin();
+    }
+
+    // ===== オーナーズカードID＋メールアドレスから、予約番号の一覧を引くための目印 =====
+    // キー（64文字のハッシュ）を知っている人だけが読める。一覧は管理者のみ
+    match /owners/{id} {
+      allow get: if true;
+      allow list: if isAdmin();
+      allow create: if id.matches('^[0-9a-f]{64}$')
+        && request.resource.data.keys().hasOnly(['ids'])
+        && request.resource.data.ids.size() == 1;
+      allow update: if isAdmin() || (id.matches('^[0-9a-f]{64}$')
+        && request.resource.data.keys().hasOnly(['ids'])
+        && request.resource.data.ids.size() <= resource.data.ids.size() + 1
+        && request.resource.data.ids.size() <= 100);
+      allow delete: if isAdmin();
+    }
+
+    // ===== 申込済みの目印（同じメールアドレスで同じイベントに重ねて申し込めないようにする） =====
+    // メールアドレスとイベントから計算できるキーなので、中に予約番号は入れない（入っていると他人の予約を引けてしまう）
+    match /applicants/{id} {
+      allow get: if true;
+      allow list: if isAdmin();
+      allow create: if id.matches('^[0-9a-f]{64}$')
+        && request.resource.data.keys().hasOnly(['at'])
+        && request.resource.data.at is int;
+      allow update: if isAdmin();
+      allow delete: if true;
+    }
+  }
+}

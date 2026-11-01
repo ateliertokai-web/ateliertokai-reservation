@@ -1,0 +1,12 @@
+{
+  "name": "ateliertokai-reservation-tests",
+  "private": true,
+  "scripts": {
+    "test": "firebase emulators:exec --only firestore --project demo-rv --config ../firebase.json \"node rules.test.js\""
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^3.0.4",
+    "firebase": "^10.14.1",
+    "firebase-tools": "^15.0.0"
+  }
+}

@@ -77,14 +77,14 @@ function makeCore(firebase, db, opts) {
         if (aS.exists) return fail('このメールアドレス（メールなしの場合は連絡先）は、すでにこのイベントにお申し込み済みです。内容の変更・キャンセルは「予約の確認・変更」から行えます');
         var status, upd = null, waitNo = 0;
         if (lot) status = 'lottery';
-        else if (fits(s, n)) { status = 'confirmed'; upd = { booked: (s.booked || 0) + 1, people: (s.people || 0) + n }; }
-        else if (ev.wait) { status = 'wait'; waitNo = (s.waitSeq || 0) + 1; upd = { waitSeq: waitNo }; }
+        else if (fits(s, n)) { status = 'confirmed'; upd = { booked: (s.booked || 0) + 1, people: (s.people || 0) + n, lastRes: id }; }
+        else if (ev.wait) { status = 'wait'; waitNo = (s.waitSeq || 0) + 1; upd = { waitSeq: waitNo, lastRes: id }; }
         else return fail('この枠は満席です');
         var doc = Object.assign({}, d, { n: n, eventId: s.eventId, eventName: ev.name, slotId: slotId, date: s.date, start: s.start, end: s.end,
           status: status, waitNo: waitNo, fav: false, createdAt: FV.serverTimestamp(), updatedAt: FV.serverTimestamp() });
         tx.set(res.doc(id), doc);
         if (okey) tx.set(owners.doc(okey), { ids: FV.arrayUnion(id) }, { merge: true });
-        tx.set(aRef, { resId: id, at: now() });
+        tx.set(aRef, { at: now() });
         if (upd) tx.update(sRef, upd);
         return ok({ id: id, status: status, waitNo: waitNo });
       });
@@ -131,7 +131,7 @@ function makeCore(firebase, db, opts) {
         var freed = false;
         if (sS.exists && isFixed(r.status)) {
           var s = sS.data(); freed = true;
-          tx.update(sRef, { booked: Math.max(0, (s.booked || 0) - 1), people: Math.max(0, (s.people || 0) - r.n) });
+          tx.update(sRef, { booked: Math.max(0, (s.booked || 0) - 1), people: Math.max(0, (s.people || 0) - r.n), lastRes: id });
         }
         tx.delete(apps.doc(ak));
         return ok({ freed: freed, slotId: r.slotId });
@@ -156,7 +156,8 @@ function makeCore(firebase, db, opts) {
         var upd = {}, waited = 0;
         if (patch && patch.owner !== undefined) patch = Object.assign({}, patch, { owner: normOwner(patch.owner) });
         EDIT.forEach(function (k) { if (patch && patch[k] !== undefined) upd[k] = patch[k]; });
-        if (upd.owner && r.mail && upd.owner !== r.owner) tx.set(owners.doc(await ownerKey(upd.owner, r.mail)), { ids: FV.arrayUnion(id) }, { merge: true });
+        // オーナーズカードIDの目印は、入力チェックがすべて通ってから書く（失敗時に書き込みが残らないように）
+        var newOkey = (upd.owner && r.mail && upd.owner !== r.owner) ? await ownerKey(upd.owner, r.mail) : '';
         var m2 = Object.assign({}, r, upd);
         var n = (+m2.a || 0) + (+m2.k || 0) + (+m2.s || 0) + (+m2.m || 0);
         upd.n = n;
@@ -176,15 +177,16 @@ function makeCore(firebase, db, opts) {
           }
           if (isFixed(r.status)) {
             var o = oldS.data();
-            tx.update(oldRef, { booked: Math.max(0, (o.booked || 0) - 1), people: Math.max(0, (o.people || 0) - r.n) });
-            if (toWait) { tx.update(newRef, { waitSeq: newWaitNo }); upd.status = 'wait'; upd.waitNo = newWaitNo; waited = newWaitNo; }
-            else tx.update(newRef, { booked: (t.booked || 0) + 1, people: (t.people || 0) + n });
+            tx.update(oldRef, { booked: Math.max(0, (o.booked || 0) - 1), people: Math.max(0, (o.people || 0) - r.n), lastRes: id });
+            if (toWait) { tx.update(newRef, { waitSeq: newWaitNo, lastRes: id }); upd.status = 'wait'; upd.waitNo = newWaitNo; waited = newWaitNo; }
+            else tx.update(newRef, { booked: (t.booked || 0) + 1, people: (t.people || 0) + n, lastRes: id });
           }
           Object.assign(upd, { slotId: newSlotId, date: t.date, start: t.start, end: t.end });
         } else if (isFixed(r.status) && n !== r.n) {
           if (t.capP && (t.people || 0) - r.n + n > t.capP) return fail('この枠の定員人数を超えるため、人数を増やせません');
-          tx.update(oldRef, { people: Math.max(0, (t.people || 0) - r.n + n) });
+          tx.update(oldRef, { people: Math.max(0, (t.people || 0) - r.n + n), lastRes: id });
         }
+        if (newOkey) tx.set(owners.doc(newOkey), { ids: FV.arrayUnion(id) }, { merge: true });
         upd.updatedAt = FV.serverTimestamp();
         tx.update(rRef, upd);
         return ok({ waitlisted: !!waited, waitNo: waited });
@@ -200,10 +202,12 @@ function makeCore(firebase, db, opts) {
         if (!rS.exists) return fail('予約が見つかりません');
         var r = rS.data();
         if (r.status !== 'wait') return fail('キャンセル待ちの予約ではありません');
-        var sRef = slots.doc(r.slotId), sS = await tx.get(sRef), s = sS.data();
+        var sRef = slots.doc(r.slotId), sS = await tx.get(sRef);
+        if (!sS.exists) return fail('この枠は削除されています');
+        var s = sS.data();
         if (!fits(s, r.n)) return fail('この枠にはまだ空きがありません');
         tx.update(rRef, { status: 'confirmed', waitNo: 0, updatedAt: FV.serverTimestamp() });
-        tx.update(sRef, { booked: (s.booked || 0) + 1, people: (s.people || 0) + r.n });
+        tx.update(sRef, { booked: (s.booked || 0) + 1, people: (s.people || 0) + r.n, lastRes: id });
         return ok({});
       });
     });
@@ -306,6 +310,13 @@ function makeCore(firebase, db, opts) {
     return ok({ count: dates.length * times.length });
   }
 
+  async function scrubApplicants() {
+    var s = await apps.get(), ops = [];
+    s.docs.forEach(function (d) { if (d.data().resId !== undefined) ops.push(function (b) { b.set(apps.doc(d.id), { at: d.data().at || 0 }); }); });
+    await chunked(ops);
+    return ok({ count: ops.length });
+  }
+
   async function deleteEvent(eventId) {
     var ss = await slots.where('eventId', '==', eventId).get();
     var ops = ss.docs.map(function (d) { return function (b) { b.delete(slots.doc(d.id)); }; });
@@ -316,7 +327,7 @@ function makeCore(firebase, db, opts) {
   }
 
   return { book: book, lookup: lookup, cancel: cancel, change: change, promote: promote, runLottery: runLottery, recount: recount,
-    findByOwner: findByOwner, normOwner: normOwner, owners: owners,
+    findByOwner: findByOwner, normOwner: normOwner, owners: owners, scrubApplicants: scrubApplicants,
     createSlots: createSlots, makeTimes: makeTimes, deleteEvent: deleteEvent, newId: newId, normMail: normMail, isFixed: isFixed, ms: ms,
     events: events, slots: slots, res: res, apps: apps, eimgs: eimgs };
 }
