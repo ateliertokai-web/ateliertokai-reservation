@@ -72,6 +72,14 @@ async function go(){
   shell();
   try{await loadEvents();await loadSlots()}catch(e){say('読み込めませんでした: '+(e.code==='permission-denied'?'この管理者アカウントには権限がありません（firestore.rules の管理者メールを確認してください）':e.message));return}
   if(S.tab==='res')resView();else evView();
+  scrubOnce();
+}
+/* 古い「申込済みの目印」に残っている予約番号を消す（この端末で1回だけ。失敗しても次回また試す） */
+var scrubbing=false;
+function scrubOnce(){
+  var K='rv_scrub_apps_v1';try{if(localStorage.getItem(K))return}catch(e){}
+  if(scrubbing)return;scrubbing=true;
+  C.scrubApplicants().then(function(r){try{localStorage.setItem(K,'1')}catch(e){}if(r.count)toast('申込記録を整理しました（'+r.count+'件）')}).catch(function(){}).then(function(){scrubbing=false});
 }
 
 /* ---------- 予約一覧 ---------- */
