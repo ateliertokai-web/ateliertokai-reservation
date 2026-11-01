@@ -1,0 +1,101 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ★ 管理者のメールアドレスに書き換えてください（Firebaseコンソール「Authentication」で作ったアカウント）
+    function isAdmin() {
+      return request.auth != null && request.auth.token.email in ['ateliertokai2027@gmail.com'];
+    }
+
+    // ===== イベント予約 =====
+    function evData(eid) {
+      return get(/databases/$(database)/documents/events/$(eid)).data;
+    }
+    function eventOk(eid, st) {
+      return evData(eid).visible == true
+        && request.time.toMillis() >= evData(eid).get('openAtMs', 0)
+        && (evData(eid).method != '抽選'
+            || (st == 'lottery' && evData(eid).drawn == false && request.time.toMillis() <= evData(eid).deadlineMs));
+    }
+
+    // イベントの写真（パンフレットなど）。お客様は見るだけ、書き込みは管理者のみ
+    match /eventImages/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /events/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // 枠: お客様は「組数・人数・待ち番号」のカウンターだけ、定員の範囲内で更新できる
+    match /slots/{id} {
+      allow read: if true;
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['booked', 'people', 'waitSeq'])
+        && request.resource.data.booked is int && request.resource.data.people is int && request.resource.data.waitSeq is int
+        && request.resource.data.booked >= 0 && request.resource.data.people >= 0
+        && (resource.data.capG == 0 || request.resource.data.booked <= resource.data.capG || request.resource.data.booked <= resource.data.booked)
+        && (resource.data.capP == 0 || request.resource.data.people <= resource.data.capP || request.resource.data.people <= resource.data.people)
+        && request.resource.data.booked - resource.data.booked <= 1
+        && resource.data.booked - request.resource.data.booked <= 1
+        && request.resource.data.people - resource.data.people <= 40
+        && resource.data.people - request.resource.data.people <= 40
+        && request.resource.data.waitSeq >= resource.data.waitSeq
+        && request.resource.data.waitSeq - resource.data.waitSeq <= 1
+      );
+    }
+
+    // 予約: 予約番号（推測できない12文字）を知っている人だけが1件を読める。一覧は管理者のみ
+    match /reservations/{id} {
+      allow get: if true;
+      allow list: if isAdmin();
+      allow create: if id.matches('^[A-HJ-NP-Z2-9]{12}$')
+        && request.resource.data.status in ['confirmed', 'wait', 'lottery']
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 50
+        && request.resource.data.mail is string && request.resource.data.mail.size() <= 100
+        && request.resource.data.n is int && request.resource.data.n >= 1 && request.resource.data.n <= 40
+        && eventOk(request.resource.data.eventId, request.resource.data.status);
+      allow update: if isAdmin() || (
+        request.resource.data.mail == resource.data.mail
+        && request.resource.data.eventId == resource.data.eventId
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.fav == resource.data.fav
+        && (
+          (request.resource.data.waitNo == resource.data.waitNo
+            && (request.resource.data.status == resource.data.status || request.resource.data.status == 'cancel'))
+          // 時間帯の変更先が満席のとき: 確定 → キャンセル待ち（並び直し）
+          || (resource.data.status == 'confirmed' && request.resource.data.status == 'wait'
+            && request.resource.data.waitNo is int && request.resource.data.waitNo >= 1)
+        )
+      );
+      allow delete: if isAdmin();
+    }
+
+    // オーナーズカードID＋メールアドレスから、予約番号の一覧を引くための目印。キー（64文字のハッシュ）を知っている人だけが読める。一覧は管理者のみ
+    match /owners/{id} {
+      allow get: if true;
+      allow list: if isAdmin();
+      allow create: if id.matches('^[0-9a-f]{64}$')
+        && request.resource.data.keys().hasOnly(['ids'])
+        && request.resource.data.ids.size() == 1;
+      allow update: if isAdmin() || (id.matches('^[0-9a-f]{64}$')
+        && request.resource.data.keys().hasOnly(['ids'])
+        && request.resource.data.ids.size() <= resource.data.ids.size() + 1
+        && request.resource.data.ids.size() <= 100);
+      allow delete: if isAdmin();
+    }
+
+    // 申込済みの目印（同じメールアドレスで同じイベントに重ねて申し込めないようにする）
+    match /applicants/{id} {
+      allow get: if true;
+      allow list: if isAdmin();
+      allow create: if id.matches('^[0-9a-f]{64}$');
+      allow update: if false;
+      allow delete: if true;
+    }
+  }
+}
