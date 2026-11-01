@@ -156,7 +156,8 @@ function makeCore(firebase, db, opts) {
         var upd = {}, waited = 0;
         if (patch && patch.owner !== undefined) patch = Object.assign({}, patch, { owner: normOwner(patch.owner) });
         EDIT.forEach(function (k) { if (patch && patch[k] !== undefined) upd[k] = patch[k]; });
-        if (upd.owner && r.mail && upd.owner !== r.owner) tx.set(owners.doc(await ownerKey(upd.owner, r.mail)), { ids: FV.arrayUnion(id) }, { merge: true });
+        // オーナーズカードIDの目印は、入力チェックがすべて通ってから書く（失敗時に書き込みが残らないように）
+        var newOkey = (upd.owner && r.mail && upd.owner !== r.owner) ? await ownerKey(upd.owner, r.mail) : '';
         var m2 = Object.assign({}, r, upd);
         var n = (+m2.a || 0) + (+m2.k || 0) + (+m2.s || 0) + (+m2.m || 0);
         upd.n = n;
@@ -185,6 +186,7 @@ function makeCore(firebase, db, opts) {
           if (t.capP && (t.people || 0) - r.n + n > t.capP) return fail('この枠の定員人数を超えるため、人数を増やせません');
           tx.update(oldRef, { people: Math.max(0, (t.people || 0) - r.n + n) });
         }
+        if (newOkey) tx.set(owners.doc(newOkey), { ids: FV.arrayUnion(id) }, { merge: true });
         upd.updatedAt = FV.serverTimestamp();
         tx.update(rRef, upd);
         return ok({ waitlisted: !!waited, waitNo: waited });
@@ -200,7 +202,9 @@ function makeCore(firebase, db, opts) {
         if (!rS.exists) return fail('予約が見つかりません');
         var r = rS.data();
         if (r.status !== 'wait') return fail('キャンセル待ちの予約ではありません');
-        var sRef = slots.doc(r.slotId), sS = await tx.get(sRef), s = sS.data();
+        var sRef = slots.doc(r.slotId), sS = await tx.get(sRef);
+        if (!sS.exists) return fail('この枠は削除されています');
+        var s = sS.data();
         if (!fits(s, r.n)) return fail('この枠にはまだ空きがありません');
         tx.update(rRef, { status: 'confirmed', waitNo: 0, updatedAt: FV.serverTimestamp() });
         tx.update(sRef, { booked: (s.booked || 0) + 1, people: (s.people || 0) + r.n });
