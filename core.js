@@ -221,7 +221,7 @@ function makeCore(firebase, db, opts) {
     }
   }
 
-  // 抽選: 枠ごとに「忖度(fav)」を先に当選させ、残りは無作為。外れた方は申込順でキャンセル待ち（なしの設定なら落選）
+  // 抽選: 枠ごとに「招待枠」（fav）の方を先に当選させ、残りは無作為。外れた方は申込順でキャンセル待ち（なしの設定なら落選）
   async function runLottery(eventId) {
     var eS = await events.doc(eventId).get();
     if (!eS.exists) return fail('イベントが見つかりません');

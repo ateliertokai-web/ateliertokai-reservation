@@ -136,7 +136,7 @@ function draw(){
   if(ev.method==='抽選'&&ev.drawn)tl+='<span class="tag k">抽選済み</span>';
   q('tl').innerHTML=tl;
   var hasP=list.some(function(r){return (r.participants||[]).some(Boolean)}),hasN=list.some(function(r){return r.note}),hasO=list.some(function(r){return r.owner});
-  var h='<tr><th>予約番号</th><th>受付</th><th>状態</th><th>日時</th><th>代表者</th><th>人数</th><th>連絡先</th><th>メール</th>'+(hasO?'<th>オーナーズカードID</th>':'')+'<th>車両</th><th>店舗・担当</th>'+(hasP?'<th>参加者</th>':'')+(hasN?'<th>備考</th>':'')+(ev.method==='抽選'?'<th>忖度</th>':'')+'<th></th></tr>';
+  var h='<tr><th>予約番号</th><th>受付</th><th>状態</th><th>日時</th><th>代表者</th><th>人数</th><th>連絡先</th><th>メール</th>'+(hasO?'<th>オーナーズカードID</th>':'')+'<th>車両</th><th>店舗・担当</th>'+(hasP?'<th>参加者</th>':'')+(hasN?'<th>備考</th>':'')+(ev.method==='抽選'?'<th>招待枠</th>':'')+'<th></th></tr>';
   list.forEach(function(r){
     h+='<tr data-id="'+r.id+'"><td style="white-space:nowrap;font-family:monospace">'+r.id.replace(/(.{4})(?=.)/g,'$1-')+'</td><td>'+ts(r.createdAt)+'</td><td>'+ST[r.status]+(r.status==='wait'?' '+(r.waitNo||''):'')+'</td><td>'+md(r.date)+' '+rng(r)+'</td><td>'+esc(r.name)+(r.corp?'<br><small>'+esc(r.corp)+'</small>':'')+'</td>'+
      '<td>'+r.n+'（大'+(+r.a||0)+(kidsN(r)?' 子'+kidsN(r):'')+'）</td><td>'+esc(r.tel)+'</td><td>'+esc(r.mail)+'</td>'+(hasO?'<td>'+esc(r.owner||'')+'</td>':'')+'<td>'+esc(carTxt(r))+'</td><td>'+(r.stores||[]).map(function(k){return esc(k)+':'+esc((r.staff||{})[k]||'')}).join('<br>')+'</td>'+
