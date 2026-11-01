@@ -282,7 +282,7 @@ async function openEv(i,btn){
   try{var sn=await C.slots.where('eventId','==',e.id).get()}catch(x){say('読み込めませんでした: '+x.message);if(btn)btn.disabled=false;return}
   if(btn){btn.disabled=false;btn.textContent='閉じる'}
   var sl=sn.docs.map(function(d){return Object.assign({id:d.id},d.data())}).sort(function(a,b){return (a.date+a.start)<(b.date+b.start)?-1:1});
-  box.innerHTML='<div style="margin-top:10px">'+optHTML('e'+i,e)+'<div class="tools"><button class="s" data-a="save">設定を保存</button><button class="s" data-a="pv">お客様画面で確認（練習）</button><button class="s d" data-a="del">イベントを削除</button></div></div>'+
+  box.innerHTML='<div style="margin-top:10px">'+optHTML('e'+i,e)+'<div class="tools"><button class="s" data-a="save">設定を保存</button><button class="s" data-a="pv">保存前の設定でお客様画面を確認</button><button class="s d" data-a="del">イベントを削除</button></div></div>'+
    '<details open><summary>枠 '+sl.length+'件</summary><div class="scroll"><table><tr><th>日時</th><th>定員(組・0で人数管理)</th><th>定員(人数)</th><th>1組上限</th><th>現在</th><th></th></tr>'+sl.map(function(s){
      return '<tr data-s="'+s.id+'"><td>'+md(s.date)+' '+rng(s)+'</td><td><input type="number" data-k="g" value="'+s.capG+'"></td><td><input type="number" data-k="p" value="'+(s.capP||0)+'"></td><td><input type="number" data-k="x" value="'+s.maxPer+'"></td><td>'+(s.booked||0)+'組・'+(s.people||0)+'名</td><td><button class="s" data-a="ss">保存</button> <button class="s d" data-a="sd">削除</button></td></tr>';
    }).join('')+'</table></div></details>';
@@ -292,7 +292,12 @@ async function openEv(i,btn){
     if(tr.dataset.xm)return;var gv=+tr.querySelector('[data-k=g]').value,pv=+tr.querySelector('[data-k=p]').value;if(!gv&&pv>0)tr.querySelector('[data-k=x]').value=pv};
   box.onclick=async function(ev){
     var b=ev.target.closest('[data-a]');if(!b)return;var a=b.dataset.a;
-    if(a==='pv'){window.open('./?pv=1&t='+Date.now(),'_blank');return}
+    if(a==='pv'){
+      // 保存していない設定を、この端末の中だけでお客様画面（練習モード）に渡す。データベースには書かない
+      var o=readOpt('e'+i,e.name),im=IMG['e'+i],pv={id:e.id,ev:o,at:Date.now()};
+      try{if(im&&im.dirty){pv.imgs=im.list.map(function(x){return x.full});pv.imgN=pv.imgs.length;pv.thumb=im.list.length?(im.list[0].thumb||await thumbOf(im.list[0].full)):''}}catch(x){}
+      try{localStorage.setItem('rv_preview',JSON.stringify(pv))}catch(x){delete pv.imgs;delete pv.thumb;delete pv.imgN;try{localStorage.setItem('rv_preview',JSON.stringify(pv))}catch(y){say('確認画面に設定を渡せませんでした');return}}
+      window.open('./?pv=1&t='+Date.now(),'rvpreview');return}
     try{
       if(a==='save'){
         var o=readOpt('e'+i,e.name);
