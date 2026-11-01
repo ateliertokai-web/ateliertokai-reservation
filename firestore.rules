@@ -91,7 +91,7 @@ service cloud.firestore {
         && d.name is string && d.name.size() > 0 && d.name.size() <= 50
         && d.mail is string && d.mail.size() <= 100
         && d.n is int && d.n >= 1 && d.n <= sb.maxPer
-        && d.fav == false                                   // 「忖度」は管理者だけが付けられる
+        && d.fav == false                                   // 「招待枠」は管理者だけが付けられる
         && d.waitNo is int
         && d.createdAt == request.time
         && sb.eventId == d.eventId                          // 枠がそのイベントのもの
