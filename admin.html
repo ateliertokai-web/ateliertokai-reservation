@@ -227,13 +227,13 @@ function optHTML(p,e){
    '<label>抽選の締切<input type="datetime-local" id="'+p+'d" value="'+dtl(e.deadlineMs)+'"></label>'+
    '<label>受付の開始日時（空欄なら、今すぐ受付）<input type="datetime-local" id="'+p+'a" value="'+dtl(e.openAtMs)+'"></label>'+
    '<label>同一イベントグループ名（連日予約防止用）<input id="'+p+'g" value="'+esc(e.group)+'" placeholder="例：サッカー観戦"></label></div>'+
-   '<div>'+chk(p+'v',e.visible!==false,'お客様画面に表示する')+chk(p+'w',e.wait!==false,'満席時にキャンセル待ちを受け付ける')+chk(p+'l',!!e.lap,'未就学児の注意文を表示')+chk(p+'n',!!e.names,'参加者名の入力欄を表示')+chk(p+'gf',!!e.golf,'ゴルフ（お子様の選択なし・参加者名を自動で表示）')+chk(p+'mo',!!e.mailOpt,'メールアドレスを任意にする（空欄でも予約できます）')+chk(p+'o',!!e.order,'ご注文中・新規のお客様チェック欄を表示')+chk(p+'t',!!e.note,'お客様ページに備考欄を作成')+'</div>'+
+   '<div>'+chk(p+'v',e.visible!==false,'お客様画面に表示する')+chk(p+'ts',!!e.test,'<b>テスト用イベント</b>（お客様画面に表示しないまま、練習画面で予約・変更・キャンセルまで本当に試せます。試した予約は本当に保存されます）')+chk(p+'w',e.wait!==false,'満席時にキャンセル待ちを受け付ける')+chk(p+'l',!!e.lap,'未就学児の注意文を表示')+chk(p+'n',!!e.names,'参加者名の入力欄を表示')+chk(p+'gf',!!e.golf,'ゴルフ（お子様の選択なし・参加者名を自動で表示）')+chk(p+'mo',!!e.mailOpt,'メールアドレスを任意にする（空欄でも予約できます）')+chk(p+'o',!!e.order,'ご注文中・新規のお客様チェック欄を表示')+chk(p+'t',!!e.note,'お客様ページに備考欄を作成')+'</div>'+
    '<label>お客様画面に出すメッセージ（空欄なら非表示）<textarea id="'+p+'s" rows="2">'+esc(e.msg)+'</textarea></label>'+
    '<label>未就学児の注意文（空欄なら標準の文）<textarea id="'+p+'p" rows="2">'+esc(e.lapText)+'</textarea></label>'+imgHTML(p);
 }
 function readOpt(p,name){
   var m=q(p+'m').value,dv=q(p+'d').value;
-  var o={name:name,method:m,visible:q(p+'v').checked,wait:q(p+'w').checked,lap:q(p+'l').checked,names:q(p+'n').checked,golf:q(p+'gf').checked,mailOpt:q(p+'mo').checked,order:q(p+'o').checked,note:q(p+'t').checked,
+  var o={name:name,method:m,test:q(p+'ts').checked,visible:q(p+'ts').checked?false:q(p+'v').checked,wait:q(p+'w').checked,lap:q(p+'l').checked,names:q(p+'n').checked,golf:q(p+'gf').checked,mailOpt:q(p+'mo').checked,order:q(p+'o').checked,note:q(p+'t').checked,
     group:q(p+'g').value.trim(),msg:q(p+'s').value.trim(),lapText:q(p+'p').value.trim()};
   o.deadlineMs=(m==='抽選'&&dv)?new Date(dv).getTime():0;
   var av=q(p+'a').value;o.openAtMs=av?new Date(av).getTime():0;
@@ -252,7 +252,7 @@ function evView(){
    '<div id="newopt">'+optHTML('nw',{})+'</div><div class="err" id="cer"></div><button class="p" type="submit" style="max-width:260px">枠を作成</button></form></details>'+
    '<h2 style="font-size:16px">作成済みのイベント</h2>';
   if(!S.events.length)h+='<div class="card note">イベントはまだありません。</div>';
-  S.events.forEach(function(e,i){h+='<div class="card" id="ev'+i+'"><div class="tools" style="justify-content:space-between;margin:0"><b>'+esc(e.name)+'</b><span>'+(e.method==='抽選'?'<span class="tag k">抽選'+(e.drawn?'・抽選済':'')+'</span>':'<span class="tag">先着</span>')+(e.visible===false?'<span class="tag w">非表示中</span>':'')+'</span></div><button class="s" data-open="'+i+'">設定・枠を開く</button><div id="ed'+i+'"></div></div>'});
+  S.events.forEach(function(e,i){h+='<div class="card" id="ev'+i+'"><div class="tools" style="justify-content:space-between;margin:0"><b>'+esc(e.name)+'</b><span>'+(e.method==='抽選'?'<span class="tag k">抽選'+(e.drawn?'・抽選済':'')+'</span>':'<span class="tag">先着</span>')+(e.test?'<span class="tag w">テスト用</span>':e.visible===false?'<span class="tag w">非表示中</span>':'')+'</span></div><button class="s" data-open="'+i+'">設定・枠を開く</button><div id="ed'+i+'"></div></div>'});
   p.innerHTML=h;
   var addDate=function(){var d=document.createElement('div');d.className='row dr';d.innerHTML='<label>日付<input type="date" class="dt"></label>';q('dates').appendChild(d)};
   q('ad').onclick=addDate;

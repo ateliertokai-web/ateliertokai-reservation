@@ -15,9 +15,9 @@ service cloud.firestore {
     function isFixed(st) { return st == 'confirmed' || st == 'won'; }
     function nowMs() { return request.time.toMillis(); }
 
-    // 受付中か（受付開始前・締切後・抽選済みは不可）。先着は「確定」か「キャンセル待ち（受け付ける設定のときだけ）」、抽選は「抽選待ち」だけ
+    // 受付中か（受付開始前・締切後・抽選済みは不可）。お客様に非表示でも「テスト用イベント」は動作確認のために予約できる。先着は「確定」か「キャンセル待ち（受け付ける設定のときだけ）」、抽選は「抽選待ち」だけ
     function eventOk(ev, st) {
-      return ev.visible == true
+      return (ev.visible == true || ev.get('test', false) == true)
         && nowMs() >= ev.get('openAtMs', 0)
         && ((ev.method == '抽選' && st == 'lottery' && ev.drawn == false && nowMs() <= ev.deadlineMs)
             || (ev.method != '抽選' && (st == 'confirmed' || (st == 'wait' && ev.get('wait', false) == true))));
