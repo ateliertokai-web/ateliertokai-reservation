@@ -73,6 +73,14 @@ async function go(){
   try{await loadEvents();await loadSlots()}catch(e){say('読み込めませんでした: '+(e.code==='permission-denied'?'この管理者アカウントには権限がありません（firestore.rules の管理者メールを確認してください）':e.message));return}
   if(S.tab==='res')resView();else evView();
   scrubOnce();
+  migrateOnce();
+}
+/* 招待枠の印を、古い項目名から invited へ移す（この端末で1回だけ。失敗しても次回また試す） */
+var migrating=false;
+function migrateOnce(){
+  var K='rv_migrate_invited_v1';try{if(localStorage.getItem(K))return}catch(e){}
+  if(migrating)return;migrating=true;
+  C.migrateInvited().then(function(){try{localStorage.setItem(K,'1')}catch(e){}}).catch(function(){}).then(function(){migrating=false});
 }
 /* 古い「申込済みの目印」に残っている予約番号を消す（この端末で1回だけ。失敗しても次回また試す） */
 var scrubbing=false;
@@ -141,7 +149,7 @@ function draw(){
     h+='<tr data-id="'+r.id+'"><td style="white-space:nowrap;font-family:monospace">'+r.id.replace(/(.{4})(?=.)/g,'$1-')+'</td><td>'+ts(r.createdAt)+'</td><td>'+ST[r.status]+(r.status==='wait'?' '+(r.waitNo||''):'')+'</td><td>'+md(r.date)+' '+rng(r)+'</td><td>'+esc(r.name)+(r.corp?'<br><small>'+esc(r.corp)+'</small>':'')+'</td>'+
      '<td>'+r.n+'（大'+(+r.a||0)+(kidsN(r)?' 子'+kidsN(r):'')+'）</td><td>'+esc(r.tel)+'</td><td>'+esc(r.mail)+'</td>'+(hasO?'<td>'+esc(r.owner||'')+'</td>':'')+'<td>'+esc(carTxt(r))+'</td><td>'+(r.stores||[]).map(function(k){return esc(k)+':'+esc((r.staff||{})[k]||'')}).join('<br>')+'</td>'+
      (hasP?'<td>'+(r.participants||[]).filter(Boolean).map(esc).join('、')+'</td>':'')+(hasN?'<td style="white-space:normal;min-width:140px">'+esc(r.note)+'</td>':'')+
-     (ev.method==='抽選'?'<td>'+(r.status==='lottery'?'<input type="checkbox" data-a="fav"'+(r.fav?' checked':'')+' style="width:auto">':(r.fav?'○':''))+'</td>':'')+
+     (ev.method==='抽選'?'<td>'+(r.status==='lottery'?'<input type="checkbox" data-a="inv"'+(r.invited?' checked':'')+' style="width:auto">':(r.invited?'○':''))+'</td>':'')+
      '<td>'+(r.status==='wait'?'<button class="s" data-a="pro">繰り上げ</button> ':'')+(r.status!=='cancel'&&r.status!=='lost'?'<button class="s d" data-a="cx">取消</button>':'')+'</td></tr>';
   });
   if(!list.length)h+='<tr><td colspan="12" class="note">該当する予約はありません</td></tr>';
@@ -150,7 +158,7 @@ function draw(){
     var b=e.target.closest('[data-a]');if(!b)return;
     var id=b.closest('tr').dataset.id,r=S.rs.filter(function(x){return x.id===id})[0],a=b.dataset.a;
     try{
-      if(a==='fav'){await C.res.doc(id).update({fav:b.checked,updatedAt:firebase.firestore.FieldValue.serverTimestamp()})}
+      if(a==='inv'){await C.res.doc(id).update({invited:b.checked,updatedAt:firebase.firestore.FieldValue.serverTimestamp()})}
       else if(a==='cx'){if(!confirm(r.name+' 様の予約を取り消します。よろしいですか？'))return;var x=await C.cancel(id,'',true);say(x.ok?'取り消しました'+(x.freed?'。枠に空きができました（キャンセル待ちの方は「繰り上げ」で確定できます）':''):x.msg);await loadSlots();draw()}
       else if(a==='pro'){if(!confirm(r.name+' 様を確定にします。店舗からご連絡済みですか？'))return;var y=await C.promote(id);say(y.ok?'確定にしました':y.msg);await loadSlots();draw()}
     }catch(er){say('失敗しました: '+er.message)}

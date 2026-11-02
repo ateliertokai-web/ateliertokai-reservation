@@ -81,7 +81,7 @@ function makeCore(firebase, db, opts) {
         else if (ev.wait) { status = 'wait'; waitNo = (s.waitSeq || 0) + 1; upd = { waitSeq: waitNo, lastRes: id }; }
         else return fail('この枠は満席です');
         var doc = Object.assign({}, d, { n: n, eventId: s.eventId, eventName: ev.name, slotId: slotId, date: s.date, start: s.start, end: s.end,
-          status: status, waitNo: waitNo, fav: false, createdAt: FV.serverTimestamp(), updatedAt: FV.serverTimestamp() });
+          status: status, waitNo: waitNo, invited: false, createdAt: FV.serverTimestamp(), updatedAt: FV.serverTimestamp() });
         tx.set(res.doc(id), doc);
         if (okey) tx.set(owners.doc(okey), { ids: FV.arrayUnion(id) }, { merge: true });
         tx.set(aRef, { at: now() });
@@ -221,13 +221,14 @@ function makeCore(firebase, db, opts) {
     }
   }
 
-  // 抽選: 枠ごとに「招待枠」（fav）の方を先に当選させ、残りは無作為。外れた方は申込順でキャンセル待ち（なしの設定なら落選）
+  // 抽選: 枠ごとに「招待枠」（invited）の方を先に当選させ、残りは無作為。外れた方は申込順でキャンセル待ち（なしの設定なら落選）
   async function runLottery(eventId) {
     var eS = await events.doc(eventId).get();
     if (!eS.exists) return fail('イベントが見つかりません');
     var ev = eS.data();
     if (ev.method !== '抽選') return fail('抽選のイベントではありません');
     if (ev.drawn) return fail('すでに抽選済みです');
+    await migrateInvited(eventId);
     var rs = await res.where('eventId', '==', eventId).where('status', '==', 'lottery').get();
     var ss = await slots.where('eventId', '==', eventId).get();
     var bySlot = {};
@@ -235,9 +236,9 @@ function makeCore(firebase, db, opts) {
     var ops = [], win = 0, wait = 0, lost = 0;
     ss.docs.forEach(function (sd) {
       var s = sd.data(), list = bySlot[sd.id] || [];
-      var favs = shuffle(list.filter(function (x) { return x.r.fav; })), rest = shuffle(list.filter(function (x) { return !x.r.fav; }));
+      var inv = shuffle(list.filter(function (x) { return x.r.invited === true; })), rest = shuffle(list.filter(function (x) { return x.r.invited !== true; }));
       var booked = s.booked || 0, people = s.people || 0, seq = s.waitSeq || 0, over = [];
-      favs.concat(rest).forEach(function (x) {
+      inv.concat(rest).forEach(function (x) {
         if ((!s.capG || booked + 1 <= s.capG) && (!s.capP || people + x.r.n <= s.capP)) {
           booked++; people += x.r.n; win++;
           ops.push(function (b) { b.update(res.doc(x.id), { status: 'won', updatedAt: FV.serverTimestamp() }); });
@@ -310,6 +311,20 @@ function makeCore(firebase, db, opts) {
     return ok({ count: dates.length * times.length });
   }
 
+  // 旧項目名（招待枠の印の古い名前）から invited へ移す。eventId を渡すとそのイベントだけ（管理者のみ）
+  var OLD_INV = 'f' + 'av';
+  async function migrateInvited(eventId) {
+    var q = res.where(OLD_INV, 'in', [true, false]);
+    if (eventId) q = q.where('eventId', '==', eventId);
+    var s = await q.get(), ops = [];
+    s.docs.forEach(function (d) {
+      var u = { invited: d.data()[OLD_INV] === true }; u[OLD_INV] = FV.delete();
+      ops.push(function (b) { b.update(res.doc(d.id), u); });
+    });
+    await chunked(ops);
+    return ok({ count: ops.length });
+  }
+
   async function scrubApplicants() {
     var s = await apps.get(), ops = [];
     s.docs.forEach(function (d) { if (d.data().resId !== undefined) ops.push(function (b) { b.set(apps.doc(d.id), { at: d.data().at || 0 }); }); });
@@ -327,7 +342,7 @@ function makeCore(firebase, db, opts) {
   }
 
   return { book: book, lookup: lookup, cancel: cancel, change: change, promote: promote, runLottery: runLottery, recount: recount,
-    findByOwner: findByOwner, normOwner: normOwner, owners: owners, scrubApplicants: scrubApplicants,
+    findByOwner: findByOwner, normOwner: normOwner, owners: owners, scrubApplicants: scrubApplicants, migrateInvited: migrateInvited,
     createSlots: createSlots, makeTimes: makeTimes, deleteEvent: deleteEvent, newId: newId, normMail: normMail, isFixed: isFixed, ms: ms,
     events: events, slots: slots, res: res, apps: apps, eimgs: eimgs };
 }
