@@ -40,7 +40,9 @@ let pass=0,fail=0;const R=(ok,name,extra)=>{ok?pass++:fail++;console.log((ok?'OK
  await tryOk('オーナーズカードで検索',()=>C.findByOwner('AB12','a@x.jp'));
  const l1=await tryOk('抽選申込',()=>C.book('L1',D('l@x.jp')),r=>r.status==='lottery');
  await tryOk('抽選申込2',()=>C.book('L1',D('l2@x.jp')));
+ if(process.env.OLD!=='1')await env.withSecurityRulesDisabled(c=>c.firestore().doc('reservations/'+l1.id).update({fav:true,invited:firebase.firestore.FieldValue.delete()}));
  await tryOk('管理: 抽選実行',()=>A.runLottery('E2'));
+ if(process.env.OLD!=='1'){const x=await raw('reservations/'+l1.id);R(x.status==='won'&&x.invited===true&&x.fav===undefined,'旧項目名の招待枠を移して、優先当選させる',JSON.stringify({status:x.status,invited:x.invited,fav:x.fav}))}
  await tryOk('管理: 数え直し',()=>A.recount('E1'));
  await tryOk('管理: 予約一覧',async()=>{await admin.collection('reservations').where('eventId','==','E1').get();return {ok:true}});
  await tryOk('管理: キャンセル',()=>A.cancel(b3.id,'',true));
@@ -48,9 +50,10 @@ let pass=0,fail=0;const R=(ok,name,extra)=>{ok?pass++:fail++;console.log((ok?'OK
  const blocked=async(name,fn)=>{try{const r=await fn();const ok=r&&r.ok===false;R(ok,name,ok?r.msg:'通ってしまった');}catch(e){R(e.code==='permission-denied',name,e.code||e.message)}};
  await blocked('受付開始前の予約',()=>C.book('X1',D('e@x.jp')));
  const FV=firebase.firestore.FieldValue;
- const resDoc=(x)=>Object.assign({name:'悪',tel:'0900000000',mail:'z@x.jp',a:1,k:0,s:0,m:0,n:1,eventId:'E1',eventName:'先着',slotId:'S1',date:'2026-12-01',start:'10:00',end:'11:00',status:'confirmed',waitNo:0,fav:false,createdAt:FV.serverTimestamp(),updatedAt:FV.serverTimestamp()},x);
+ const resDoc=(x)=>Object.assign({name:'悪',tel:'0900000000',mail:'z@x.jp',a:1,k:0,s:0,m:0,n:1,eventId:'E1',eventName:'先着',slotId:'S1',date:'2026-12-01',start:'10:00',end:'11:00',status:'confirmed',waitNo:0,invited:false,createdAt:FV.serverTimestamp(),updatedAt:FV.serverTimestamp()},x);
  await blocked('枠を数えずに「確定」予約を直接作る（定員オーバーの抜け道）',()=>cust.doc('reservations/AAAABBBBCCC2').set(resDoc()));
- await blocked('抽選で「招待枠」付きの申込を自分で作る',async()=>{await env.withSecurityRulesDisabled(c=>c.firestore().doc('events/E4').set({name:'抽2',method:'抽選',visible:true,drawn:false,wait:false,deadlineMs:now+3600e3}));return cust.doc('reservations/AAAABBBBCCC3').set(resDoc({eventId:'E4',status:'lottery',fav:true}))});
+ await blocked('抽選で「招待枠」付きの申込を自分で作る',async()=>{await env.withSecurityRulesDisabled(c=>c.firestore().doc('events/E4').set({name:'抽2',method:'抽選',visible:true,drawn:false,wait:false,deadlineMs:now+3600e3}));return cust.doc('reservations/AAAABBBBCCC3').set(resDoc({eventId:'E4',status:'lottery',invited:true}))});
+ await blocked('抽選で旧項目名（fav）の招待枠を自分で付ける',()=>cust.doc('reservations/AAAABBBBCCC6').set(resDoc({eventId:'E4',status:'lottery',invited:false,fav:true})));
  await blocked('予約なしで枠の組数を減らす（席を空ける抜け道）',async()=>{const s=await raw('slots/S1');return cust.doc('slots/S1').update({booked:s.booked-1,people:Math.max(0,s.people-2)})});
  await blocked('キャンセル済みの予約番号を使って、枠をもう一度減らす',async()=>{const s=await raw('slots/S1');if(!(s.booked>0))throw new Error('test setup: S1 empty');return cust.doc('slots/S1').update({booked:s.booked-1,people:Math.max(0,s.people-2),lastRes:b2.id})});
  await blocked('生きている予約番号を使って、予約は変えずに枠だけ減らす',async()=>{const s=await raw('slots/S1');return cust.doc('slots/S1').update({booked:Math.max(0,s.booked-1),people:Math.max(0,s.people-2),lastRes:b4.id})});
