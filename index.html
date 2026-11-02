@@ -16,6 +16,10 @@
 </head>
 <body>
 <header class="top"><h1>Atelier Tokai reservation</h1></header>
+<script>
+/* 確認画面（練習モード）の赤いバーは最初から出す。後から出すと画面がずれて「読み込み中」が2回あるように見えるため */
+if(/[?&#]pv=1(&|$)/.test(location.search+location.hash)){var pvb=document.createElement('div');pvb.id='pvbar';pvb.style.cssText='position:sticky;top:0;z-index:50;background:#c0392b;color:#fff;text-align:center;padding:12px 10px;line-height:1.4';pvb.innerHTML='<div style="font-size:22px;font-weight:700;letter-spacing:.05em">確認画面中です</div><div style="font-size:13px;margin-top:2px">練習用の画面です。お客様には見えません。予約は保存されません。</div>';document.querySelector('header.top').insertAdjacentElement('afterend',pvb)}
+</script>
 <main id="app"><p class="note" style="text-align:center;padding:40px 0">読み込み中…</p></main>
 <script>
 (function(){var er=[];window.__er=er;
@@ -34,7 +38,7 @@ a.innerHTML='<div class="card err">読み込みに時間がかかっています
 (function(){
 'use strict';
 var PV=/[?&#]pv=1(&|$)/.test(location.search+location.hash);
-if(PV){var pvb=document.createElement('div');pvb.id='pvbar';pvb.style.cssText='position:sticky;top:0;z-index:50;background:#c0392b;color:#fff;text-align:center;padding:12px 10px;line-height:1.4';pvb.innerHTML='<div style="font-size:22px;font-weight:700;letter-spacing:.05em">確認画面中です</div><div style="font-size:13px;margin-top:2px">練習用の画面です。お客様には見えません。予約は保存されません。</div>';var pm=document.getElementById('app');pm.parentNode.insertBefore(pvb,pm)}
+/* 確認画面の赤いバーは、ページ冒頭（ライブラリの読み込み前）ですでに出している */
 /* 管理画面の「保存前の設定でお客様画面を確認」から渡された、未保存の設定（練習モードのときだけ使う） */
 function pvGet(){if(!PV)return null;try{var o=JSON.parse(localStorage.getItem('rv_preview')||'null');return o&&o.id&&Date.now()-o.at<12*3600e3?o:null}catch(e){return null}}
 function realTest(ev){return !!(ev&&ev.savedTest)}
@@ -52,7 +56,7 @@ function opts(a,b,sel){var o='';for(var i=a;i<=b;i++)o+='<option'+(i===sel?' sel
 function busy(on,btn,txt){if(btn){btn.disabled=on;if(txt)btn.textContent=txt}}
 function top(){window.scrollTo(0,0)}
 /* サーバーの時刻に合わせる（お客様のスマホの時計がずれていても、受付開始の判定がずれないように） */
-var TOFF=0;
+var TOFF=0,TSYNC=Promise.resolve();
 function nowS(){return Date.now()+TOFF}
 function tmo(p,ms){return Promise.race([p,new Promise(function(_,rej){setTimeout(function(){rej(new Error('timeout'))},ms||12000)})])}
 function syncTime(){
@@ -143,9 +147,9 @@ var homeIv=0;
 async function home(){
   clearInterval(homeIv);
   top();
-  app.innerHTML='<p class="note" style="text-align:center;padding:40px 0">読み込み中…</p>';
+  if(!(app.children.length===1&&/読み込み中/.test(app.textContent)))app.innerHTML='<p class="note" style="text-align:center;padding:40px 0">読み込み中…</p>';
   try{
-    var snap=await tmo(PV?C.events.get():C.events.where('visible','==',true).get());
+    var snap=(await Promise.all([tmo(PV?C.events.get():C.events.where('visible','==',true).get()),TSYNC]))[0];
     var evs=snap.docs.map(function(d){return pvApply(Object.assign({id:d.id},d.data()))}).sort(function(a,b){return a.name<b.name?-1:1});
     var h='<h2>ご予約・お申し込み<small>ご希望のイベントを選んでください</small></h2>';
     if(!evs.length)h+='<div class="card note">現在、受付中のイベントはありません。</div>';
@@ -497,7 +501,7 @@ if(typeof firebase==='undefined'||typeof makeCore==='undefined'){
   firebase.initializeApp(FIREBASE_CONFIG);
   var FDB=firebase.firestore();try{FDB.settings({experimentalAutoDetectLongPolling:true,merge:true})}catch(e){}
   C=makeCore(firebase,FDB);
-  syncTime().then(openFromLink);
+  TSYNC=syncTime();openFromLink();
 }
 })();
 </script>
