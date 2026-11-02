@@ -65,7 +65,7 @@ function makeCore(firebase, db, opts) {
         var s = sS.data(), eS = await tx.get(events.doc(s.eventId));
         if (!eS.exists) return fail('このイベントは削除されました');
         var ev = eS.data();
-        if (!ev.visible) return fail('このイベントは受付を終了しました');
+        if (!ev.visible && !ev.test) return fail('このイベントは受付を終了しました'); // テスト用イベントは非表示でも予約できる（動作確認用）
         var lot = ev.method === '抽選';
         if (lot) {
           if (ev.drawn) return fail('抽選は終了したため、新しいお申し込みはできません');

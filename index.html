@@ -37,7 +37,8 @@ var PV=/[?&#]pv=1(&|$)/.test(location.search+location.hash);
 if(PV){var pvb=document.createElement('div');pvb.id='pvbar';pvb.style.cssText='position:sticky;top:0;z-index:50;background:#c0392b;color:#fff;text-align:center;padding:12px 10px;line-height:1.4';pvb.innerHTML='<div style="font-size:22px;font-weight:700;letter-spacing:.05em">確認画面中です</div><div style="font-size:13px;margin-top:2px">練習用の画面です。お客様には見えません。予約は保存されません。</div>';var pm=document.getElementById('app');pm.parentNode.insertBefore(pvb,pm)}
 /* 管理画面の「保存前の設定でお客様画面を確認」から渡された、未保存の設定（練習モードのときだけ使う） */
 function pvGet(){if(!PV)return null;try{var o=JSON.parse(localStorage.getItem('rv_preview')||'null');return o&&o.id&&Date.now()-o.at<12*3600e3?o:null}catch(e){return null}}
-function pvApply(e){var o=pvGet();if(!o||o.id!==e.id)return e;var r=Object.assign({},e,o.ev,{pvDraft:true});if(o.imgs){r.thumb=o.thumb;r.imgN=o.imgN}return r}
+function realTest(ev){return !!(ev&&ev.savedTest)}
+function pvApply(e){e.savedTest=!!e.test;var o=pvGet();if(!o||o.id!==e.id)return e;var r=Object.assign({},e,o.ev,{pvDraft:true,savedTest:!!e.test});if(o.imgs){r.thumb=o.thumb;r.imgN=o.imgN}return r}
 if(PV&&pvGet()){var pvn=document.createElement('div');pvn.style.cssText='font-size:13px;margin-top:4px;font-weight:700';pvn.textContent='管理画面の「保存していない設定」で表示しています';document.getElementById('pvbar').appendChild(pvn)}
 var app=document.getElementById('app'),C,S={ev:null,slots:[],slot:null,mode:'new',rec:null};
 var esc=function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})};
@@ -71,7 +72,7 @@ function fixModel(v){return v.replace(/[ａ-ｚＡ-Ｚ０-９]/g,function(c){ret
 var MYKEY='yoyaku_my_v1';
 function myGet(){try{var a=JSON.parse(localStorage.getItem(MYKEY)||'[]');return Array.isArray(a)?a:[]}catch(e){return[]}}
 function mySet(a){try{localStorage.setItem(MYKEY,JSON.stringify(a.slice(0,20)))}catch(e){}}
-function myAdd(id,mail){var a=myGet().filter(function(x){return x.id!==id});a.unshift({id:id,mail:mail});mySet(a)}
+function myAdd(id,mail){if(PV)return;var a=myGet().filter(function(x){return x.id!==id});a.unshift({id:id,mail:mail});mySet(a)}
 function myDel(id){mySet(myGet().filter(function(x){return x.id!==id}))}
 try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){} // ブラウザに、保存した記録を消さないよう頼む
 
@@ -153,7 +154,7 @@ async function home(){
       var notYet=e.openAtMs&&nowS()<e.openAtMs;
       if(notYet&&(!soon||e.openAtMs<soon))soon=e.openAtMs;
       var closed=e.method==='抽選'&&(e.drawn||(e.deadlineMs&&nowS()>e.deadlineMs));
-      var inner='<b>'+esc(e.name)+'</b>'+(PV&&e.visible===false?'<span class="tag w">非表示（練習用）</span>':'')+(e.pvDraft?'<span class="tag w">未保存の設定</span>':'')+
+      var inner='<b>'+esc(e.name)+'</b>'+(PV&&e.visible===false?'<span class="tag w">非表示（練習用）</span>':'')+(e.pvDraft?'<span class="tag w">未保存の設定</span>':'')+(e.savedTest?'<span class="tag k">テスト用・本当に保存</span>':'')+
         (e.method==='抽選'?'<span class="tag k">抽選</span><span>'+(closed?'受付は終了しました':'締切 '+dl(e))+'</span>':'<span class="tag">先着順</span>')+
         (notYet?'<div class="note" style="margin-top:6px;color:#8a6d2f"><b>ご予約は '+openText(e.openAtMs)+' からです</b><br><span class="cd" data-t="'+e.openAtMs+'"></span></div>':'');
       h+='<button class="ev" data-i="'+i+'"'+((closed||notYet)?' disabled style="opacity:.55"':'')+'>'+(e.thumb?'<div class="evr"><img class="evimg" src="'+esc(e.thumb)+'" alt=""><div>'+inner+'</div></div>':inner)+'</button>';
@@ -218,6 +219,7 @@ async function pickSlot(){
     S.slots=snap.docs.map(function(d){return Object.assign({id:d.id},d.data())}).sort(function(a,b){return (a.date+a.start)<(b.date+b.start)?-1:1});
   }catch(e){app.innerHTML='<div class="card err">読み込めませんでした。電波の良い場所で、もう一度お試しください。<br><button class="s" id="rt" style="margin-top:10px">もう一度読み込む</button></div>';var rt=q('rt');if(rt)rt.onclick=pickSlot;return}
   var ev=S.ev,h='<button class="l" id="bk">← イベント一覧へ</button><h2>'+esc(ev.name)+'<small>'+(ev.method==='抽選'?'抽選のお申し込みです（締切 '+dl(ev)+'）':'先着順のお申し込みです')+'</small></h2>';
+  if(PV&&realTest(ev))h+='<div class="box" style="border-color:#c0392b"><b>テスト用イベントです。</b>ここでの予約・変更・キャンセルは<b>本当に保存</b>されます（お客様には見えません）。試し終わったら、管理画面でこのイベントを削除してください。</div>';
   if(ev.msg)h+='<div class="box">'+esc(ev.msg).replace(/\n/g,'<br>')+'</div>';
   if(ev.imgN>0){h+=(ev.thumb?'<img class="gthumb" id="gt" src="'+esc(ev.thumb)+'" alt="">':'')+'<div id="gal"><button class="s" id="gb">写真・パンフレットを見る（'+ev.imgN+'枚）</button></div>'}
   var cur='';
@@ -360,7 +362,7 @@ async function submit(){
   var unbusy=function(){busy(false,btn,S.mode==='edit'?'変更を保存する':S.ev.method==='抽選'?'抽選に申し込む':'予約する')};
   try{
     var r;
-    if(S.mode==='edit'&&PV){S.msg='【練習モード】変更は保存していません';return detailView()}
+    if(S.mode==='edit'&&PV&&!realTest(S.ev)){S.msg='【練習モード】変更は保存していません';return detailView()}
     if(S.mode==='edit'){
       var ns=q('ns')?q('ns').value:S.slot.id;
       if(ns!==S.slot.id){
@@ -375,7 +377,7 @@ async function submit(){
       r=await C.change(S.rec.id,S.rec.mail,patch,ns);
       if(r.ok){var l=await C.lookup(S.rec.id,S.rec.mail);S.rec=Object.assign({id:S.rec.id},l.r);S.msg=r.waitlisted?'ご希望の時間帯は満席のため、キャンセル待ち（'+r.waitNo+'番目）として受け付けました。元のお時間のご予約は解放されています。空きが出た場合は、店舗からご連絡します。':'変更を保存しました';return detailView()}
     }else{
-      if(PV){r={ok:true,id:'PRACTICE0000',status:'confirmed'};return doneView(r,g.d)}
+      if(PV&&!realTest(S.ev)){r={ok:true,id:'PRACTICE0000',status:'confirmed'};return doneView(r,g.d)}
       r=await C.book(S.slot.id,g.d);
       if(r.ok){myAdd(r.id,g.d.mail);return doneView(r,g.d)}
     }
@@ -392,8 +394,11 @@ function doneView(r,d){
   app.innerHTML='<h2>'+msg+'</h2><div class="card"><b>'+esc(ev.name)+'</b><br>'+day(s.date)+' '+rng(s)+'<br>'+esc(d.name)+' 様　'+(d.a+d.k+d.s+d.m)+'名</div>'+
    '<p class="note" style="margin:14px 0 0">予約番号（変更・キャンセル'+(ev.method==='抽選'?'・抽選結果の確認':'')+'に必要です）</p><div class="code">'+fmtCode(r.id)+'</div>'+
    '<div class="box">この予約番号は、この端末のトップ画面「あなたの予約」にも表示されます。別の端末で確認する場合に備えて、スクリーンショットを保存するか、予約番号をメモしてください。予約確認のメールは送信されません。</div>'+
-   keepHTML({mail:d.mail})+'<button class="p" id="hm" style="margin-top:14px">トップへ戻る</button>';
+   keepHTML({mail:d.mail})+(PV&&realTest(ev)?'<button class="p" id="tr" style="margin-top:14px">この予約を開いて、変更・キャンセルを試す</button>':'')+'<button class="p" id="hm" style="margin-top:14px">トップへ戻る</button>';
   q('hm').onclick=home;
+  if(q('tr'))q('tr').onclick=async function(){var b=this;b.disabled=true;
+    try{var l=await C.lookup(r.id,d.mail);if(!l.ok){alert(l.msg);b.disabled=false;return}S.rec=Object.assign({id:l.id},l.r);S.msg='';await loadForRec();detailView()}
+    catch(e){b.disabled=false;alert('通信に失敗しました。もう一度お試しください。')}};
   wireKeep({id:r.id,mail:C.normMail(d.mail),eventName:ev.name,date:s.date,start:s.start,end:s.end});
 }
 
@@ -463,7 +468,7 @@ function detailView(){
 function cancelView(){
   var r=S.rec;
   if(!confirm('この予約をキャンセルします。よろしいですか？'))return;
-  if(PV){S.msg='【練習モード】キャンセルは保存していません';return detailView()}
+  if(PV&&!realTest(S.ev)){S.msg='【練習モード】キャンセルは保存していません';return detailView()}
   C.cancel(r.id,r.mail).then(function(x){
     if(!x.ok){alert(x.msg);return}
     S.rec.status='cancel';S.msg='キャンセルしました';detailView();

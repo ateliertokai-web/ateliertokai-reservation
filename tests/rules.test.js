@@ -16,7 +16,9 @@ let pass=0,fail=0;const R=(ok,name,extra)=>{ok?pass++:fail++;console.log((ok?'OK
   await d.doc('events/E3').set(ev({name:'未公開',openAtMs:now+3600e3}));
   const sl=(e,x)=>Object.assign({eventId:e,eventName:'x',date:'2026-12-01',start:'10:00',end:'11:00',capG:2,capP:0,maxPer:4,booked:0,people:0,waitSeq:0},x);
   await d.doc('slots/S1').set(sl('E1'));await d.doc('slots/S2').set(sl('E1',{start:'11:00',end:'12:00',capG:1}));
-  await d.doc('slots/L1').set(sl('E2',{capG:1}));await d.doc('slots/X1').set(sl('E3'));
+  await d.doc('slots/L1').set(sl('E2',{capG:1}));
+  await d.doc('events/T1').set(ev({name:'テスト用',visible:false,test:true}));await d.doc('slots/T1S').set(sl('T1'));
+  await d.doc('events/H1').set(ev({name:'非表示',visible:false}));await d.doc('slots/H1S').set(sl('H1'));await d.doc('slots/X1').set(sl('E3'));
  });
  const cust=env.unauthenticatedContext().firestore();
  const admin=env.authenticatedContext('adm',{email:ADMIN,email_verified:true}).firestore();
@@ -43,11 +45,15 @@ let pass=0,fail=0;const R=(ok,name,extra)=>{ok?pass++:fail++;console.log((ok?'OK
  if(process.env.OLD!=='1')await env.withSecurityRulesDisabled(c=>c.firestore().doc('reservations/'+l1.id).update({fav:true,invited:firebase.firestore.FieldValue.delete()}));
  await tryOk('管理: 抽選実行',()=>A.runLottery('E2'));
  if(process.env.OLD!=='1'){const x=await raw('reservations/'+l1.id);R(x.status==='won'&&x.invited===true&&x.fav===undefined,'旧項目名の招待枠を移して、優先当選させる',JSON.stringify({status:x.status,invited:x.invited,fav:x.fav}))}
+ const t1=await tryOk('テスト用イベント（非表示）に予約',()=>C.book('T1S',D('t@x.jp')),r=>r.status==='confirmed');
+ await tryOk('テスト用イベントの予約を変更',()=>C.change(t1.id,'t@x.jp',{a:3}));
+ await tryOk('テスト用イベントの予約をキャンセル',()=>C.cancel(t1.id,'t@x.jp'));
  await tryOk('管理: 数え直し',()=>A.recount('E1'));
  await tryOk('管理: 予約一覧',async()=>{await admin.collection('reservations').where('eventId','==','E1').get();return {ok:true}});
  await tryOk('管理: キャンセル',()=>A.cancel(b3.id,'',true));
  console.log('--- 断られるべきもの ---');
  const blocked=async(name,fn)=>{try{const r=await fn();const ok=r&&r.ok===false;R(ok,name,ok?r.msg:'通ってしまった');}catch(e){R(e.code==='permission-denied',name,e.code||e.message)}};
+ await blocked('テスト用ではない非表示イベントへの予約',()=>C.book('H1S',D('h@x.jp')));
  await blocked('受付開始前の予約',()=>C.book('X1',D('e@x.jp')));
  const FV=firebase.firestore.FieldValue;
  const resDoc=(x)=>Object.assign({name:'悪',tel:'0900000000',mail:'z@x.jp',a:1,k:0,s:0,m:0,n:1,eventId:'E1',eventName:'先着',slotId:'S1',date:'2026-12-01',start:'10:00',end:'11:00',status:'confirmed',waitNo:0,invited:false,createdAt:FV.serverTimestamp(),updatedAt:FV.serverTimestamp()},x);
