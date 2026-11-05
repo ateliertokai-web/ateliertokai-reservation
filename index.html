@@ -16,7 +16,7 @@
 </head>
 <body>
 <header class="top"><h1>Atelier Tokai reservation</h1></header>
-<main id="app"><p class="note" style="text-align:center;padding:40px 0">読み込み中…</p></main>
+<main id="app"><div class="loading" role="status"><span class="spin"></span>読み込み中…</div></main>
 <script>
 (function(){var er=[];window.__er=er;
 window.addEventListener('error',function(e){var t=e.target;er.push(t&&t.src?'読込失敗:'+t.src.split('/').pop():(e.message||'error'))},true);
@@ -49,7 +49,7 @@ function rng(s){return s.start==='00:00'&&s.end==='24:00'?'終日':s.start+'〜'
 function fmtCode(id){return id.replace(/(.{4})(?=.)/g,'$1-')}
 function dl(ev){return ev.deadlineMs?new Date(ev.deadlineMs).toLocaleString('ja-JP',{month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'}):''}
 function opts(a,b,sel){var o='';for(var i=a;i<=b;i++)o+='<option'+(i===sel?' selected':'')+'>'+i+'</option>';return o}
-function busy(on,btn,txt){if(btn){btn.disabled=on;if(txt)btn.textContent=txt}}
+function busy(on,btn,txt){if(btn){btn.disabled=on;btn.classList.toggle('busy',!!on);if(txt)btn.textContent=txt}}
 function top(){window.scrollTo(0,0)}
 /* サーバーの時刻に合わせる（お客様のスマホの時計がずれていても、受付開始の判定がずれないように） */
 var TOFF=0;
@@ -143,7 +143,7 @@ var homeIv=0;
 async function home(){
   clearInterval(homeIv);
   top();
-  app.innerHTML='<p class="note" style="text-align:center;padding:40px 0">読み込み中…</p>';
+  app.innerHTML='<div class="loading" role="status"><span class="spin"></span>読み込み中…</div>';
   try{
     var snap=await tmo(PV?C.events.get():C.events.where('visible','==',true).get());
     var evs=snap.docs.map(function(d){return pvApply(Object.assign({id:d.id},d.data()))}).sort(function(a,b){return a.name<b.name?-1:1});
@@ -161,7 +161,7 @@ async function home(){
     });
     var mine=PV?[]:myGet();
     if(mine.length){
-      h+='<h2 style="margin-top:28px">あなたの予約<small>この端末に保存されています</small></h2><div id="my"><p class="note">読み込み中…</p></div>';
+      h+='<h2 style="margin-top:28px">あなたの予約<small>この端末に保存されています</small></h2><div id="my"><div class="loading sm" role="status"><span class="spin"></span>読み込み中…</div></div>';
     }
     h+='<div style="margin-top:28px;text-align:center"><button class="l" id="lk">ご予約の確認・変更・キャンセル</button></div>';
     app.innerHTML=h;
@@ -213,7 +213,7 @@ async function loadMine(mine){
 async function pickSlot(){
   if(S.ev&&S.ev.openAtMs&&nowS()<S.ev.openAtMs){home();return}
   top();
-  app.innerHTML='<p class="note" style="text-align:center;padding:40px 0">読み込み中…</p>';
+  app.innerHTML='<div class="loading" role="status"><span class="spin"></span>読み込み中…</div>';
   try{
     var snap=await tmo(C.slots.where('eventId','==',S.ev.id).get());
     S.slots=snap.docs.map(function(d){return Object.assign({id:d.id},d.data())}).sort(function(a,b){return (a.date+a.start)<(b.date+b.start)?-1:1});
@@ -234,7 +234,7 @@ async function pickSlot(){
   q('bk').onclick=home;
   if(q('gb')){
     var openGal=async function(){
-      var box=q('gal');box.innerHTML='<p class="note">読み込み中…</p>';
+      var box=q('gal');box.innerHTML='<div class="loading sm" role="status"><span class="spin"></span>読み込み中…</div>';
       try{var po=pvGet(),im;if(po&&po.id===ev.id&&po.imgs)im=po.imgs;else{var d=await C.eimgs.doc(ev.id).get();im=d.exists?d.data().imgs:[]}
         box.innerHTML='<div class="gal">'+im.map(function(u){return '<img src="'+esc(u)+'" alt="" loading="lazy">'}).join('')+'</div><button class="s" id="gc">写真を閉じる</button>';
         q('gc').onclick=function(){box.innerHTML='<button class="s" id="gb">写真・パンフレットを見る（'+ev.imgN+'枚）</button>';q('gb').onclick=openGal};
