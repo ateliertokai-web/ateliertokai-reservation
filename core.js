@@ -344,7 +344,7 @@ function makeCore(firebase, db, opts) {
   return { book: book, lookup: lookup, cancel: cancel, change: change, promote: promote, runLottery: runLottery, recount: recount,
     findByOwner: findByOwner, normOwner: normOwner, owners: owners, scrubApplicants: scrubApplicants, migrateInvited: migrateInvited,
     createSlots: createSlots, makeTimes: makeTimes, deleteEvent: deleteEvent, newId: newId, normMail: normMail, isFixed: isFixed, ms: ms,
-    events: events, slots: slots, res: res, apps: apps, eimgs: eimgs };
+    events: events, slots: slots, res: res, apps: apps, eimgs: eimgs, cfg: db.collection('config') };
 }
 root.makeCore = makeCore;
 root.RV = { STORES: STORES, LAP_TEXT: LAP_TEXT };

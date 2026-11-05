@@ -163,10 +163,13 @@ async function home(){
     if(mine.length){
       h+='<h2 style="margin-top:28px">あなたの予約<small>この端末に保存されています</small></h2><div id="my"><p class="note">読み込み中…</p></div>';
     }
-    h+='<div style="margin-top:28px;text-align:center"><button class="l" id="lk">ご予約の確認・変更・キャンセル</button></div>';
+    h+='<div style="margin-top:28px;text-align:center"><button class="l" id="lk">ご予約の確認・変更・キャンセル</button><div id="gd" style="margin-top:6px"></div></div>';
     app.innerHTML=h;
     app.querySelectorAll('.ev').forEach(function(b){b.onclick=function(){S.ev=evs[+b.dataset.i];pickSlot()}});
     q('lk').onclick=lookupView;
+    // 説明書（ご予約の方法）へのボタン。管理画面の「お客様画面」で表示ONのときだけ出す
+    C.cfg.doc('guide').get().then(function(s){var g=s.exists?s.data():null,box=q('gd');
+      if(box&&g&&g.on)box.innerHTML='<a class="l" href="guide.html">'+esc((g.label&&g.label.trim())||'ご予約の方法（使い方）')+'</a>'}).catch(function(){});
     if(mine.length)loadMine(mine);
     // 受付開始の時刻になったら、自動で画面を更新する
     if(soon){

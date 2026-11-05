@@ -51,9 +51,12 @@ let pass=0,fail=0;const R=(ok,name,extra)=>{ok?pass++:fail++;console.log((ok?'OK
  await tryOk('管理: 数え直し',()=>A.recount('E1'));
  await tryOk('管理: 予約一覧',async()=>{await admin.collection('reservations').where('eventId','==','E1').get();return {ok:true}});
  await tryOk('管理: キャンセル',()=>A.cancel(b3.id,'',true));
+ await tryOk('お客様画面の設定（説明書）を読む',async()=>{await cust.doc('config/guide').get();return {ok:true}});
+ await tryOk('管理: 説明書の表示・文章を保存',async()=>{await admin.doc('config/guide').set({on:false,label:'ご予約の方法'});return {ok:true}});
  console.log('--- 断られるべきもの ---');
  const blocked=async(name,fn)=>{try{const r=await fn();const ok=r&&r.ok===false;R(ok,name,ok?r.msg:'通ってしまった');}catch(e){R(e.code==='permission-denied',name,e.code||e.message)}};
  await blocked('テスト用ではない非表示イベントへの予約',()=>C.book('H1S',D('h@x.jp')));
+ await blocked('お客様が説明書の設定を書き換える',()=>cust.doc('config/guide').set({on:true}));
  await blocked('受付開始前の予約',()=>C.book('X1',D('e@x.jp')));
  const FV=firebase.firestore.FieldValue;
  const resDoc=(x)=>Object.assign({name:'悪',tel:'0900000000',mail:'z@x.jp',a:1,k:0,s:0,m:0,n:1,eventId:'E1',eventName:'先着',slotId:'S1',date:'2026-12-01',start:'10:00',end:'11:00',status:'confirmed',waitNo:0,invited:false,createdAt:FV.serverTimestamp(),updatedAt:FV.serverTimestamp()},x);

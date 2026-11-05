@@ -34,6 +34,12 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // お客様画面の設定（説明書ボタンの表示ON/OFF・説明書の文章など）。お客様は見るだけ、変更は管理者のみ
+    match /config/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     // ===== 枠 =====
     // お客様は「組数・人数・待ち番号」のカウンターだけ更新できる。
     // そのとき lastRes に「どの予約による変更か」を書き、その予約の変化（新規・キャンセル・人数変更・時間帯変更）と
