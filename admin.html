@@ -17,7 +17,7 @@
 </head>
 <body>
 <header class="top"><h1>Atelier Tokai reservation</h1><small>ADMIN</small></header>
-<main id="app" class="wide"></main>
+<main id="app" class="wide"><div class="loading" role="status"><span class="spin"></span>読み込み中…</div></main>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
@@ -69,7 +69,7 @@ function toast(m){if(!m)return;var t=document.getElementById('toast');if(!t){t=d
 function say(m){S.msg=m;var e=q('msg');if(e){e.hidden=!m;e.textContent=m}toast(m)}
 async function go(){
   if(S.unsub){S.unsub();S.unsub=null}
-  shell();
+  shell();q('pane').innerHTML='<div class="loading" role="status"><span class="spin"></span>読み込み中…</div>';
   try{await loadEvents();await loadSlots()}catch(e){say('読み込めませんでした: '+(e.code==='permission-denied'?'この管理者アカウントには権限がありません（firestore.rules の管理者メールを確認してください）':e.message));return}
   if(S.tab==='res')resView();else evView();
   scrubOnce();
@@ -287,7 +287,8 @@ async function openEv(i,btn){
   var e=S.events[i],box=q('ed'+i);
   if(box.innerHTML){box.innerHTML='';if(btn)btn.textContent='設定・枠を開く';return}
   if(btn)btn.disabled=true;
-  try{var sn=await C.slots.where('eventId','==',e.id).get()}catch(x){say('読み込めませんでした: '+x.message);if(btn)btn.disabled=false;return}
+  box.innerHTML='<div class="loading sm" role="status"><span class="spin"></span>読み込み中…</div>';
+  try{var sn=await C.slots.where('eventId','==',e.id).get()}catch(x){box.innerHTML='';say('読み込めませんでした: '+x.message);if(btn)btn.disabled=false;return}
   if(btn){btn.disabled=false;btn.textContent='閉じる'}
   var sl=sn.docs.map(function(d){return Object.assign({id:d.id},d.data())}).sort(function(a,b){return (a.date+a.start)<(b.date+b.start)?-1:1});
   box.innerHTML='<div style="margin-top:10px">'+optHTML('e'+i,e)+'<div class="tools"><button class="s" data-a="save">設定を保存</button><button class="s" data-a="pv">保存前の設定でお客様画面を確認</button><button class="s d" data-a="del">イベントを削除</button></div></div>'+
