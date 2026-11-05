@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ご予約の方法 | Atelier Tokai reservation</title>
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#111111">
+<link rel="stylesheet" href="style.css">
+<style>
+/* お客様向けの説明書。手順ごとに「画面の見本（番号つきの赤枠）」と「説明」を並べる。スマホでは縦に積む */
+:root{--mark:#e0362c}
+main.guide{max-width:940px}
+.g-back{display:inline-block;margin:4px 0 0}
+.g-intro{margin:8px 0 0;color:var(--ink2)}
+.g-sample{display:inline-block;margin-top:8px;font-size:12px;border:1px solid var(--line);color:var(--ink2);border-radius:4px;padding:0 8px;background:#fff}
+.g-toc{display:flex;flex-wrap:wrap;gap:6px 14px;padding:16px 0 4px;margin:0;list-style:none;font-size:14px}
+.g-toc a{color:var(--ink2);text-decoration:none;border-bottom:1px solid var(--line)}
+.g-step{display:grid;grid-template-columns:minmax(0,320px) minmax(0,1fr);gap:28px;align-items:start;padding:28px 0;border-top:1px solid var(--line)}
+.g-step:first-of-type{border-top:0}
+.g-shot{padding:12px}
+.g-frame{position:relative;width:100%;border-radius:14px;outline:1px solid var(--line);box-shadow:0 6px 24px rgba(0,0,0,.10);background:#fff}
+.g-frame img{display:block;width:100%;height:auto;border-radius:14px}
+.g-mark{position:absolute;border:3px solid var(--mark);border-radius:8px;pointer-events:none}
+.g-mark b,.g-num{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--mark);color:#fff;font-size:16px;font-weight:700;line-height:1;flex:none}
+.g-mark b{position:absolute;right:-13px;top:-13px;box-shadow:0 0 0 2px #fff}
+.g-text{min-width:0}
+.g-eyebrow{margin:0;font-size:12px;font-weight:700;letter-spacing:.12em;color:var(--gold-d)}
+.g-text h2{margin:2px 0 6px}
+.g-lead{margin:0 0 14px;color:var(--ink2)}
+.g-notes{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.g-notes li{display:flex;gap:12px;align-items:flex-start;background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px 14px;white-space:pre-wrap}
+.g-caution{margin-top:14px;border:2px solid var(--mark);border-radius:10px;padding:12px 16px;background:#fff}
+.g-caution b{display:block;color:var(--mark);margin-bottom:4px}
+.g-caution ul{margin:0;padding-left:1.2em;display:grid;gap:6px}
+.g-foot{color:var(--ink2);font-size:13px;border-top:1px solid var(--line);padding-top:18px;margin-top:8px;white-space:pre-wrap}
+@media (max-width:680px){.g-step{grid-template-columns:minmax(0,1fr);gap:14px;padding:22px 0}.g-shot{max-width:340px;margin:0 auto;width:100%}}
+</style>
+</head>
+<body>
+<header class="top"><h1>Atelier Tokai reservation</h1></header>
+<main id="app" class="guide"><div class="loading" role="status"><span class="spin"></span>読み込み中…</div></main>
+<script src="guide-text.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script>
+(function(){
+'use strict';
+var app=document.getElementById('app'),D=window.GUIDE_DEFAULT,L=window.GUIDE_LAYOUT,M='①②③④⑤⑥⑦⑧⑨';
+var esc=function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})};
+// 管理画面で変更した文章があればそれを、空欄なら初期の文章を使う
+var pick=function(a,b){return (typeof a==='string'&&a.trim())?a:b};
+function render(o){
+  o=o||{};var os=o.steps||[];
+  var h='<a class="l g-back" href="./">← 予約ページへ</a><h2 style="font-size:24px;margin-top:10px">'+esc(pick(o.title,D.title))+'</h2>'+
+    '<p class="g-intro">'+esc(pick(o.intro,D.intro))+'</p><span class="g-sample">画面の内容は見本です</span>';
+  h+='<ul class="g-toc">'+D.steps.map(function(s,i){return '<li><a href="#step'+(i+1)+'">'+(i+1)+'. '+esc(pick((os[i]||{}).title,s.title))+'</a></li>'}).join('')+'</ul>';
+  D.steps.forEach(function(s,i){
+    var e=os[i]||{},lay=L[i],en=e.notes||[],ec=e.caution||{},dc=s.caution||{};
+    var marks=lay.marks.map(function(m,j){return '<span class="g-mark" style="left:'+m[0]+'%;top:'+m[1]+'%;width:'+m[2]+'%;height:'+m[3]+'%"><b>'+M[j]+'</b></span>'}).join('');
+    var notes=s.notes.map(function(n,j){return '<li><b class="g-num">'+M[j]+'</b><span>'+esc(pick(en[j],n))+'</span></li>'}).join('');
+    var items=(ec.items&&ec.items.filter(function(x){return x&&x.trim()}).length?ec.items:(dc.items||[])).filter(function(x){return x&&x.trim()});
+    var ct=pick(ec.title,dc.title||'ご注意');
+    h+='<section class="g-step" id="step'+(i+1)+'"><div class="g-shot"><div class="g-frame" style="aspect-ratio:'+lay.w+'/'+lay.h+'"><img src="'+lay.img+'" alt="" width="'+lay.w+'" height="'+lay.h+'" loading="lazy">'+marks+'</div></div>'+
+      '<div class="g-text"><p class="g-eyebrow">STEP '+(i+1)+'</p><h2>'+esc(pick(e.title,s.title))+'</h2><p class="g-lead">'+esc(pick(e.lead,s.lead))+'</p><ol class="g-notes">'+notes+'</ol>'+
+      (items.length?'<div class="g-caution" role="note"><b>'+esc(ct)+'</b><ul>'+items.map(function(x){return '<li>'+esc(x)+'</li>'}).join('')+'</ul></div>':'')+'</div></section>';
+  });
+  h+='<p class="g-foot">'+esc(pick(o.foot,D.foot))+'</p><p style="text-align:center;margin-top:20px"><a class="l" href="./">← 予約ページへ</a></p>';
+  app.innerHTML=h;
+  if(location.hash){var t=document.querySelector(location.hash);if(t)t.scrollIntoView()}
+}
+var done=false,show=function(o){if(done)return;done=true;render(o)};
+setTimeout(function(){show(null)},3000); // 読み込めないときは、初期の文章で表示する
+try{
+  firebase.initializeApp(FIREBASE_CONFIG);
+  var db=firebase.firestore();try{db.settings({experimentalAutoDetectLongPolling:true,merge:true})}catch(e){}
+  db.collection('config').doc('guide').get().then(function(s){show(s.exists?s.data():null)}).catch(function(){show(null)});
+}catch(e){show(null)}
+})();
+</script>
+</body>
+</html>

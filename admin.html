@@ -23,6 +23,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
 <script src="core.js"></script>
+<script src="guide-text.js"></script>
 <script>
 (function(){
 'use strict';
@@ -61,7 +62,7 @@ async function loadSlots(){
 }
 function shell(){
   app.className='wide';
-  app.innerHTML='<div class="tools" style="justify-content:space-between"><div class="tabs" style="border:0;margin:0"><button data-t="res" class="'+(S.tab==='res'?'on':'')+'">予約一覧</button><button data-t="ev" class="'+(S.tab==='ev'?'on':'')+'">イベント・枠</button></div><button class="s" id="lo">ログアウト</button></div><div id="msg" class="box" '+(S.msg?'':'hidden')+'>'+esc(S.msg)+'</div><div id="pane"></div>';
+  app.innerHTML='<div class="tools" style="justify-content:space-between"><div class="tabs" style="border:0;margin:0"><button data-t="res" class="'+(S.tab==='res'?'on':'')+'">予約一覧</button><button data-t="ev" class="'+(S.tab==='ev'?'on':'')+'">イベント・枠</button><button data-t="cs" class="'+(S.tab==='cs'?'on':'')+'">お客様画面</button></div><button class="s" id="lo">ログアウト</button></div><div id="msg" class="box" '+(S.msg?'':'hidden')+'>'+esc(S.msg)+'</div><div id="pane"></div>';
   app.querySelectorAll('[data-t]').forEach(function(b){b.onclick=function(){S.tab=b.dataset.t;S.msg='';go()}});
   q('lo').onclick=function(){auth.signOut()};
 }
@@ -71,7 +72,7 @@ async function go(){
   if(S.unsub){S.unsub();S.unsub=null}
   shell();q('pane').innerHTML='<div class="loading" role="status"><span class="spin"></span>読み込み中…</div>';
   try{await loadEvents();await loadSlots()}catch(e){say('読み込めませんでした: '+(e.code==='permission-denied'?'この管理者アカウントには権限がありません（firestore.rules の管理者メールを確認してください）':e.message));return}
-  if(S.tab==='res')resView();else evView();
+  if(S.tab==='res')resView();else if(S.tab==='cs')csView();else evView();
   scrubOnce();
   migrateOnce();
 }
@@ -328,6 +329,48 @@ async function openEv(i,btn){
       }
     }catch(x){say('失敗しました: '+x.message)}
   };
+}
+
+
+/* ---------- お客様画面（説明書ボタンの表示・説明書の文章） ---------- */
+function csView(){
+  var p=q('pane'),D=window.GUIDE_DEFAULT,M='①②③④⑤⑥⑦⑧⑨';
+  p.innerHTML='<div class="loading sm" role="status"><span class="spin"></span>読み込み中…</div>';
+  C.cfg.doc('guide').get().then(function(s){draw(s.exists?s.data():{})}).catch(function(e){p.innerHTML='';say('読み込めませんでした: '+(e.code==='permission-denied'?'Firestoreのルールに「config」の設定がまだありません。最新の firestore.rules を公開してください':e.message));draw({})});
+  function val(o,k,d){return (o&&typeof o[k]==='string'&&o[k].trim())?o[k]:d}
+  function draw(g){
+    var gs=g.steps||[];
+    var h='<div class="card"><h2 style="margin-top:0">説明書（ご予約の方法）</h2>'+
+      '<label class="chk"><input type="checkbox" id="gOn"'+(g.on?' checked':'')+'>お客様画面に説明書のボタンを表示する<span class="note">（「ご予約の確認・変更・キャンセル」の下に出ます）</span></label>'+
+      '<label>ボタンの文字<input id="gLabel" maxlength="40" value="'+esc(val(g,'label',D.label))+'"></label>'+
+      '<div class="tools"><a class="s" style="text-decoration:none;color:inherit;border:1px solid var(--line);border-radius:7px;padding:7px 12px;font-size:14px;background:#fff" href="guide.html" target="_blank" rel="noopener">説明書を開く（保存済みの内容）</a></div></div>'+
+      '<details><summary>説明書の文章を変更する</summary><div class="card">'+
+      '<label>ページの見出し<input id="gTitle" maxlength="60" value="'+esc(val(g,'title',D.title))+'"></label>'+
+      '<label>はじめの説明<textarea id="gIntro" rows="2" maxlength="300">'+esc(val(g,'intro',D.intro))+'</textarea></label>';
+    D.steps.forEach(function(st,i){
+      var e=gs[i]||{},en=e.notes||[],ec=e.caution||{},dc=st.caution||{};
+      h+='<fieldset><legend>STEP '+(i+1)+'</legend>'+
+        '<label>見出し<input id="gS'+i+'t" maxlength="60" value="'+esc(val(e,'title',st.title))+'"></label>'+
+        '<label>説明<textarea id="gS'+i+'l" rows="2" maxlength="300">'+esc(val(e,'lead',st.lead))+'</textarea></label>'+
+        st.notes.map(function(n,j){return '<label>'+M[j]+'（画面の'+M[j]+'の赤枠の説明）<textarea id="gS'+i+'n'+j+'" rows="2" maxlength="400">'+esc((en[j]&&en[j].trim())?en[j]:n)+'</textarea></label>'}).join('')+
+        '<label>ご注意の見出し<span class="note">（空欄なら「ご注意」）</span><input id="gS'+i+'ct" maxlength="60" value="'+esc(val(ec,'title',dc.title||''))+'"></label>'+
+        '<label>ご注意の内容<span class="note">（1行に1項目。空欄ならご注意の枠は出ません）</span><textarea id="gS'+i+'ci" rows="3" maxlength="800">'+esc(((ec.items&&ec.items.length)?ec.items:(dc.items||[])).join('\n'))+'</textarea></label></fieldset>';
+    });
+    h+='<label>いちばん下の文<textarea id="gFoot" rows="2" maxlength="300">'+esc(val(g,'foot',D.foot))+'</textarea></label>'+
+      '<p class="note">空欄にした欄は、初期の文章で表示されます。</p></div></details>'+
+      '<div class="tools"><button class="p" id="gSave" style="max-width:260px">保存する</button><button class="s" id="gReset" type="button">文章を初期の内容に戻す</button></div>';
+    p.innerHTML=h;
+    q('gReset').onclick=function(){if(!confirm('説明書の文章を、初期の内容に戻します（「保存する」を押すまで反映されません）。よろしいですか？'))return;var on=q('gOn').checked;draw({on:on});q('gOn').checked=on;p.querySelector('details').open=true};
+    q('gSave').onclick=async function(){
+      var b=this,o={on:q('gOn').checked,label:q('gLabel').value.trim(),title:q('gTitle').value.trim(),intro:q('gIntro').value.trim(),foot:q('gFoot').value.trim(),steps:[],updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
+      D.steps.forEach(function(st,i){o.steps.push({title:q('gS'+i+'t').value.trim(),lead:q('gS'+i+'l').value.trim(),notes:st.notes.map(function(n,j){return q('gS'+i+'n'+j).value.trim()}),
+        caution:{title:q('gS'+i+'ct').value.trim(),items:q('gS'+i+'ci').value.split('\n').map(function(x){return x.trim()}).filter(Boolean)}})});
+      b.disabled=true;
+      try{await C.cfg.doc('guide').set(o);say(o.on?'保存しました（お客様画面に説明書のボタンを表示しています）':'保存しました（説明書のボタンは非表示です）')}
+      catch(e){say('保存できませんでした: '+(e.code==='permission-denied'?'Firestoreのルールに「config」の設定がまだありません。最新の firestore.rules を公開してください':e.message))}
+      b.disabled=false;
+    };
+  }
 }
 
 /* ---------- 起動 ---------- */
