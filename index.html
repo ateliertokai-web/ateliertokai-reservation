@@ -362,7 +362,7 @@ async function submit(){
   var unbusy=function(){busy(false,btn,S.mode==='edit'?'変更を保存する':S.ev.method==='抽選'?'抽選に申し込む':'予約する')};
   try{
     var r;
-    if(S.mode==='edit'&&PV&&!realTest(S.ev)){S.msg='【練習モード】変更は保存していません';return detailView()}
+    if(S.mode==='edit'&&PV&&!realTest(S.ev)){S.msg='【練習モード】変更は保存していません';S.justChanged=true;return detailView()}
     if(S.mode==='edit'){
       var ns=q('ns')?q('ns').value:S.slot.id;
       if(ns!==S.slot.id){
@@ -375,7 +375,7 @@ async function submit(){
       }
       var patch=Object.assign({},g.d);delete patch.mail;
       r=await C.change(S.rec.id,S.rec.mail,patch,ns);
-      if(r.ok){var l=await C.lookup(S.rec.id,S.rec.mail);S.rec=Object.assign({id:S.rec.id},l.r);S.msg=r.waitlisted?'ご希望の時間帯は満席のため、キャンセル待ち（'+r.waitNo+'番目）として受け付けました。元のお時間のご予約は解放されています。空きが出た場合は、店舗からご連絡します。':'変更を保存しました';return detailView()}
+      if(r.ok){var l=await C.lookup(S.rec.id,S.rec.mail);S.rec=Object.assign({id:S.rec.id},l.r);S.justChanged=true;S.msg=r.waitlisted?'ご希望の時間帯は満席のため、キャンセル待ち（'+r.waitNo+'番目）として受け付けました。元のお時間のご予約は解放されています。空きが出た場合は、店舗からご連絡します。':'変更を保存しました';return detailView()}
     }else{
       if(PV&&!realTest(S.ev)){r={ok:true,id:'PRACTICE0000',status:'confirmed'};return doneView(r,g.d)}
       r=await C.book(S.slot.id,g.d);
@@ -455,7 +455,9 @@ function detailView(){
   if(r.status==='lottery')h+='<div class="box">抽選結果は、締切後にこの画面で確認できます。</div>';
   if(r.status==='lost')h+='<div class="box">今回は抽選の結果、ご案内できませんでした。</div>';
   if(can)h+=keepHTML(r);
-  if(can)h+='<button class="p" id="ed" style="margin-top:14px">内容を変更する</button><div style="text-align:center;margin-top:16px"><button class="s d" id="cx">この予約をキャンセルする</button></div>';
+  // 変更を保存した直後は、押し間違いを防ぐためキャンセルボタンを出さない（トップから開き直すと表示される）
+  var just=S.justChanged;S.justChanged=false;
+  if(can)h+='<button class="p" id="ed" style="margin-top:14px">内容を変更する</button>'+(just?'<p class="note" style="text-align:center;margin-top:16px">ご予約をキャンセルする場合は、トップ画面からご予約を開き直してください。</p>':'<div style="text-align:center;margin-top:16px"><button class="s d" id="cx">この予約をキャンセルする</button></div>');
   app.innerHTML=h;
   q('bk').onclick=home;
   if(can)wireKeep(r);
@@ -463,7 +465,7 @@ function detailView(){
       if(S.rec.status==='confirmed'||S.rec.status==='won'){
         if(!confirm('ご予約内容の変更について\n\n時間帯を変更される場合、変更先に空きがあれば、そのままお手続きいただけます。\n\n変更先が満席の場合は、順番の並び直しとなり、「キャンセル待ち」となる、またはご変更をお受けできない場合がございます。（キャンセル待ちとなった場合、元のお時間のご予約は解放されます。）\n\n内容を変更しますか？'))return;
       }
-      S.mode='edit';formView()};q('cx').onclick=cancelView}
+      S.mode='edit';formView()};if(q('cx'))q('cx').onclick=cancelView}
 }
 function cancelView(){
   var r=S.rec;
