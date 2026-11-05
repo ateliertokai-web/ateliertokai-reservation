@@ -284,6 +284,7 @@ function formView(){
         '<label class="stf" data-k="'+esc(k)+'"'+(on?'':' hidden')+'>担当スタッフ（'+esc(k)+'）<select data-k="'+esc(k)+'"><option value="">選択してください</option>'+RV.STORES[k].map(function(n){return '<option'+(((r.staff||{})[k]===n)?' selected':'')+'>'+esc(n)+'</option>'}).join('')+'</select></label>';
     }).join('')+'</fieldset>'+
    (ev.note?'<label>備考（ご要望・ご連絡事項など）<textarea id="nt" rows="3" maxlength="500">'+esc(r.note)+'</textarea></label>':'')+
+   '<p class="note privacy">ご入力いただいた個人情報は、本イベントのご案内・ご連絡およびご予約の管理にのみ使用し、法令に基づく場合を除き、第三者に提供することはありません。</p>'+
    '<div class="err" id="er"></div><button class="p" id="go" type="submit">'+(edit?'変更を保存する':ev.method==='抽選'?'抽選に申し込む':'予約する')+'</button>'+
    (edit?'<div style="text-align:center;margin-top:18px"><button type="button" class="s d" id="cx">この予約をキャンセルする</button></div>':'')+'</form>';
   app.innerHTML=h;
