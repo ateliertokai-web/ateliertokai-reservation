@@ -380,6 +380,13 @@ function csView(){
         '<label>ご注意の見出し<span class="note">（空欄なら「ご注意」）</span><input id="gS'+i+'ct" maxlength="60" value="'+esc(val(ec,'title',dc.title||''))+'"></label>'+
         '<label>ご注意の内容<span class="note">（1行に1項目。空欄ならご注意の枠は出ません）</span><textarea id="gS'+i+'ci" rows="3" maxlength="800">'+esc(((ec.items&&ec.items.length)?ec.items:(dc.items||[])).join('\n'))+'</textarea></label></fieldset>';
     });
+    var dh=D.home||{},gh=g.home||{},ln=function(a,b){a=(a||[]).filter(function(x){return x&&x.trim()});return (a.length?a:(b||[])).join('\n')};
+    h+='<fieldset><legend>ホーム画面に追加する（アプリのように使う）</legend>'+
+      '<label>見出し<input id="gHt" maxlength="60" value="'+esc(val(gh,'title',dh.title))+'"></label>'+
+      '<label>説明<textarea id="gHl" rows="2" maxlength="300">'+esc(val(gh,'lead',dh.lead))+'</textarea></label>'+
+      '<label>iPhone の手順<span class="note">（1行に1手順）</span><textarea id="gHi" rows="4" maxlength="800">'+esc(ln(gh.ios,dh.ios))+'</textarea></label>'+
+      '<label>Android の手順<span class="note">（1行に1手順）</span><textarea id="gHa" rows="4" maxlength="800">'+esc(ln(gh.android,dh.android))+'</textarea></label>'+
+      '<label>補足<textarea id="gHn" rows="3" maxlength="500">'+esc(val(gh,'note',dh.note))+'</textarea></label></fieldset>';
     h+='<label>いちばん下の文<textarea id="gFoot" rows="2" maxlength="300">'+esc(val(g,'foot',D.foot))+'</textarea></label>'+
       '<p class="note">空欄にした欄は、初期の文章で表示されます。</p></div></details>'+
       '<div class="tools"><button class="p" id="gSave" style="max-width:260px">保存する</button><button class="s" id="gReset" type="button">文章を初期の内容に戻す</button></div>';
@@ -387,6 +394,8 @@ function csView(){
     q('gReset').onclick=function(){if(!confirm('説明書の文章を、初期の内容に戻します（「保存する」を押すまで反映されません）。よろしいですか？'))return;var on=q('gOn').checked;draw({on:on});q('gOn').checked=on;p.querySelector('details').open=true};
     q('gSave').onclick=async function(){
       var b=this,o={on:q('gOn').checked,label:q('gLabel').value.trim(),title:q('gTitle').value.trim(),intro:q('gIntro').value.trim(),foot:q('gFoot').value.trim(),steps:[],updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
+      var sp=function(id){return q(id).value.split('\n').map(function(x){return x.trim()}).filter(Boolean)};
+      o.home={title:q('gHt').value.trim(),lead:q('gHl').value.trim(),ios:sp('gHi'),android:sp('gHa'),note:q('gHn').value.trim()};
       D.steps.forEach(function(st,i){o.steps.push({title:q('gS'+i+'t').value.trim(),lead:q('gS'+i+'l').value.trim(),notes:st.notes.map(function(n,j){return q('gS'+i+'n'+j).value.trim()}),
         caution:{title:q('gS'+i+'ct').value.trim(),items:q('gS'+i+'ci').value.split('\n').map(function(x){return x.trim()}).filter(Boolean)}})});
       b.disabled=true;
