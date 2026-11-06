@@ -141,7 +141,7 @@ service cloud.firestore {
       let a = request.resource.data;
       let moving = a.slotId != b.slotId;
       return a.diff(b).affectedKeys().hasOnly(['owner', 'name', 'corp', 'tel', 'a', 'k', 's', 'm', 'participants', 'note', 'car', 'order', 'stores', 'staff',
-                                               'n', 'slotId', 'date', 'start', 'end', 'status', 'waitNo', 'updatedAt'])
+                                               'n', 'slotId', 'date', 'start', 'end', 'status', 'waitNo', 'updatedAt', 'lexus'])
         && a.updatedAt == request.time
         && b.status != 'cancel'
         && (

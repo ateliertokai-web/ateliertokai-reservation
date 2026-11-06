@@ -132,6 +132,8 @@ function resView(){
   },function(e){say('予約を読み込めませんでした: '+e.message)});
 }
 function kidsN(r){return (+r.k||0)+(+r.s||0)+(+r.m||0)}
+// 参加者名。ゴルフで「レクサスオーナー」にチェックがある方には（オーナー）を付ける
+function pTxt(r,html){var l=r.lexus||[];return (r.participants||[]).map(function(p,i){return p?(html?esc(p):p)+(l[i]?(html?'<b style="color:var(--gold-d)">（オーナー）</b>':'（オーナー）'):''):''}).filter(Boolean).join('、')}
 function carTxt(r){if(r.order)return 'ご注文中・新規';var c=r.car||{};return [c.pref,c.cls,c.kana,c.num].join(' ')+' '+(c.model||'')}
 function draw(){
   var ev=S.events.filter(function(e){return e.id===S.evId})[0]||{};
@@ -184,7 +186,7 @@ function draw(){
   list.forEach(function(r){
     h+='<tr data-id="'+r.id+'"><td style="white-space:nowrap;font-family:monospace">'+r.id.replace(/(.{4})(?=.)/g,'$1-')+'</td><td>'+ts(r.createdAt)+'</td><td>'+ST[r.status]+(r.status==='wait'?' '+(r.waitNo||''):'')+((S.dupIds||{})[r.id]?'<br><span class="tag w">同姓同名?</span>':'')+'</td><td>'+md(r.date)+' '+rng(r)+'</td><td>'+esc(r.name)+(r.corp?'<br><small>'+esc(r.corp)+'</small>':'')+'</td>'+
      '<td>'+r.n+'（大'+(+r.a||0)+(kidsN(r)?' 子'+kidsN(r):'')+'）</td><td>'+esc(r.tel)+'</td><td>'+esc(r.mail)+'</td>'+(hasO?'<td>'+esc(r.owner||'')+'</td>':'')+'<td>'+esc(carTxt(r))+'</td><td>'+(r.stores||[]).map(function(k){return esc(k)+':'+esc((r.staff||{})[k]||'')}).join('<br>')+'</td>'+
-     (hasP?'<td>'+(r.participants||[]).filter(Boolean).map(esc).join('、')+'</td>':'')+(hasN?'<td style="white-space:normal;min-width:140px">'+esc(r.note)+'</td>':'')+
+     (hasP?'<td>'+pTxt(r,true)+'</td>':'')+(hasN?'<td style="white-space:normal;min-width:140px">'+esc(r.note)+'</td>':'')+
      (ev.method==='抽選'?'<td>'+(r.status==='lottery'?'<input type="checkbox" data-a="inv"'+(r.invited?' checked':'')+' style="width:auto">':(r.invited?'○':''))+'</td>':'')+
      '<td>'+(r.status==='wait'?'<button class="s" data-a="pro">繰り上げ</button> ':'')+(r.status!=='cancel'&&r.status!=='lost'?'<button class="s d" data-a="cx">取消</button>':'')+'</td></tr>';
   });
@@ -214,7 +216,7 @@ function csv(list){
   var rows=list.map(function(r){
     var c=r.car||{},p=r.participants||[];
     var a=[r.id,ts(r.createdAt),ST[r.status]+(r.status==='wait'?(r.waitNo||''):''),r.eventName,r.date,r.start,r.end,r.name,r.corp||'',r.tel,r.mail,r.a,r.k,r.s,r.m,r.n];
-    for(var i=0;i<12;i++)a.push(p[i]||'');
+    for(var i=0;i<12;i++)a.push(p[i]?(p[i]+((r.lexus||[])[i]?'（オーナー）':'')):'');
     return a.concat([r.order?'':[c.pref,c.cls,c.kana,c.num].join(' '),r.order?'':(c.model||''),r.order?'○':'',(r.stores||[]).join(' / '),(r.stores||[]).map(function(k){return (r.staff||{})[k]||''}).join(' / '),r.note||'',r.owner||'']);
   });
   var text=[head].concat(rows).map(function(r){return r.map(function(v){v=String(v==null?'':v);return '"'+v.replace(/"/g,'""')+'"'}).join(',')}).join('\r\n');
