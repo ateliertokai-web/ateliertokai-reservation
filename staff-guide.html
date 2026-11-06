@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>予約管理 スタッフガイド</title>
+<link rel="icon" type="image/png" href="admin-icon-192.png">
+</head>
+<body style="margin:0">
+<style>
+/* 縦に並ぶ手順。管理画面は横長なので、各手順は「見出し → 注釈つきの画面 → 番号の説明」の順に縦積み */
+:root{
+  --bg:#f5f6f4; --paper:#ffffff; --ink:#1d1d1b; --ink2:#5f5d58; --line:#e1e0db;
+  --brand:#111111; --gold:#b8955a; --mark:#e0362c; --mark-ink:#ffffff;
+  --font:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic","YuGothic",Meiryo,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#161615;--paper:#21211f;--ink:#ecebe7;--ink2:#a9a69f;--line:#34332f;--brand:#0b0b0b;--gold:#d2b47a;--mark:#ff5a4f;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#161615;--paper:#21211f;--ink:#ecebe7;--ink2:#a9a69f;--line:#34332f;--brand:#0b0b0b;--gold:#d2b47a;--mark:#ff5a4f;color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:16px/1.75 var(--font);-webkit-text-size-adjust:100%}
+.top{background:var(--brand);color:#fff;border-bottom:3px solid var(--gold)}
+.wrap{max-width:1040px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.top .wrap{padding-block:28px 24px}
+.top .brand{margin:0;color:var(--gold);font-size:13px;letter-spacing:.12em}
+.top h1{margin:4px 0 6px;font-size:clamp(24px,5vw,32px);line-height:1.35;text-wrap:balance}
+.top p{margin:0;color:#d9d6cf;font-size:14px}
+.sample{display:inline-block;margin-top:12px;font-size:12px;border:1px solid #6b6252;color:#e9dcc0;border-radius:4px;padding:1px 8px}
+main.wrap{padding-block:8px 48px;display:grid;gap:8px}
+.toc{display:flex;flex-wrap:wrap;gap:6px 14px;padding-block:18px 6px;margin:0;list-style:none;font-size:14px}
+.toc a{color:var(--ink2);text-decoration:none;border-bottom:1px solid var(--line)}
+.toc a:hover,.toc a:focus-visible{color:var(--ink);border-color:var(--ink)}
+.step{display:grid;gap:16px;padding-block:32px;border-top:1px solid var(--line);min-width:0}
+.step:first-of-type{border-top:0}
+.eyebrow{margin:0;font-size:12px;font-weight:700;letter-spacing:.12em;color:var(--gold)}
+.head h2{margin:2px 0 4px;font-size:22px;line-height:1.4;text-wrap:balance}
+.lead{margin:0;color:var(--ink2)}
+.shot{padding:12px;min-width:0}
+.shot.narrow{max-width:520px}
+.frame{position:relative;width:100%;max-width:100%;border-radius:10px;outline:1px solid var(--line);box-shadow:0 6px 24px rgba(0,0,0,.10);background:#fff}
+.frame img{display:block;width:100%;height:100%;border-radius:10px}
+.mark{position:absolute;border:3px solid var(--mark);border-radius:6px;pointer-events:none}
+.mark b,.num{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--mark);color:var(--mark-ink);font-size:16px;font-weight:700;line-height:1;flex:none}
+.mark b{position:absolute;right:-13px;top:-13px;box-shadow:0 0 0 2px var(--paper)}
+.notes{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:10px}
+.notes li{display:flex;gap:12px;align-items:flex-start;background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:12px 14px;min-width:0}
+.notes .num{margin-top:1px}
+.caution{border:2px solid var(--mark);border-radius:10px;padding:12px 16px;background:var(--paper)}
+.caution-title{margin:0 0 2px;font-weight:700;color:var(--mark)}
+.caution p{margin:0}
+.faq{display:grid;gap:10px;padding-block:32px;border-top:1px solid var(--line)}
+.faq h2{margin:0 0 4px;font-size:22px}
+.qa{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:12px 16px}
+.qa .q{margin:0;font-weight:700}
+.qa .q::before{content:"Q. ";color:var(--gold)}
+.qa .a{margin:2px 0 0;color:var(--ink2)}
+.opts{display:grid;gap:10px}.opts h3{margin:8px 0 0;font-size:18px}.opts dl{margin:0;display:grid;gap:8px}.opts dl div{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:12px 16px}.opts dt{font-weight:700}.opts dd{margin:4px 0 0;color:var(--ink2)}.foot{color:var(--ink2);font-size:13px;border-top:1px solid var(--line);padding-top:20px}
+@media (max-width:680px){.step{padding-block:24px}.shot{padding:10px 8px}.mark{border-width:2px}.mark b{width:20px;height:20px;font-size:13px;right:-10px;top:-10px}}
+</style>
+<header class="top"><div class="wrap">
+  <p class="brand">Atelier Tokai reservation</p>
+  <h1>予約管理 スタッフガイド</h1>
+  <p>管理画面での予約の確認、キャンセル待ちの繰り上げ、抽選、イベントと枠の作り方をまとめています。</p>
+  <span class="sample">見本：画面の名前・連絡先はすべて架空です</span>
+</div></header>
+<main class="wrap">
+<ul class="toc"><li><a href="#step1">1. ログインする</a></li><li><a href="#step2">2. 予約一覧を見る</a></li><li><a href="#step3">3. キャンセル待ちを繰り上げる</a></li><li><a href="#step4">4. 抽選を行う</a></li><li><a href="#step5">5. イベントと枠を作る</a></li><li><a href="#step6">6. イベントの設定を変える</a></li><li><a href="#more">そのほかの機能</a></li><li><a href="#faq">困ったとき</a></li></ul>
+<section class="step" id="step1">
+  <div class="head"><p class="eyebrow">STEP 1</p><h2>ログインする</h2><p class="lead">管理画面（予約ページのアドレスの最後を admin.html にしたページ）を開き、ログインします。</p></div>
+  <div class="shot narrow"><div class="frame" style="aspect-ratio:800/420"><img src="staff-guide/01-login.webp" alt="ログインするの画面" width="800" height="420" loading="lazy"><span class="mark" style="left:14.12%;top:48.30%;width:71.75%;height:11.21%"><b>①</b></span><span class="mark" style="left:14.12%;top:68.82%;width:71.75%;height:11.21%"><b>②</b></span><span class="mark" style="left:14.12%;top:88.13%;width:71.75%;height:12.95%"><b>③</b></span></div></div>
+  <ol class="notes"><li><b class="num">①</b><span>管理者として登録されたメールアドレスを入力します。</span></li><li><b class="num">②</b><span>パスワードを入力します。</span></li><li><b class="num">③</b><span>「ログイン」を押します。</span></li></ol><div class="caution" role="note"><p class="caution-title">ご注意</p><p>登録された管理者アカウントだけが使えます。共有のパソコンでは、使い終わったら右上の「ログアウト」を押してください。</p></div>
+</section><section class="step" id="step2">
+  <div class="head"><p class="eyebrow">STEP 2</p><h2>予約一覧を見る</h2><p class="lead">ログインすると「予約一覧」が開きます。予約はリアルタイムで更新されます。</p></div>
+  <div class="shot"><div class="frame" style="aspect-ratio:1480/900"><img src="staff-guide/02-list.webp" alt="予約一覧を見るの画面" width="1480" height="900" loading="lazy"><span class="mark" style="left:1.08%;top:1.33%;width:15.10%;height:5.49%"><b>①</b></span><span class="mark" style="left:1.08%;top:7.93%;width:97.84%;height:7.79%"><b>②</b></span><span class="mark" style="left:1.08%;top:36.06%;width:97.84%;height:6.88%"><b>③</b></span><span class="mark" style="left:1.08%;top:44.05%;width:97.84%;height:4.34%"><b>④</b></span><span class="mark" style="left:1.15%;top:53.61%;width:84.50%;height:6.01%"><b>⑤</b></span><span class="mark" style="left:88.13%;top:54.44%;width:3.65%;height:4.34%"><b>⑥</b></span></div></div>
+  <ol class="notes"><li><b class="num">①</b><span>「予約一覧」と「イベント・枠」を切り替えます。</span></li><li><b class="num">②</b><span>イベント・時間帯・状態で絞り込みます。状態は「取消以外」が標準です。</span></li><li><b class="num">③</b><span>時間帯ごとの予約状況です。「4組・9/12名」は、予約4組・9名（定員12名）という意味です。キャンセル待ちがあると「待ち1」のように出ます。</span></li><li><b class="num">④</b><span>「CSVを書き出す」でExcel用の一覧を保存できます。「人数を数え直す」は、枠の数字が合わないときに予約から数え直します。</span></li><li><b class="num">⑤</b><span>予約1件ごとの内容です。予約番号・お名前・連絡先・車両・店舗と担当が並びます。</span></li><li><b class="num">⑥</b><span>「取消」で、お客様に代わってキャンセルします。確定の予約を取り消すと、その枠に空きができます。</span></li></ol>
+</section><section class="step" id="step3">
+  <div class="head"><p class="eyebrow">STEP 3</p><h2>キャンセル待ちを繰り上げる</h2><p class="lead">キャンセル待ちがある時間帯は、予約一覧の上にまとめて表示されます。</p></div>
+  <div class="shot"><div class="frame" style="aspect-ratio:1480/260"><img src="staff-guide/03-wait.webp" alt="キャンセル待ちを繰り上げるの画面" width="1480" height="260" loading="lazy"><span class="mark" style="left:22.11%;top:8.49%;width:4.24%;height:9.23%"><b>①</b></span><span class="mark" style="left:78.30%;top:36.74%;width:5.58%;height:15.04%"><b>②</b></span></div></div>
+  <ol class="notes"><li><b class="num">①</b><span>「空きあり」は、1番の方が入れる空きが出ている印です。</span></li><li><b class="num">②</b><span>1番の方に店舗から連絡し、了承をいただいたら「繰り上げ」を押します。予約が確定になります。</span></li></ol><div class="caution" role="note"><p class="caution-title">ご注意</p><p>繰り上げは1番の方から順番に行います。今はお客様に自動では連絡が届かないので、必ず店舗からご連絡してください。</p></div>
+</section><section class="step" id="step4">
+  <div class="head"><p class="eyebrow">STEP 4</p><h2>抽選を行う</h2><p class="lead">抽選のイベントは、締切が過ぎたら管理画面で抽選を実行します。</p></div>
+  <div class="shot"><div class="frame" style="aspect-ratio:1480/330"><img src="staff-guide/04-lottery.webp" alt="抽選を行うの画面" width="1480" height="330" loading="lazy"><span class="mark" style="left:94.23%;top:30.31%;width:1.62%;height:7.27%"><b>①</b></span><span class="mark" style="left:24.33%;top:3.64%;width:8.44%;height:11.85%"><b>②</b></span></div></div>
+  <ol class="notes"><li><b class="num">①</b><span>「招待枠」にチェックを入れた申し込みは、抽選より先に当選になります（定員の範囲内）。チェックは抽選待ちの間だけ変えられます。</span></li><li><b class="num">②</b><span>「抽選を実行する」を押すと、当選・キャンセル待ち・落選が決まります。お客様は「予約の確認」で結果を見られます。</span></li></ol><div class="caution" role="note"><p class="caution-title">ご注意</p><p>抽選は一度実行すると取り消せず、そのあとは新しい申し込みができなくなります。必ず締切を過ぎてから実行してください。</p></div>
+</section><section class="step" id="step5">
+  <div class="head"><p class="eyebrow">STEP 5</p><h2>イベントと枠を作る</h2><p class="lead">「イベント・枠」タブの「枠を作成する」で作ります。入力したら、いちばん下の「枠を作成」を押します。</p></div>
+  <div class="shot"><div class="frame" style="aspect-ratio:1000/900"><img src="staff-guide/05-create.webp" alt="イベントと枠を作るの画面" width="1000" height="900" loading="lazy"><span class="mark" style="left:3.30%;top:6.90%;width:24.70%;height:5.23%"><b>①</b></span><span class="mark" style="left:3.30%;top:13.02%;width:93.40%;height:8.47%"><b>②</b></span><span class="mark" style="left:3.30%;top:28.05%;width:93.40%;height:21.23%"><b>③</b></span><span class="mark" style="left:3.30%;top:59.53%;width:93.40%;height:8.24%"><b>④</b></span><span class="mark" style="left:3.30%;top:75.43%;width:93.40%;height:8.47%"><b>⑤</b></span><span class="mark" style="left:3.30%;top:87.79%;width:93.40%;height:5.13%"><b>⑥</b></span></div></div>
+  <ol class="notes"><li><b class="num">①</b><span>イベント名です。作成済みのイベント名を入れると、そのイベントに枠を追加します。</span></li><li><b class="num">②</b><span>日付です。「＋ 日付を追加」で、複数の日にまとめて作れます。</span></li><li><b class="num">③</b><span>時間帯と1枠の長さです。例：10:00〜17:00を60分ごと。「終日（1枠）」も選べます。休憩の時間は枠から除かれます。</span></li><li><b class="num">④</b><span>定員です。組数で決めるか、組を「0」にして人数で決めます（例：12名）。1組の上限人数も決めます。</span></li><li><b class="num">⑤</b><span>方式（先着・抽選）と、受付の開始日時を決めます。抽選のときは締切も入れます。</span></li><li><b class="num">⑥</b><span>「テスト用イベント」にチェックを入れると、お客様には表示されず、練習画面で予約まで試せます。</span></li></ol>
+</section><section class="step" id="step6">
+  <div class="head"><p class="eyebrow">STEP 6</p><h2>イベントの設定を変える</h2><p class="lead">作成済みのイベントの「設定・枠を開く」から変更します。</p></div>
+  <div class="shot"><div class="frame" style="aspect-ratio:1000/1110"><img src="staff-guide/06-settings.webp" alt="イベントの設定を変えるの画面" width="1000" height="1110" loading="lazy"><span class="mark" style="left:36.70%;top:9.23%;width:26.76%;height:6.86%"><b>①</b></span><span class="mark" style="left:3.30%;top:19.26%;width:93.40%;height:4.16%"><b>②</b></span><span class="mark" style="left:3.30%;top:76.33%;width:9.63%;height:3.52%"><b>③</b></span><span class="mark" style="left:13.73%;top:76.33%;width:23.73%;height:3.52%"><b>④</b></span><span class="mark" style="left:3.40%;top:87.54%;width:93.20%;height:4.87%"><b>⑤</b></span></div></div>
+  <ol class="notes"><li><b class="num">①</b><span>受付の開始日時です。空欄なら、すぐに受付が始まります。</span></li><li><b class="num">②</b><span>テスト用イベントにするかどうかです。そのすぐ上の「お客様画面に表示する」で、表示・非表示も切り替えられます。</span></li><li><b class="num">③</b><span>「設定を保存」で、お客様画面に反映されます。</span></li><li><b class="num">④</b><span>「保存前の設定でお客様画面を確認」で、保存する前の設定のまま、お客様画面を開いて試せます。お客様には見えず、予約も保存されません。</span></li><li><b class="num">⑤</b><span>枠ごとに定員を変えられます。変えたら、その行の「保存」を押します。予約が残っている枠は削除できません。</span></li></ol><div class="caution" role="note"><p class="caution-title">ご注意</p><p>公開中のイベントの受付時間を変えるときは、先に④で確認してから保存してください。</p></div>
+  <div class="opts"><h3>設定の項目の説明</h3><dl>
+    <div><dt>お客様画面に表示する</dt><dd>チェックを外すと、お客様画面に出さずに準備できます。</dd></div>
+    <div><dt>未就学児の注意文を表示</dt><dd>カスタマイズイベントなどで、定員を超えて未就学児を連れてきたいというご要望がありそうなときに使います。席が4名席のみの場合は、「保護者の膝の上で」などの案内を、下の「未就学児の注意文」に入力してください。</dd></div>
+    <div><dt>参加者名の入力欄を表示</dt><dd>ゴルフやホテル宿泊など、お連れ様のお名前が必要なイベントで、入力欄を出せます。未入力でも予約でき、あとからお客様が編集できます。</dd></div>
+    <div><dt>ゴルフ</dt><dd>未就学児は参加できないため、人数が2名以上でもお子様の選択肢が出ません。参加者1には、自動的に申込者のお名前が入ります。</dd></div>
+    <div><dt>メールアドレスを任意にする</dt><dd>必須のほうがセキュリティは高くなります。任意にすると、予約番号だけで予約を変更できるため、セキュリティはやや低くなります。個人情報をなるべくお預かりしない観点では、任意がおすすめです。</dd></div>
+    <div><dt>ご注文中・新規のお客様チェック欄を表示</dt><dd>レクサス車の登録ナンバーを入力してもらうことで、お名前が違う場合（オーナーのご家族など）も判別できるようにしています。この欄を出すと、ご注文中で納車待ちのお客様も参加できるよう、登録ナンバーの入力を飛ばせます。</dd></div>
+    <div><dt>お客様ページに備考欄を作成</dt><dd>お客様がご要望を入力できる備考欄を、お客様画面に出します（例：ゴルフ　9時ごろ希望）。</dd></div>
+    <div><dt>お客様画面に出すメッセージ（空欄なら非表示）</dt><dd>店舗からお客様へのご連絡や、補足のご案内に使えます。</dd></div>
+  </dl></div>
+</section>
+<section class="faq" id="more"><h2>そのほかの機能</h2>
+<div class="qa"><p class="q">「お客様画面」タブ</p><p class="a">お客様画面に、お客様向けの説明書（ご予約の方法）へのボタンを出すかどうかと、ボタンの文字、説明書の文章を変えられます。変えたら「保存する」を押します。</p></div>
+<div class="qa"><p class="q">「スタッフ」タブ（オーナーのみ）</p><p class="a">管理画面に入れるスタッフのメールアドレスを登録・削除します。登録したスタッフは、ログイン画面の「はじめてログインするスタッフの方」からパスワードを決め、届いた確認メールのリンクを開くとログインできます。辞めた方は「削除」を押すと、すぐに入れなくなります。</p></div>
+<div class="qa"><p class="q">パスワードを忘れたとき</p><p class="a">ログイン画面でメールアドレスを入力し、「パスワードを忘れた方」を押します。届いたメールのリンクから、新しいパスワードを決めます。</p></div>
+<div class="qa"><p class="q">設定の項目の意味がわからないとき</p><p class="a">「イベント・枠」の設定画面では、各項目のすぐ下に説明が出ています。この説明書のSTEP 6にも、まとめて載せています。</p></div>
+</section>
+<section class="faq" id="faq"><h2>困ったとき</h2><div class="qa"><p class="q">お客様が予約番号を忘れた</p><p class="a">予約一覧で、お名前や電話番号から予約を探し、予約番号をお伝えします。オーナーズカードIDを登録しているお客様は、ご自分でも探せます。</p></div><div class="qa"><p class="q">枠の「組・名」の数字が予約と合わない</p><p class="a">予約一覧の「人数を数え直す」を押すと、予約から数え直して正しい数字になります。</p></div><div class="qa"><p class="q">本番の前に、予約の流れを試したい</p><p class="a">テスト用イベントを作り、「保存前の設定でお客様画面を確認」から予約・変更・キャンセルまで試せます。終わったらイベントを削除します。</p></div></section>
+<p class="foot"><a href="admin.html" style="color:inherit">← 管理画面へ戻る</a>　／　<a href="guide.html" target="_blank" rel="noopener" style="color:inherit">お客様向けの説明書</a></p>
+</main>
+</body>
+</html>
