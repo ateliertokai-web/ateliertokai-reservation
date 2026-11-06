@@ -17,6 +17,7 @@ let pass=0,fail=0;const R=(ok,name,extra)=>{ok?pass++:fail++;console.log((ok?'OK
   const sl=(e,x)=>Object.assign({eventId:e,eventName:'x',date:'2026-12-01',start:'10:00',end:'11:00',capG:2,capP:0,maxPer:4,booked:0,people:0,waitSeq:0},x);
   await d.doc('slots/S1').set(sl('E1'));await d.doc('slots/S2').set(sl('E1',{start:'11:00',end:'12:00',capG:1}));
   await d.doc('slots/L1').set(sl('E2',{capG:1}));
+  await d.doc('events/E5').set(ev({name:'ゴルフ',golf:true}));await d.doc('slots/G5S').set(sl('E5',{capP:20,capG:0}));
   await d.doc('events/T1').set(ev({name:'テスト用',visible:false,test:true}));await d.doc('slots/T1S').set(sl('T1'));
   await d.doc('events/H1').set(ev({name:'非表示',visible:false}));await d.doc('slots/H1S').set(sl('H1'));await d.doc('slots/X1').set(sl('E3'));
  });
@@ -48,6 +49,16 @@ let pass=0,fail=0;const R=(ok,name,extra)=>{ok?pass++:fail++;console.log((ok?'OK
  const t1=await tryOk('テスト用イベント（非表示）に予約',()=>C.book('T1S',D('t@x.jp')),r=>r.status==='confirmed');
  await tryOk('テスト用イベントの予約を変更',()=>C.change(t1.id,'t@x.jp',{a:3}));
  await tryOk('テスト用イベントの予約をキャンセル',()=>C.cancel(t1.id,'t@x.jp'));
+ // --- ゴルフ：同姓同名の目印
+ const E5={golf:true};const nameDoc=async n=>{const crypto=globalThis.crypto;const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('n:E5|'+n));return raw('names/'+Buffer.from(b).toString('hex'))};
+ const g1=await tryOk('ゴルフ予約1（山田 太郎・佐藤 一郎）',()=>C.book('G5S',D('g1@x.jp',{a:2,participants:['山田 太郎','佐藤 一郎']})));
+ await tryOk('同姓同名の確認：スペース違いでも見つかる',()=>C.dupNames('E5',E5,['山田　太郎','別人'],[]).then(x=>({ok:x.join()==='山田　太郎'})));
+ const g2=await tryOk('同姓同名でも予約はできる',()=>C.book('G5S',D('g2@x.jp',{a:2,participants:['山田　太郎','鈴木']})));
+ await tryOk('件数が2になる',async()=>({ok:(await nameDoc('山田太郎')).n===2}));
+ await tryOk('キャンセルで件数が戻る',async()=>{await C.cancel(g2.id,'g2@x.jp');return {ok:(await nameDoc('山田太郎')).n===1}});
+ await tryOk('参加者名の変更で目印が入れ替わる',async()=>{const r=await C.change(g1.id,'g1@x.jp',{participants:['山田 次郎','佐藤 一郎']});return {ok:r.ok&&(await nameDoc('山田太郎')).n===0&&(await nameDoc('山田次郎')).n===1&&(await nameDoc('佐藤一郎')).n===1}});
+ await tryOk('変更前の自分の名前は同姓同名にしない',()=>C.dupNames('E5',E5,['山田 次郎'],['山田 次郎']).then(x=>({ok:x.length===0})));
+ await tryOk('管理: 数え直しで目印も作り直す',async()=>{await env.withSecurityRulesDisabled(c=>c.firestore().doc('names/'+'0'.repeat(64)).set({n:9,e:'E5'}));await A.recount('E5');return {ok:(await nameDoc('山田次郎')).n===1&&(await raw('names/'+'0'.repeat(64))).n===0}});
  await tryOk('管理: 数え直し',()=>A.recount('E1'));
  await tryOk('管理: 予約一覧',async()=>{await admin.collection('reservations').where('eventId','==','E1').get();return {ok:true}});
  await tryOk('管理: キャンセル',()=>A.cancel(b3.id,'',true));
@@ -67,6 +78,9 @@ let pass=0,fail=0;const R=(ok,name,extra)=>{ok?pass++:fail++;console.log((ok?'OK
  await blocked('登録されていない人が予約一覧を見る',async()=>{await stranger.collection('reservations').where('eventId','==','E1').get()});
  await blocked('スタッフが別のスタッフを登録する',async()=>{await staffOk.doc('admins/evil@example.com').set({name:'x'})});
  await blocked('登録されていない人が自分をスタッフ登録する',async()=>{await stranger.doc('admins/stranger@example.com').set({name:'x'})});
+ await blocked('同姓同名の件数を勝手に増やす（+5）',async()=>{const crypto=globalThis.crypto;const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('n:E5|佐藤一郎'));return cust.doc('names/'+Buffer.from(b).toString('hex')).update({n:6})});
+ await blocked('同姓同名の目印を件数3で作る',()=>cust.doc('names/'+'a'.repeat(64)).set({n:3,e:'E5'}));
+ await blocked('同姓同名の目印の一覧を見る',async()=>{await cust.collection('names').get()});
  await blocked('受付開始前の予約',()=>C.book('X1',D('e@x.jp')));
  const FV=firebase.firestore.FieldValue;
  const resDoc=(x)=>Object.assign({name:'悪',tel:'0900000000',mail:'z@x.jp',a:1,k:0,s:0,m:0,n:1,eventId:'E1',eventName:'先着',slotId:'S1',date:'2026-12-01',start:'10:00',end:'11:00',status:'confirmed',waitNo:0,invited:false,createdAt:FV.serverTimestamp(),updatedAt:FV.serverTimestamp()},x);
