@@ -212,7 +212,7 @@ function csv(list){
 }
 
 /* ---------- イベント・枠 ---------- */
-var chk=function(id,on,label){return '<label class="chk" style="margin:4px 0"><input type="checkbox" id="'+id+'"'+(on?' checked':'')+'>'+label+'</label>'};
+var chk=function(id,on,label,help){return '<label class="chk" style="margin:4px 0"><input type="checkbox" id="'+id+'"'+(on?' checked':'')+'><span>'+label+(help?'<small class="help">'+help+'</small>':'')+'</span></label>'};
 /* ---------- 写真（イベントパンフなど） ---------- */
 var IMG={};
 function imgHTML(p){return '<div class="box" style="margin:10px 0"><b style="font-size:14px">写真・パンフレット（最大3枚）</b><div class="imgs" id="'+p+'im"></div><input type="file" accept="image/*" multiple id="'+p+'if"><p class="note" style="margin:6px 0 0">自動で小さくして保存します。1枚目が、お客様画面のイベント一覧に小さく表示されます。タップすると全部の写真を見られます。</p></div>'}
@@ -252,8 +252,8 @@ function optHTML(p,e){
    '<label>抽選の締切<input type="datetime-local" id="'+p+'d" value="'+dtl(e.deadlineMs)+'"></label>'+
    '<label>受付の開始日時（空欄なら、今すぐ受付）<input type="datetime-local" id="'+p+'a" value="'+dtl(e.openAtMs)+'"></label>'+
    '<label>同一イベントグループ名（連日予約防止用）<input id="'+p+'g" value="'+esc(e.group)+'" placeholder="例：サッカー観戦"></label></div>'+
-   '<div>'+chk(p+'v',e.visible!==false,'お客様画面に表示する')+chk(p+'ts',!!e.test,'<b>テスト用イベント</b>（お客様画面に表示しないまま、練習画面で予約・変更・キャンセルまで本当に試せます。試した予約は本当に保存されます）')+chk(p+'w',e.wait!==false,'満席時にキャンセル待ちを受け付ける')+chk(p+'l',!!e.lap,'未就学児の注意文を表示')+chk(p+'n',!!e.names,'参加者名の入力欄を表示')+chk(p+'gf',!!e.golf,'ゴルフ（お子様の選択なし・参加者名を自動で表示）')+chk(p+'mo',!!e.mailOpt,'メールアドレスを任意にする（空欄でも予約できます）')+chk(p+'o',!!e.order,'ご注文中・新規のお客様チェック欄を表示')+chk(p+'t',!!e.note,'お客様ページに備考欄を作成')+'</div>'+
-   '<label>お客様画面に出すメッセージ（空欄なら非表示）<textarea id="'+p+'s" rows="2">'+esc(e.msg)+'</textarea></label>'+
+   '<div>'+chk(p+'v',e.visible!==false,'お客様画面に表示する','チェックを外すと、お客様画面に出さずに準備できます。')+chk(p+'ts',!!e.test,'<b>テスト用イベント</b>（お客様画面に表示しないまま、練習画面で予約・変更・キャンセルまで本当に試せます。試した予約は本当に保存されます）')+chk(p+'w',e.wait!==false,'満席時にキャンセル待ちを受け付ける')+chk(p+'l',!!e.lap,'未就学児の注意文を表示','カスタマイズイベントなどで、定員を超えて未就学児を連れてきたいご要望がありそうなときに使います。4名席のみの場合は「保護者の膝の上で」などの案内を、下の「未就学児の注意文」に入力してください。')+chk(p+'n',!!e.names,'参加者名の入力欄を表示','ゴルフやホテル宿泊など、お連れ様のお名前が必要なイベントで入力欄を出せます。未入力でも予約でき、あとからお客様が編集できます。')+chk(p+'gf',!!e.golf,'ゴルフ（お子様の選択なし・参加者名を自動で表示）','未就学児は参加できないため、2名以上でもお子様の選択肢が出ません。参加者1には申込者のお名前が自動で入ります。')+chk(p+'mo',!!e.mailOpt,'メールアドレスを任意にする（空欄でも予約できます）','必須のほうがセキュリティは高くなります（任意だと予約番号だけで変更できるため、やや低め）。個人情報をなるべく預からない観点では、任意がおすすめです。')+chk(p+'o',!!e.order,'ご注文中・新規のお客様チェック欄を表示','登録ナンバーで、お名前が違う場合（オーナーのご家族など）も判別できるようにしています。この欄を出すと、ご注文中で納車待ちのお客様も、ナンバーの入力を飛ばして参加できます。')+chk(p+'t',!!e.note,'お客様ページに備考欄を作成','お客様がご要望を入力できる備考欄を、お客様画面に出します（例：ゴルフ 9時ごろ希望）。')+'</div>'+
+   '<label>お客様画面に出すメッセージ（空欄なら非表示）<small class="help" style="font-weight:400">店舗からお客様へのご連絡や、補足のご案内に使えます。</small><textarea id="'+p+'s" rows="2">'+esc(e.msg)+'</textarea></label>'+
    '<label>未就学児の注意文（空欄なら標準の文）<textarea id="'+p+'p" rows="2">'+esc(e.lapText)+'</textarea></label>'+imgHTML(p);
 }
 function readOpt(p,name){
