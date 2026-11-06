@@ -39,14 +39,38 @@ var ST={confirmed:'確定',won:'当選',lottery:'抽選待ち',wait:'待ち',los
 var S={tab:'res',events:[],evId:'',slots:[],rs:[],unsub:null,fSlot:'',fSt:'live',msg:''};
 
 /* ---------- ログイン ---------- */
-function loginView(msg){
+var OWNERS=['ateliertokai2027@gmail.com']; // firestore.rules の isOwner() と同じにする
+var isOwnerUser=function(u){return !!(u&&u.email&&OWNERS.indexOf(u.email.toLowerCase())>=0)};
+function authMsg(c){return /invalid-credential|wrong-password|user-not-found|invalid-email/.test(c)?'メールアドレスまたはパスワードが違います':/email-already-in-use/.test(c)?'このメールアドレスのアカウントはすでにあります。ログインするか「パスワードを忘れた方」から再設定してください':/weak-password/.test(c)?'パスワードは10文字以上にしてください':/too-many-requests/.test(c)?'試行が多すぎます。しばらく待ってからお試しください':'うまくいきませんでした'}
+function loginView(msg,mode){
   if(S.unsub){S.unsub();S.unsub=null}
   app.className='';
-  app.innerHTML='<h2>管理者ログイン</h2><form id="f" class="card"><label>メールアドレス<input id="em" type="email" autocomplete="username" required></label><label>パスワード<input id="pw" type="password" autocomplete="current-password" required></label><div class="err" id="er">'+esc(msg||'')+'</div><button class="p" type="submit">ログイン</button></form>';
+  var su=mode==='signup';
+  app.innerHTML='<h2>'+(su?'はじめてログインするスタッフの方':'管理者ログイン')+'</h2>'+
+    (su?'<p class="note">オーナーに登録されたメールアドレスで、パスワードを決めてアカウントを作ります。作成後に届く確認メールのリンクを開くと、ログインできるようになります。</p>':'')+
+    '<form id="f" class="card"><label>メールアドレス<input id="em" type="email" autocomplete="username" required></label><label>パスワード'+(su?'（10文字以上）':'')+'<input id="pw" type="password" autocomplete="'+(su?'new-password':'current-password')+'" '+(su?'minlength="10" ':'')+'required></label><div class="err" id="er">'+esc(msg||'')+'</div><button class="p" type="submit">'+(su?'アカウントを作る':'ログイン')+'</button></form>'+
+    '<div class="tools" style="justify-content:center;gap:18px">'+(su?'<button type="button" class="l" id="bk">← ログインに戻る</button>':'<button type="button" class="l" id="fp">パスワードを忘れた方</button><button type="button" class="l" id="su">はじめてログインするスタッフの方</button>')+'</div>';
+  if(q('bk'))q('bk').onclick=function(){loginView()};
+  if(q('su'))q('su').onclick=function(){loginView('','signup')};
+  if(q('fp'))q('fp').onclick=function(){var m=q('em').value.trim();if(!m){q('er').textContent='メールアドレスを入力してから押してください';return}
+    auth.sendPasswordResetEmail(m).then(function(){q('er').textContent='';say('パスワード再設定のメールを送りました（登録されているメールアドレスの場合）。メールのリンクから新しいパスワードを決めてください')}).catch(function(e){q('er').textContent=authMsg((e&&e.code)||'')})};
   q('f').onsubmit=function(e){
-    e.preventDefault();q('er').textContent='';
-    auth.signInWithEmailAndPassword(q('em').value.trim(),q('pw').value).catch(function(e){var c=(e&&e.code)||'';q('er').textContent=(/invalid-credential|wrong-password|user-not-found|invalid-email/.test(c)?'メールアドレスまたはパスワードが違います':'ログインできませんでした')+'（'+(c||(e&&e.message)||'')+'）'});
+    e.preventDefault();q('er').textContent='';var m=q('em').value.trim(),pw=q('pw').value;
+    if(su){
+      if(pw.length<10){q('er').textContent='パスワードは10文字以上にしてください';return}
+      auth.createUserWithEmailAndPassword(m,pw).then(function(r){return r.user.sendEmailVerification()}).then(function(){return auth.signOut()}).then(function(){loginView('');say('確認メールを送りました。メールのリンクを開いてから、ログインしてください')}).catch(function(e){q('er').textContent=authMsg((e&&e.code)||'')+'（'+((e&&e.code)||'')+'）'});
+    }else{
+      auth.signInWithEmailAndPassword(m,pw).catch(function(e){var c=(e&&e.code)||'';q('er').textContent=authMsg(c)+'（'+(c||(e&&e.message)||'')+'）'});
+    }
   };
+}
+/* スタッフ：メールアドレスの確認がまだのとき */
+function verifyView(u){
+  app.className='';
+  app.innerHTML='<h2>メールアドレスの確認</h2><div class="card"><p style="margin-top:0">'+esc(u.email)+' あてに届いた確認メールのリンクを開いてから、「確認しました」を押してください。</p><div class="tools"><button class="p" id="vd" style="max-width:220px">確認しました</button><button class="s" id="vr">確認メールをもう一度送る</button><button class="s" id="vo">ログアウト</button></div><div class="err" id="er"></div></div>';
+  q('vd').onclick=function(){u.reload().then(function(){return u.getIdToken(true)}).then(function(){if(auth.currentUser&&auth.currentUser.emailVerified)go();else q('er').textContent='まだ確認が済んでいません。メールのリンクを開いてください'}).catch(function(e){q('er').textContent=e.message})};
+  q('vr').onclick=function(){u.sendEmailVerification().then(function(){say('確認メールを送りました')}).catch(function(e){q('er').textContent=authMsg((e&&e.code)||'')})};
+  q('vo').onclick=function(){auth.signOut()};
 }
 
 /* ---------- 共通 ---------- */
@@ -62,7 +86,7 @@ async function loadSlots(){
 }
 function shell(){
   app.className='wide';
-  app.innerHTML='<div class="tools" style="justify-content:space-between"><div class="tabs" style="border:0;margin:0"><button data-t="res" class="'+(S.tab==='res'?'on':'')+'">予約一覧</button><button data-t="ev" class="'+(S.tab==='ev'?'on':'')+'">イベント・枠</button><button data-t="cs" class="'+(S.tab==='cs'?'on':'')+'">お客様画面</button></div><button class="s" id="lo">ログアウト</button></div><div id="msg" class="box" '+(S.msg?'':'hidden')+'>'+esc(S.msg)+'</div><div id="pane"></div>';
+  app.innerHTML='<div class="tools" style="justify-content:space-between"><div class="tabs" style="border:0;margin:0"><button data-t="res" class="'+(S.tab==='res'?'on':'')+'">予約一覧</button><button data-t="ev" class="'+(S.tab==='ev'?'on':'')+'">イベント・枠</button><button data-t="cs" class="'+(S.tab==='cs'?'on':'')+'">お客様画面</button>'+(isOwnerUser(auth.currentUser)?'<button data-t="st" class="'+(S.tab==='st'?'on':'')+'">スタッフ</button>':'')+'</div><button class="s" id="lo">ログアウト</button></div><div id="msg" class="box" '+(S.msg?'':'hidden')+'>'+esc(S.msg)+'</div><div id="pane"></div>';
   app.querySelectorAll('[data-t]').forEach(function(b){b.onclick=function(){S.tab=b.dataset.t;S.msg='';go()}});
   q('lo').onclick=function(){auth.signOut()};
 }
@@ -71,8 +95,8 @@ function say(m){S.msg=m;var e=q('msg');if(e){e.hidden=!m;e.textContent=m}toast(m
 async function go(){
   if(S.unsub){S.unsub();S.unsub=null}
   shell();q('pane').innerHTML='<div class="loading" role="status"><span class="spin"></span>読み込み中…</div>';
-  try{await loadEvents();await loadSlots()}catch(e){say('読み込めませんでした: '+(e.code==='permission-denied'?'この管理者アカウントには権限がありません（firestore.rules の管理者メールを確認してください）':e.message));return}
-  if(S.tab==='res')resView();else if(S.tab==='cs')csView();else evView();
+  try{await loadEvents();await loadSlots()}catch(e){say('読み込めませんでした: '+(e.code==='permission-denied'?'このアカウントは管理者として登録されていません。オーナーにスタッフ登録を依頼してください':e.message));return}
+  if(S.tab==='res')resView();else if(S.tab==='cs')csView();else if(S.tab==='st'&&isOwnerUser(auth.currentUser))staffView();else evView();
   scrubOnce();
   migrateOnce();
 }
@@ -373,13 +397,35 @@ function csView(){
   }
 }
 
+
+/* ---------- スタッフ（管理画面に入れる人の登録・削除。オーナーのみ） ---------- */
+function staffView(){
+  var p=q('pane');p.innerHTML='<div class="loading sm" role="status"><span class="spin"></span>読み込み中…</div>';
+  db.collection('admins').get().then(function(s){
+    var list=s.docs.map(function(d){return Object.assign({email:d.id},d.data())}).sort(function(a,b){return a.email<b.email?-1:1});
+    p.innerHTML='<div class="card"><h2 style="margin-top:0">スタッフの登録</h2>'+
+      '<p class="note">登録したメールアドレスの方だけが、管理画面に入れます。登録後、スタッフの方に管理画面を開いてもらい、「はじめてログインするスタッフの方」からパスワードを決めてもらってください。確認メールのリンクを開くと、ログインできるようになります。</p>'+
+      '<form id="af" class="row"><label style="flex:1;min-width:220px">メールアドレス<input id="am" type="email" required style="width:100%"></label><label>お名前（任意）<input id="an" maxlength="30"></label><button class="s" type="submit">登録する</button></form></div>'+
+      '<div class="scroll"><table><tr><th>メールアドレス</th><th>お名前</th><th>登録日</th><th></th></tr>'+
+      '<tr><td>'+esc(OWNERS.join(', '))+'</td><td>オーナー</td><td></td><td class="note">削除できません</td></tr>'+
+      list.map(function(a){return '<tr><td>'+esc(a.email)+'</td><td>'+esc(a.name||'')+'</td><td>'+ts(a.addedAt)+'</td><td><button class="s d" data-del="'+esc(a.email)+'">削除</button></td></tr>'}).join('')+'</table></div>'+
+      '<p class="note">辞めた方は「削除」を押すと、すぐに管理画面に入れなくなります。</p>';
+    q('af').onsubmit=async function(e){e.preventDefault();var m=q('am').value.trim().toLowerCase();
+      if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(m)){say('メールアドレスを正しく入力してください');return}
+      if(OWNERS.indexOf(m)>=0){say('オーナーは登録しなくても入れます');return}
+      try{await db.collection('admins').doc(m).set({name:q('an').value.trim(),addedAt:firebase.firestore.FieldValue.serverTimestamp(),addedBy:auth.currentUser.email});say(m+' を登録しました');staffView()}catch(x){say('登録できませんでした: '+(x.code==='permission-denied'?'最新の firestore.rules を公開してください（オーナーだけが登録できます）':x.message))}};
+    p.querySelectorAll('[data-del]').forEach(function(b){b.onclick=async function(){var m=b.dataset.del;if(!confirm(m+' を削除します。この方は管理画面に入れなくなります。よろしいですか？'))return;
+      try{await db.collection('admins').doc(m).delete();say(m+' を削除しました');staffView()}catch(x){say('削除できませんでした: '+x.message)}}});
+  }).catch(function(e){p.innerHTML='';say('読み込めませんでした: '+(e.code==='permission-denied'?'最新の firestore.rules を公開してください':e.message))});
+}
+
 /* ---------- 起動 ---------- */
 if(typeof firebase==='undefined'||!window.FIREBASE_CONFIG||/ここに/.test(FIREBASE_CONFIG.apiKey)){
   app.innerHTML='<div class="card err">Firebaseの設定が未入力です（firebase-config.js）。</div>';
 }else{
   firebase.initializeApp(FIREBASE_CONFIG);
   db=firebase.firestore();try{db.settings({experimentalAutoDetectLongPolling:true,merge:true})}catch(e){}auth=firebase.auth();C=makeCore(firebase,db);
-  auth.onAuthStateChanged(function(u){if(u)go();else loginView()});
+  auth.onAuthStateChanged(function(u){if(!u)loginView();else if(!u.emailVerified&&!isOwnerUser(u))verifyView(u);else go()});
 }
 })();
 </script>
