@@ -86,7 +86,7 @@ async function loadSlots(){
 }
 function shell(){
   app.className='wide';
-  app.innerHTML='<div class="tools" style="justify-content:space-between"><div class="tabs" style="border:0;margin:0"><button data-t="res" class="'+(S.tab==='res'?'on':'')+'">予約一覧</button><button data-t="ev" class="'+(S.tab==='ev'?'on':'')+'">イベント・枠</button><button data-t="cs" class="'+(S.tab==='cs'?'on':'')+'">お客様画面</button>'+(isOwnerUser(auth.currentUser)?'<button data-t="st" class="'+(S.tab==='st'?'on':'')+'">スタッフ</button>':'')+'</div><button class="s" id="lo">ログアウト</button></div><div id="msg" class="box" '+(S.msg?'':'hidden')+'>'+esc(S.msg)+'</div><div id="pane"></div>';
+  app.innerHTML='<div class="tools" style="justify-content:space-between"><div class="tabs" style="border:0;margin:0"><button data-t="res" class="'+(S.tab==='res'?'on':'')+'">予約一覧</button><button data-t="ev" class="'+(S.tab==='ev'?'on':'')+'">イベント・枠</button><button data-t="cs" class="'+(S.tab==='cs'?'on':'')+'">お客様画面</button>'+(isOwnerUser(auth.currentUser)?'<button data-t="st" class="'+(S.tab==='st'?'on':'')+'">スタッフ</button>':'')+'</div><div class="tools" style="margin:0;align-items:center"><a class="s" href="staff-guide.html" target="_blank" rel="noopener">使い方</a><button class="s" id="lo">ログアウト</button></div></div><div id="msg" class="box" '+(S.msg?'':'hidden')+'>'+esc(S.msg)+'</div><div id="pane"></div>';
   app.querySelectorAll('[data-t]').forEach(function(b){b.onclick=function(){S.tab=b.dataset.t;S.msg='';go()}});
   q('lo').onclick=function(){auth.signOut()};
 }

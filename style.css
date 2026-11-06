@@ -14,7 +14,8 @@ h2 small{display:block;font:400 13px/1.5 sans-serif;color:var(--ink2);margin-top
 button,.btn{font:inherit;cursor:pointer}
 button.p,a.p{display:block;width:100%;padding:14px;border:0;border-radius:8px;background:var(--black);color:var(--gold);font-weight:700;letter-spacing:.08em;text-align:center;text-decoration:none}
 button.p:disabled{opacity:.5}
-button.s{padding:7px 12px;border:1px solid var(--line);background:#fff;border-radius:7px;font-size:14px}
+a.s{display:inline-block;text-decoration:none;color:inherit;line-height:normal}
+button.s,a.s{padding:7px 12px;border:1px solid var(--line);background:#fff;border-radius:7px;font-size:14px}
 button.s.d{color:var(--err);border-color:#f0c7c2}
 button.l,a.l{display:inline-block;background:none;border:0;color:var(--gold-d);padding:4px 0;text-decoration:underline;font-size:14px}
 .ev{display:block;width:100%;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin:10px 0}
