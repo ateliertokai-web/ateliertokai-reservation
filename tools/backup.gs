@@ -10,6 +10,7 @@
  */
 var PROJECT_ID = 'test-2ee7a';   // Firebase のプロジェクトID（firebase-config.js の projectId）
 var KEEP = 60;                   // 残すバックアップの数（毎日なら約2か月分）
+var NOTIFY_TO = 'ateliertokai2027@gmail.com'; // 同姓同名を見つけたときのお知らせ先
 var BASE = 'https://firestore.googleapis.com/v1/projects/' + PROJECT_ID + '/databases/(default)/documents/';
 
 var STATUS = { confirmed: '確定', won: '当選', lottery: '抽選待ち', wait: 'キャンセル待ち', lost: '落選', cancel: '取消' };
@@ -38,18 +39,65 @@ function backupNow() {
   return rows.length;
 }
 
-/** 自動実行の設定（最初に1回だけ実行）。毎日3時と、毎月1日の13時（解禁日の受付のあと）にバックアップします */
+/** 自動実行の設定（最初に1回だけ実行）。毎日3時と毎月1日13時（解禁日の受付のあと）にバックアップ、1時間ごとに同姓同名の確認をします */
 function setupTriggers() {
-  ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'backupNow') ScriptApp.deleteTrigger(t); });
+  stopTriggers();
   ScriptApp.newTrigger('backupNow').timeBased().everyDays(1).atHour(3).inTimezone('Asia/Tokyo').create();
   ScriptApp.newTrigger('backupNow').timeBased().onMonthDay(1).atHour(13).inTimezone('Asia/Tokyo').create();
-  Logger.log('自動バックアップを設定しました（毎日3時ごろ・毎月1日13時ごろ）');
+  ScriptApp.newTrigger('checkDuplicates').timeBased().everyHours(1).create();
+  Logger.log('自動実行を設定しました（バックアップ：毎日3時ごろ・毎月1日13時ごろ／同姓同名の確認：1時間ごと）');
 }
 
 /** 自動実行を止めるとき */
 function stopTriggers() {
-  ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'backupNow') ScriptApp.deleteTrigger(t); });
-  Logger.log('自動バックアップを止めました');
+  ScriptApp.getProjectTriggers().forEach(function (t) { var f = t.getHandlerFunction(); if (f === 'backupNow' || f === 'checkDuplicates') ScriptApp.deleteTrigger(t); });
+  Logger.log('自動実行を止めました');
+}
+
+/**
+ * ゴルフのイベントで、参加者名がスペースを除いて完全一致する予約（同姓同名の可能性）を探し、
+ * 新しく見つかったものだけを NOTIFY_TO にメールで知らせます（同じ組み合わせは一度だけ）。
+ */
+function checkDuplicates() {
+  var golf = query_('events', { fieldFilter: { field: { fieldPath: 'golf' }, op: 'EQUAL', value: { booleanValue: true } } });
+  var props = PropertiesService.getScriptProperties(), sent = JSON.parse(props.getProperty('DUP_SENT') || '{}'), found = [];
+  var today = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
+  golf.forEach(function (ev) {
+    var rs = query_('reservations', { fieldFilter: { field: { fieldPath: 'eventId' }, op: 'EQUAL', value: { stringValue: ev.id } } });
+    var byName = {};
+    rs.forEach(function (d) {
+      var r = d.data;
+      if (r.status === 'cancel' || r.status === 'lost' || (r.date && r.date < today)) return;
+      var seen = {};
+      (r.participants || []).forEach(function (p) { var k = String(p || '').replace(/[\s\u3000]/g, ''); if (!k || seen[k]) return; seen[k] = 1; (byName[k] = byName[k] || []).push(d); });
+    });
+    Object.keys(byName).forEach(function (k) {
+      var list = byName[k]; if (list.length < 2) return;
+      var key = ev.id + '|' + k + '|' + list.map(function (d) { return d.id; }).sort().join(',');
+      if (sent[key]) return;
+      sent[key] = Date.now();
+      found.push('■ ' + (ev.data.name || '') + '　参加者名「' + k + '」\n' + list.map(function (d) {
+        var r = d.data; return '　・予約番号 ' + d.id.replace(/(.{4})(?=.)/g, '$1-') + '　代表 ' + (r.name || '') + ' 様　' + (r.date || '') + ' ' + (r.start || '') + '　' + (STATUS[r.status] || '') + '　連絡先 ' + (r.tel || '');
+      }).join('\n'));
+    });
+  });
+  if (found.length) {
+    MailApp.sendEmail({ to: NOTIFY_TO, subject: '【予約システム】同姓同名の予約を検知しました（要確認）',
+      body: '次の予約で、参加者名がスペースを除いて完全一致しています。\nご本人の重複申し込みか、本当の同姓同名かをご確認ください。\n\n' + found.join('\n\n') + '\n\n（このメールは予約システムの自動確認から送っています）' });
+    // 古い記録（90日より前）は消す
+    var lim = Date.now() - 90 * 864e5; Object.keys(sent).forEach(function (k) { if (sent[k] < lim) delete sent[k]; });
+    props.setProperty('DUP_SENT', JSON.stringify(sent));
+  }
+  Logger.log(found.length ? found.length + '件の同姓同名をお知らせしました' : '新しい同姓同名はありません');
+  return found.length;
+}
+
+function query_(collection, where) {
+  var url = 'https://firestore.googleapis.com/v1/projects/' + PROJECT_ID + '/databases/(default)/documents:runQuery';
+  var res = UrlFetchApp.fetch(url, { method: 'post', contentType: 'application/json', payload: JSON.stringify({ structuredQuery: { from: [{ collectionId: collection }], where: where } }),
+    headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken(), 'X-Goog-User-Project': PROJECT_ID }, muteHttpExceptions: true });
+  if (res.getResponseCode() !== 200) throw new Error('データを読めませんでした（' + res.getResponseCode() + '）: ' + res.getContentText().slice(0, 300));
+  return JSON.parse(res.getContentText()).filter(function (x) { return x.document; }).map(function (x) { return { id: x.document.name.split('/').pop(), data: fields_(x.document.fields || {}) }; });
 }
 
 // ---------- ここから下は中身の処理 ----------

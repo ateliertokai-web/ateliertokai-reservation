@@ -363,6 +363,13 @@ async function submit(){
   var g=gather(),er=q('er'),btn=q('go');
   if(g.er.length){er.textContent=g.er.join('\n');return}
   er.textContent='';busy(true,btn,'送信中…');
+  // ゴルフ：参加者名がスペースを除いて完全一致する予約があれば、注意を出す（同姓同名の可能性もあるので、そのまま予約はできる）
+  if(S.ev.golf&&g.d.participants&&g.d.participants.some(Boolean)){
+    try{
+      var dups=await C.dupNames(S.ev.id,S.ev,g.d.participants,S.mode==='edit'?(S.rec.participants||[]):[]);
+      if(dups.length&&!confirm('同姓同名のご予約が既に入っています：'+dups.join('、')+' 様\n\nお名前に間違いがなければ、このままご予約いただけます。\n'+(S.mode==='edit'?'変更を保存しますか？':'予約しますか？'))){busy(false,btn,S.mode==='edit'?'変更を保存する':S.ev.method==='抽選'?'抽選に申し込む':'予約する');return}
+    }catch(x){}
+  }
   var unbusy=function(){busy(false,btn,S.mode==='edit'?'変更を保存する':S.ev.method==='抽選'?'抽選に申し込む':'予約する')};
   try{
     var r;

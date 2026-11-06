@@ -41,6 +41,20 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // 同姓同名の目印（ゴルフのイベント）。キーは「イベント＋参加者名」のハッシュで、中身は件数とイベントIDだけ。
+    // お客様は1件ずつ見られる（同じ名前の予約があるかの確認用）。件数は1ずつしか増減できない
+    match /names/{id} {
+      allow get: if true;
+      allow list: if isAdmin();
+      allow create: if isAdmin() || (id.matches('^[0-9a-f]{64}$')
+        && request.resource.data.keys().hasOnly(['n', 'e'])
+        && request.resource.data.n == 1 && request.resource.data.e is string);
+      allow update: if isAdmin() || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['n'])
+        && request.resource.data.n is int && request.resource.data.n >= 0
+        && (request.resource.data.n == resource.data.n + 1 || request.resource.data.n == resource.data.n - 1));
+      allow delete: if isAdmin();
+    }
+
     // 管理画面に入れるスタッフの一覧（ドキュメントIDはメールアドレス）。見られるのは管理者、登録・削除はオーナーのみ
     match /admins/{email} {
       allow read: if isAdmin();

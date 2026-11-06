@@ -33,6 +33,37 @@ function makeCore(firebase, db, opts) {
   }
   // 「オーナーズカードID＋メールアドレス」を知っている人だけが引ける目印（予約番号の一覧）
   function ownerKey(owner, mail) { return sha('o:' + normOwner(owner) + '|' + normMail(mail)); }
+  // 同姓同名の目印（ゴルフのイベントのみ）。「イベント＋参加者名（スペースを除く）」のハッシュごとに、予約の件数だけを持つ。
+  // 予約番号や他の情報は入れないので、お客様が見られるのは「同じ名前の予約があるか」だけ
+  var names = db.collection('names');
+  function normName(s) { return String(s || '').replace(/[\s\u3000]/g, ''); }
+  function nameList(ev, parts) {
+    if (!ev || !ev.golf) return [];
+    var seen = {}, out = [];
+    (parts || []).forEach(function (p) { var k = normName(p); if (k && !seen[k]) { seen[k] = 1; out.push(k); } });
+    return out;
+  }
+  async function nameRefs(eventId, list) {
+    var out = [];
+    for (var i = 0; i < list.length; i++) out.push({ n: list[i], ref: names.doc(await sha('n:' + eventId + '|' + list[i])) });
+    return out;
+  }
+  async function readNames(tx, refs) { var out = []; for (var i = 0; i < refs.length; i++) out.push(await tx.get(refs[i].ref)); return out; }
+  function bumpNames(tx, refs, snaps, delta, eventId) {
+    refs.forEach(function (x, i) {
+      var s = snaps[i], cur = s.exists ? (s.data().n || 0) : 0;
+      if (s.exists) { if (delta > 0 || cur > 0) tx.update(x.ref, { n: Math.max(0, cur + delta) }); }
+      else if (delta > 0) tx.set(x.ref, { n: 1, e: eventId });
+    });
+  }
+  // 申し込み前の確認用：同じイベントに、同じ参加者名（スペースを除いて完全一致）の予約があるか。except の名前（変更前の自分の名前）は除く
+  async function dupNames(eventId, ev, parts, except) {
+    var ex = {}; nameList(ev, except).forEach(function (n) { ex[n] = 1; });
+    var orig = {}; (parts || []).forEach(function (p) { var k = normName(p); if (k && !orig[k]) orig[k] = String(p).trim(); });
+    var refs = await nameRefs(eventId, nameList(ev, parts).filter(function (n) { return !ex[n]; })), out = [];
+    for (var i = 0; i < refs.length; i++) { var s = await refs[i].ref.get(); if (s.exists && (s.data().n || 0) > 0) out.push(orig[refs[i].n]); }
+    return out;
+  }
   function appKey(ev, eventId, mail, tel) { return sha((ev && ev.group ? 'g:' + ev.group : 'e:' + eventId) + '|' + (normMail(mail) || ('tel:' + String(tel || '').replace(/\D/g, '')))); }
 
   async function withRetry(fn, onRetry) {
@@ -75,6 +106,7 @@ function makeCore(firebase, db, opts) {
         if (n < 1 || n > s.maxPer) return fail('人数は1〜' + s.maxPer + '名で入力してください');
         var ak = await appKey(ev, s.eventId, d.mail, d.tel), aRef = apps.doc(ak), aS = await tx.get(aRef);
         if (aS.exists) return fail('このメールアドレス（メールなしの場合は連絡先）は、すでにこのイベントにお申し込み済みです。内容の変更・キャンセルは「予約の確認・変更」から行えます');
+        var nRefs = await nameRefs(s.eventId, nameList(ev, d.participants)), nSnaps = await readNames(tx, nRefs);
         var status, upd = null, waitNo = 0;
         if (lot) status = 'lottery';
         else if (fits(s, n)) { status = 'confirmed'; upd = { booked: (s.booked || 0) + 1, people: (s.people || 0) + n, lastRes: id }; }
@@ -85,6 +117,7 @@ function makeCore(firebase, db, opts) {
         tx.set(res.doc(id), doc);
         if (okey) tx.set(owners.doc(okey), { ids: FV.arrayUnion(id) }, { merge: true });
         tx.set(aRef, { at: now() });
+        bumpNames(tx, nRefs, nSnaps, 1, s.eventId);
         if (upd) tx.update(sRef, upd);
         return ok({ id: id, status: status, waitNo: waitNo });
       });
@@ -126,6 +159,7 @@ function makeCore(firebase, db, opts) {
         if (!admin && r.mail !== normMail(mail)) return fail('予約番号またはメールアドレスが違います');
         if (r.status === 'cancel') return fail('すでにキャンセル済みです');
         var sRef = slots.doc(r.slotId), sS = await tx.get(sRef), eS = await tx.get(events.doc(r.eventId));
+        var cRefs = await nameRefs(r.eventId, nameList(eS.exists ? eS.data() : null, r.participants)), cSnaps = await readNames(tx, cRefs);
         var ak = await appKey(eS.exists ? eS.data() : null, r.eventId, r.mail, r.tel);
         tx.update(rRef, { status: 'cancel', updatedAt: FV.serverTimestamp() });
         var freed = false;
@@ -134,6 +168,7 @@ function makeCore(firebase, db, opts) {
           tx.update(sRef, { booked: Math.max(0, (s.booked || 0) - 1), people: Math.max(0, (s.people || 0) - r.n), lastRes: id });
         }
         tx.delete(apps.doc(ak));
+        if (r.status !== 'lost') bumpNames(tx, cRefs, cSnaps, -1, r.eventId);
         return ok({ freed: freed, slotId: r.slotId });
       });
     });
@@ -153,6 +188,10 @@ function makeCore(firebase, db, opts) {
         var moving = newSlotId && newSlotId !== r.slotId, newRef = null, newS = null;
         if (moving) { newRef = slots.doc(newSlotId); newS = await tx.get(newRef); }
         var eS = await tx.get(events.doc(r.eventId)), ev = eS.exists ? eS.data() : {};
+        // 参加者名が変わったら、同姓同名の目印も入れ替える
+        var oldN = nameList(ev, r.participants), newN = (patch && patch.participants !== undefined) ? nameList(ev, patch.participants) : oldN;
+        var addRefs = await nameRefs(r.eventId, newN.filter(function (n) { return oldN.indexOf(n) < 0; })), addSnaps = await readNames(tx, addRefs);
+        var delRefs = await nameRefs(r.eventId, oldN.filter(function (n) { return newN.indexOf(n) < 0; })), delSnaps = await readNames(tx, delRefs);
         var upd = {}, waited = 0;
         if (patch && patch.owner !== undefined) patch = Object.assign({}, patch, { owner: normOwner(patch.owner) });
         EDIT.forEach(function (k) { if (patch && patch[k] !== undefined) upd[k] = patch[k]; });
@@ -187,6 +226,7 @@ function makeCore(firebase, db, opts) {
           tx.update(oldRef, { people: Math.max(0, (t.people || 0) - r.n + n), lastRes: id });
         }
         if (newOkey) tx.set(owners.doc(newOkey), { ids: FV.arrayUnion(id) }, { merge: true });
+        if (r.status !== 'lost') { bumpNames(tx, addRefs, addSnaps, 1, r.eventId); bumpNames(tx, delRefs, delSnaps, -1, r.eventId); }
         upd.updatedAt = FV.serverTimestamp();
         tx.update(rRef, upd);
         return ok({ waitlisted: !!waited, waitNo: waited });
@@ -270,8 +310,19 @@ function makeCore(firebase, db, opts) {
       var x = c[sd.id] || { booked: 0, people: 0, waitSeq: 0 };
       return function (b) { b.update(slots.doc(sd.id), x); };
     });
+    // ゴルフのイベントは、同姓同名の目印も予約から数え直す
+    var eS = await events.doc(eventId).get(), ev = eS.exists ? eS.data() : null;
+    if (ev && ev.golf) {
+      var cnt = {};
+      rs.docs.forEach(function (d) { var r = d.data(); if (r.status === 'cancel' || r.status === 'lost') return; nameList(ev, r.participants).forEach(function (n) { cnt[n] = (cnt[n] || 0) + 1; }); });
+      var keys = Object.keys(cnt), want = {};
+      for (var i = 0; i < keys.length; i++) want[await sha('n:' + eventId + '|' + keys[i])] = cnt[keys[i]];
+      var have = await names.where('e', '==', eventId).get();
+      have.docs.forEach(function (d) { if (!(d.id in want)) ops.push(function (b) { b.update(names.doc(d.id), { n: 0 }); }); });
+      Object.keys(want).forEach(function (k) { ops.push(function (b) { b.set(names.doc(k), { n: want[k], e: eventId }); }); });
+    }
     await chunked(ops);
-    return ok({ slots: ops.length });
+    return ok({ slots: ss.docs.length });
   }
 
   // 時間枠の作成。minutes ごとに区切り、休憩時間は除く。allday なら終日1枠
@@ -344,7 +395,7 @@ function makeCore(firebase, db, opts) {
   return { book: book, lookup: lookup, cancel: cancel, change: change, promote: promote, runLottery: runLottery, recount: recount,
     findByOwner: findByOwner, normOwner: normOwner, owners: owners, scrubApplicants: scrubApplicants, migrateInvited: migrateInvited,
     createSlots: createSlots, makeTimes: makeTimes, deleteEvent: deleteEvent, newId: newId, normMail: normMail, isFixed: isFixed, ms: ms,
-    events: events, slots: slots, res: res, apps: apps, eimgs: eimgs, cfg: db.collection('config') };
+    events: events, slots: slots, res: res, apps: apps, eimgs: eimgs, cfg: db.collection('config'), dupNames: dupNames, normName: normName };
 }
 root.makeCore = makeCore;
 root.RV = { STORES: STORES, LAP_TEXT: LAP_TEXT };
