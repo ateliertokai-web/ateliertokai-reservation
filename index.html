@@ -308,11 +308,13 @@ function formView(){
     if(kids)['bk_','bs_','bm_'].forEach(function(i){q(i).onchange=hint});
     hint();
     if(q('pn')){
-      var cur=[].map.call(q('pn').querySelectorAll('input'),function(i){return i.value});
-      if(!cur.length&&edit)cur=(r.participants||[]).slice();
-      var h='';for(var i=0;i<T;i++)h+='<label style="margin:6px 0">参加者'+(i+1)+'<input maxlength="40" value="'+esc(cur[i]!==undefined?cur[i]:(i===0?q('rn').value:''))+'"></label>';
+      var cur=[].map.call(q('pn').querySelectorAll('.pnm'),function(i){return i.value}),curL=[].map.call(q('pn').querySelectorAll('.plx'),function(i){return i.checked});
+      if(!cur.length&&edit){cur=(r.participants||[]).slice();curL=(r.lexus||[]).slice()}
+      // ゴルフ：参加者ごとに「レクサスオーナー」のチェック欄を右に出す
+      var h='';for(var i=0;i<T;i++)h+='<div class="pnr"><label style="margin:6px 0">参加者'+(i+1)+'<input class="pnm" maxlength="40" value="'+esc(cur[i]!==undefined?cur[i]:(i===0?q('rn').value:''))+'"></label>'+
+        (ev.golf?'<label class="chk plxl"><input type="checkbox" class="plx"'+(curL[i]?' checked':'')+'>レクサスオーナー</label>':'')+'</div>';
       q('pn').innerHTML=h;
-      var f1=q('pn').querySelector('input');if(f1)f1.oninput=function(){p1t=true};
+      var f1=q('pn').querySelector('.pnm');if(f1)f1.oninput=function(){p1t=true};
     }
   }
   tt.onchange=function(){fillAd(+ad.value);upd()};ad.onchange=upd;
@@ -331,7 +333,7 @@ function formView(){
   q('pf').addEventListener('compositionend',function(){var el=this;setTimeout(function(){if(el.value.trim()&&document.activeElement===el)q('cl').focus()},0)});
   app.querySelectorAll('.st').forEach(function(c){c.onchange=function(){app.querySelector('.stf[data-k="'+c.dataset.k+'"]').hidden=!c.checked}});
   // 参加者1には、代表申込者を自動で入れる（参加者1を直接変更したあとは、そのまま）
-  q('rn').addEventListener('input',function(){var f=q('pn')&&q('pn').querySelector('input');if(f&&!p1t)f.value=this.value});
+  q('rn').addEventListener('input',function(){var f=q('pn')&&q('pn').querySelector('.pnm');if(f&&!p1t)f.value=this.value});
   q('f').onsubmit=function(e){e.preventDefault();submit()};
   if(edit)q('cx').onclick=cancelView;
 }
@@ -345,7 +347,8 @@ function gather(){
   if(!d.name)er.push('代表申込者を入力してください');
   if(!/^[0-9０-９+\-ー－\s]{9,15}$/.test(d.tel))er.push('連絡先（電話番号）を正しく入力してください');
   if(d.mail?!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.mail):(!S.ev.mailOpt&&S.mode!=='edit'))er.push('メールアドレスを正しく入力してください');
-  if(q('pn'))d.participants=[].map.call(q('pn').querySelectorAll('input'),function(i){return i.value.trim()});
+  if(q('pn'))d.participants=[].map.call(q('pn').querySelectorAll('.pnm'),function(i){return i.value.trim()});
+  if(q('pn')&&ev.golf)d.lexus=[].map.call(q('pn').querySelectorAll('.plx'),function(i){return i.checked});
   if(!d.order){
     d.car={pref:get('pf'),cls:get('cl'),kana:get('kn'),num:get('nm'),model:fixModel(get('md'))};
     if(!d.car.pref||!/^\d{1,3}$/.test(d.car.cls)||!/^[ぁ-ん]$/.test(d.car.kana)||!/^\d{1,4}$/.test(d.car.num))er.push('保有レクサス車の登録ナンバーを入力してください');

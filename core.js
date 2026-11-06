@@ -175,7 +175,7 @@ function makeCore(firebase, db, opts) {
   }
 
   /* ---------- お客様: 内容の変更（人数・名前・連絡先・時間帯） ---------- */
-  var EDIT = ['owner', 'name', 'corp', 'tel', 'a', 'k', 's', 'm', 'participants', 'note', 'car', 'order', 'stores', 'staff'];
+  var EDIT = ['owner', 'name', 'corp', 'tel', 'a', 'k', 's', 'm', 'participants', 'lexus', 'note', 'car', 'order', 'stores', 'staff'];
   async function change(id, mail, patch, newSlotId) {
     return withRetry(function () {
       return db.runTransaction(async function (tx) {

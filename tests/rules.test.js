@@ -57,6 +57,7 @@ let pass=0,fail=0;const R=(ok,name,extra)=>{ok?pass++:fail++;console.log((ok?'OK
  await tryOk('件数が2になる',async()=>({ok:(await nameDoc('山田太郎')).n===2}));
  await tryOk('キャンセルで件数が戻る',async()=>{await C.cancel(g2.id,'g2@x.jp');return {ok:(await nameDoc('山田太郎')).n===1}});
  await tryOk('参加者名の変更で目印が入れ替わる',async()=>{const r=await C.change(g1.id,'g1@x.jp',{participants:['山田 次郎','佐藤 一郎']});return {ok:r.ok&&(await nameDoc('山田太郎')).n===0&&(await nameDoc('山田次郎')).n===1&&(await nameDoc('佐藤一郎')).n===1}});
+ await tryOk('ゴルフ：レクサスオーナーのチェックを、お客様があとから変更できる',async()=>{const r=await C.change(g1.id,'g1@x.jp',{lexus:[true,false]});const x=await raw('reservations/'+g1.id);return {ok:r.ok&&x.lexus[0]===true&&x.lexus[1]===false}});
  await tryOk('変更前の自分の名前は同姓同名にしない',()=>C.dupNames('E5',E5,['山田 次郎'],['山田 次郎']).then(x=>({ok:x.length===0})));
  await tryOk('管理: 数え直しで目印も作り直す',async()=>{await env.withSecurityRulesDisabled(c=>c.firestore().doc('names/'+'0'.repeat(64)).set({n:9,e:'E5'}));await A.recount('E5');return {ok:(await nameDoc('山田次郎')).n===1&&(await raw('names/'+'0'.repeat(64))).n===0}});
  await tryOk('管理: 数え直し',()=>A.recount('E1'));

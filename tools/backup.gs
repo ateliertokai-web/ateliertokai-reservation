@@ -140,7 +140,7 @@ function toRow_(doc) {
   var invited = r.invited === true || r.fav === true;
   return [doc.id.replace(/(.{4})(?=.)/g, '$1-'), fmt(r.createdAt), STATUS[r.status] || r.status || '', r.status === 'wait' ? (r.waitNo || '') : '',
     r.eventName || '', r.date || '', r.start || '', r.end || '', r.name || '', r.corp || '', "'" + (r.tel || ''), r.mail || '',
-    r.a || 0, r.k || 0, r.s || 0, r.m || 0, r.n || 0, (r.participants || []).filter(String).join('、'),
+    r.a || 0, r.k || 0, r.s || 0, r.m || 0, r.n || 0, (r.participants || []).map(function (p, i) { return p ? p + ((r.lexus || [])[i] ? '（オーナー）' : '') : ''; }).filter(String).join('、'),
     r.order ? '' : [c.pref, c.cls, c.kana, c.num].filter(function (x) { return x; }).join(' '), r.order ? '' : (c.model || ''), r.order ? '○' : '',
     st.join(' / '), st.map(function (k) { return sf[k] || ''; }).join(' / '), r.note || '', r.owner || '', invited ? '○' : '', fmt(r.updatedAt)];
 }
