@@ -35,26 +35,32 @@ function makeCore(firebase, db, opts) {
   function ownerKey(owner, mail) { return sha('o:' + normOwner(owner) + '|' + normMail(mail)); }
   function appKey(ev, eventId, mail, tel) { return sha((ev && ev.group ? 'g:' + ev.group : 'e:' + eventId) + '|' + (normMail(mail) || ('tel:' + String(tel || '').replace(/\D/g, '')))); }
 
+  // 混み合ったとき（解禁日など、同じ枠に同時に申し込みが集中したとき）は、最新の数字で読み直して、
+  // 最大およそ30秒やり直す。同じ瞬間に他の方の申し込みが先に保存されると、ルールの照合が古い数字で行われて
+  // permission-denied になることもあるため、これも混雑として扱う（本当に受付外のときは数回で止める）
   async function withRetry(fn, onRetry) {
-    for (var i = 0; i < 10; i++) {
+    var start = now(), denied = 0;
+    for (var i = 0; ; i++) {
       try { return await fn(); }
       catch (e) {
         var c = e && e.code;
-        if (c === 'aborted' || c === 'resource-exhausted' || /contention|too much|aborted/i.test(String(e && e.message))) {
+        var busy = c === 'aborted' || c === 'failed-precondition' || c === 'resource-exhausted' || /contention|too much|aborted/i.test(String(e && e.message));
+        var raced = c === 'permission-denied' && ++denied <= 20;
+        if ((busy || raced) && now() - start < 30000) {
           if (onRetry) onRetry(i + 1);
-          await sleep(200 + Math.random() * 900 + i * 150);
+          await sleep(80 + Math.random() * (300 + Math.min(i, 10) * 120));
           continue;
         }
+        if (busy) return fail('混み合っていて処理できませんでした。少し待ってもう一度お試しください');
         throw e;
       }
     }
-    return fail('混み合っていて処理できませんでした。少し待ってもう一度お試しください');
   }
 
   var fits = function (s, n, extraGroups) { return (!s.capG || (s.booked || 0) + (extraGroups || 1) <= s.capG) && (!s.capP || (s.people || 0) + n <= s.capP); };
 
   /* ---------- お客様: 申し込み ---------- */
-  async function book(slotId, d) {
+  async function book(slotId, d, onRetry) {
     var id = newId();
     d = Object.assign({}, d, { mail: normMail(d.mail), owner: normOwner(d.owner) });
     var okey = d.owner && d.mail ? await ownerKey(d.owner, d.mail) : '';
@@ -88,7 +94,7 @@ function makeCore(firebase, db, opts) {
         if (upd) tx.update(sRef, upd);
         return ok({ id: id, status: status, waitNo: waitNo });
       });
-    });
+    }, onRetry);
   }
 
   async function lookup(id, mail) {
