@@ -39,8 +39,8 @@ var ST={confirmed:'確定',won:'当選',lottery:'抽選待ち',wait:'待ち',los
 var S={tab:'res',events:[],evId:'',slots:[],rs:[],unsub:null,fSlot:'',fSt:'live',msg:''};
 
 /* ---------- ログイン ---------- */
-var OWNERS=['ateliertokai2027@gmail.com']; // firestore.rules の isOwner() と同じにする
-var isOwnerUser=function(u){return !!(u&&u.email&&OWNERS.indexOf(u.email.toLowerCase())>=0)};
+// オーナーかどうかは、Firebase のルール（isOwner）で判断する。メールアドレスはこのファイルに書かない
+var isOwnerUser=function(){return !!S.owner};
 function authMsg(c){return /invalid-credential|wrong-password|user-not-found|invalid-email/.test(c)?'メールアドレスまたはパスワードが違います':/email-already-in-use/.test(c)?'このメールアドレスのアカウントはすでにあります。ログインするか「パスワードを忘れた方」から再設定してください':/weak-password/.test(c)?'パスワードは10文字以上にしてください':/too-many-requests/.test(c)?'試行が多すぎます。しばらく待ってからお試しください':'うまくいきませんでした'}
 function loginView(msg,mode){
   if(S.unsub){S.unsub();S.unsub=null}
@@ -429,12 +429,12 @@ function staffView(){
       '<p class="note">登録したメールアドレスの方だけが、管理画面に入れます。登録後、スタッフの方に管理画面を開いてもらい、「はじめてログインするスタッフの方」からパスワードを決めてもらってください。確認メールのリンクを開くと、ログインできるようになります。</p>'+
       '<form id="af" class="row"><label style="flex:1;min-width:220px">メールアドレス<input id="am" type="email" required style="width:100%"></label><label>お名前（任意）<input id="an" maxlength="30"></label><button class="s" type="submit">登録する</button></form></div>'+
       '<div class="scroll"><table><tr><th>メールアドレス</th><th>お名前</th><th>登録日</th><th></th></tr>'+
-      '<tr><td>'+esc(OWNERS.join(', '))+'</td><td>オーナー</td><td></td><td class="note">削除できません</td></tr>'+
+      '<tr><td>'+esc((auth.currentUser&&auth.currentUser.email)||'')+'</td><td>オーナー（あなた）</td><td></td><td class="note">削除できません</td></tr>'+
       list.map(function(a){return '<tr><td>'+esc(a.email)+'</td><td>'+esc(a.name||'')+'</td><td>'+ts(a.addedAt)+'</td><td><button class="s d" data-del="'+esc(a.email)+'">削除</button></td></tr>'}).join('')+'</table></div>'+
       '<p class="note">辞めた方は「削除」を押すと、すぐに管理画面に入れなくなります。</p>';
     q('af').onsubmit=async function(e){e.preventDefault();var m=q('am').value.trim().toLowerCase();
       if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(m)){say('メールアドレスを正しく入力してください');return}
-      if(OWNERS.indexOf(m)>=0){say('オーナーは登録しなくても入れます');return}
+      if(auth.currentUser&&m===String(auth.currentUser.email||'').toLowerCase()){say('オーナーは登録しなくても入れます');return}
       try{await db.collection('admins').doc(m).set({name:q('an').value.trim(),addedAt:firebase.firestore.FieldValue.serverTimestamp(),addedBy:auth.currentUser.email});say(m+' を登録しました');staffView()}catch(x){say('登録できませんでした: '+(x.code==='permission-denied'?'最新の firestore.rules を公開してください（オーナーだけが登録できます）':x.message))}};
     p.querySelectorAll('[data-del]').forEach(function(b){b.onclick=async function(){var m=b.dataset.del;if(!confirm(m+' を削除します。この方は管理画面に入れなくなります。よろしいですか？'))return;
       try{await db.collection('admins').doc(m).delete();say(m+' を削除しました');staffView()}catch(x){say('削除できませんでした: '+x.message)}}});
@@ -447,7 +447,16 @@ if(typeof firebase==='undefined'||!window.FIREBASE_CONFIG||/ここに/.test(FIRE
 }else{
   firebase.initializeApp(FIREBASE_CONFIG);
   db=firebase.firestore();try{db.settings({experimentalAutoDetectLongPolling:true,merge:true})}catch(e){}auth=firebase.auth();C=makeCore(firebase,db);
-  auth.onAuthStateChanged(function(u){if(!u)loginView();else if(!u.emailVerified&&!isOwnerUser(u))verifyView(u);else go()});
+  // ログインしたら、オーナーか（スタッフタブを出すか）と、管理画面に入れるかを、データベースのルールに確かめる
+  var can=function(p){return p.then(function(){return true},function(){return false})};
+  auth.onAuthStateChanged(function(u){
+    if(!u){S.owner=false;loginView();return}
+    app.innerHTML='<div class="loading" role="status"><span class="spin"></span>読み込み中…</div>';
+    Promise.all([can(db.collection('ownerCheck').doc('me').get()),can(C.res.limit(1).get())]).then(function(r){
+      S.owner=r[0];
+      if(r[1]||u.emailVerified)go();else verifyView(u);
+    });
+  });
 }
 })();
 </script>
