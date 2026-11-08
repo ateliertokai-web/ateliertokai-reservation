@@ -21,6 +21,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check-compat.js"></script>
 <script src="firebase-config.js"></script>
 <script src="core.js"></script>
 <script src="guide-text.js"></script>
@@ -442,10 +443,12 @@ function staffView(){
 }
 
 /* ---------- 起動 ---------- */
+/* App Check: サイトキーが設定されていれば、本物のページからのアクセスであることを Firebase に示す */
+function startAppCheck(){try{if(window.APPCHECK_SITE_KEY&&firebase.appCheck)firebase.appCheck().activate(new firebase.appCheck.ReCaptchaEnterpriseProvider(APPCHECK_SITE_KEY),true)}catch(e){}}
 if(typeof firebase==='undefined'||!window.FIREBASE_CONFIG||/ここに/.test(FIREBASE_CONFIG.apiKey)){
   app.innerHTML='<div class="card err">Firebaseの設定が未入力です（firebase-config.js）。</div>';
 }else{
-  firebase.initializeApp(FIREBASE_CONFIG);
+  firebase.initializeApp(FIREBASE_CONFIG);startAppCheck();
   db=firebase.firestore();try{db.settings({experimentalAutoDetectLongPolling:true,merge:true})}catch(e){}auth=firebase.auth();C=makeCore(firebase,db);
   auth.onAuthStateChanged(function(u){if(!u)loginView();else if(!u.emailVerified&&!isOwnerUser(u))verifyView(u);else go()});
 }
