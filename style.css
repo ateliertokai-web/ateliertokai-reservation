@@ -25,7 +25,10 @@ button.l,a.l{display:inline-block;background:none;border:0;color:var(--gold-d);p
 .tag.k{background:var(--gold);color:#222}
 .tag.w{border-color:#d3a8a3;color:var(--err)}
 .slot{display:flex;justify-content:space-between;align-items:center;width:100%;padding:13px 14px;margin:8px 0;background:#fff;border:1px solid var(--line);border-radius:8px;text-align:left}
-.slot:disabled{opacity:.45}
+.slot:disabled{opacity:.6;cursor:not-allowed}
+.slot.booked{background:#ece9e2;border-color:#dcd7cb}
+.slot.booked b{color:var(--ink2);font-weight:500}
+.slot.booked em.f{color:var(--ink2);border:1px solid #cfc8ba;border-radius:99px;padding:0 10px;background:#f6f4f0}
 .slot em{font-style:normal;font-size:13px;color:var(--ok)}
 .slot em.f{color:var(--err)}
 label{display:block;font-size:14px;margin:12px 0;font-weight:600}
