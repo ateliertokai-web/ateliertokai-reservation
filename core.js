@@ -14,7 +14,7 @@ function makeCore(firebase, db, opts) {
   var sleep = opts.sleep || function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
   var FV = firebase.firestore.FieldValue;
   var events = db.collection('events'), slots = db.collection('slots'), res = db.collection('reservations'), apps = db.collection('applicants'), eimgs = db.collection('eventImages'), owners = db.collection('owners');
-  var guests = db.collection('guests'), gmail = db.collection('guestMail');
+  var guests = db.collection('guests'), gmail = db.collection('guestMail'), groups = db.collection('guestGroups');
 
   var fail = function (m) { return { ok: false, msg: m }; };
   var ok = function (x) { var o = { ok: true }; for (var k in (x || {})) o[k] = x[k]; return o; };
@@ -412,15 +412,55 @@ function makeCore(firebase, db, opts) {
 
   /* ---------- ゴルフ: お連れ様の入力URL ---------- */
   // お連れ様の入力欄（guests）は、予約番号とは別のIDで作る。お連れ様は自分の欄だけを読み書きでき、予約の変更・キャンセルはできない
-  async function makeInvite(rec, no) {
+  async function makeInvite(rec, no, grp) {
     var inv = rec.inv || {};
     if (inv[no]) return inv[no];
     var gid = newId();
-    await guests.doc(gid).set({ no: no, eid: rec.eventId, ev: rec.eventName || '', date: rec.date || '', start: rec.start || '', end: rec.end || '',
-      host: rec.name || '', name: '', own: false, hasMail: false, createdAt: FV.serverTimestamp(), updatedAt: FV.serverTimestamp() });
+    var doc = { no: no, eid: rec.eventId, ev: rec.eventName || '', date: rec.date || '', start: rec.start || '', end: rec.end || '',
+      host: rec.name || '', name: '', own: false, hasMail: false, createdAt: FV.serverTimestamp(), updatedAt: FV.serverTimestamp() };
+    if (grp) doc.grp = grp;   // 同じ組（全員共通のURL）
+    await guests.doc(gid).set(doc);
     var up = { updatedAt: FV.serverTimestamp() }; up['inv.' + no] = gid;
     await res.doc(rec.id).update(up);
     return gid;
+  }
+
+  /* ---------- ゴルフ: 全員共通のURL（入力が終わった順に、空いている枠に入る） ---------- */
+  // 組（guestGroups）：共通URLに対応する、お連れ様の欄（guests）の一覧。予約が確定した直後に、代表者の端末で作る
+  async function makeGroup(rec, nos) {
+    var grp = newId(), members = [];
+    for (var i = 0; i < nos.length; i++) members.push(await makeInvite(rec, nos[i], grp));
+    await groups.doc(grp).set({ eid: rec.eventId, ev: rec.eventName || '', date: rec.date || '', start: rec.start || '', end: rec.end || '',
+      host: rec.name || '', members: members, createdAt: FV.serverTimestamp() });
+    return { grp: grp, members: members };
+  }
+  async function getGroup(grp) {
+    if (!/^[A-HJ-NP-Z2-9]{12}$/.test(grp || '')) return null;
+    var s = await groups.doc(grp).get();
+    if (!s.exists) return null;
+    var d = s.data(), list = [];
+    for (var i = 0; i < (d.members || []).length; i++) { var g = await getGuest(d.members[i]); if (g) list.push(g); }
+    list.sort(function (a, b) { return a.no - b.no; });
+    return { id: grp, host: d.host, ev: d.ev, date: d.date, start: d.start, end: d.end, eid: d.eid, members: list };
+  }
+  // 共通URLから入力するお連れ様を、空いている最初の枠に入れる（同時に送信されても、同じ枠には入らない）
+  async function claimGuest(grp, v) {
+    var gs = await groups.doc(grp).get();
+    if (!gs.exists) return { ok: false, invalid: true };
+    var members = gs.data().members || [], name = String(v.name || '').trim().slice(0, 50), mail = normMail(v.mail);
+    var out = await db.runTransaction(async function (t) {
+      var snaps = [];
+      for (var i = 0; i < members.length; i++) snaps.push(await t.get(guests.doc(members[i])));
+      for (var j = 0; j < snaps.length; j++) {
+        var d = snaps[j].exists ? snaps[j].data() : null;
+        if (!d || d.name || (d.cx && d.cxBy === 'owner')) continue;   // 入力済み・代表者が取り消した枠は、使わない
+        t.update(guests.doc(members[j]), { name: name, own: !!v.own, hasMail: !!mail, cx: false, cxBy: '', cxName: '', updatedAt: FV.serverTimestamp() });
+        return { ok: true, gid: members[j] };
+      }
+      return { ok: false, full: true };
+    });
+    if (out.ok && mail) await gmail.doc(out.gid).set({ mail: mail, eid: gs.data().eid, updatedAt: FV.serverTimestamp() });
+    return out;
   }
   async function getGuest(gid) {
     if (!/^[A-HJ-NP-Z2-9]{12}$/.test(gid || '')) return null;
@@ -468,7 +508,7 @@ function makeCore(firebase, db, opts) {
     await guests.doc(g.id).update({ name: String(name || '').trim().slice(0, 50), updatedAt: FV.serverTimestamp() });
   }
 
-  return { syncParticipants: syncParticipants, makeInvite: makeInvite, getGuest: getGuest, saveGuest: saveGuest, cancelGuest: cancelGuest, renameGuest: renameGuest, guests: guests, gmail: gmail, getDupTels: getDupTels, setDupTels: setDupTels,
+  return { syncParticipants: syncParticipants, makeInvite: makeInvite, makeGroup: makeGroup, getGroup: getGroup, claimGuest: claimGuest, getGuest: getGuest, saveGuest: saveGuest, cancelGuest: cancelGuest, renameGuest: renameGuest, guests: guests, gmail: gmail, getDupTels: getDupTels, setDupTels: setDupTels,
     book: book, lookup: lookup, cancel: cancel, change: change, promote: promote, runLottery: runLottery, recount: recount,
     findByOwner: findByOwner, normOwner: normOwner, owners: owners, scrubApplicants: scrubApplicants, migrateInvited: migrateInvited,
     createSlots: createSlots, makeTimes: makeTimes, deleteEvent: deleteEvent, newId: newId, normMail: normMail, isFixed: isFixed, ms: ms,

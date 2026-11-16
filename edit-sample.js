@@ -20,7 +20,7 @@
   function rec(o) {
     return Object.assign({ id: 'ABCDEFGHJKLM', mail: 'sample@example.com', eventId: 'E1', eventName: EV.E1.name, slotId: 'S1', date: SL.S1.date, start: '10:00', end: '11:00', name: '鹿児島 太郎', n: 2, a: 2, k: 0, s: 0, m: 0, status: 'confirmed', participants: [], inv: {}, car: {}, stores: [], staff: {} }, o || {});
   }
-  var GUEST = { id: 'GGGGGGGGGGGG', name: '山田 花子', own: true, hasMail: true, cx: false };
+  var GUEST = { id: 'GGGGGGGGGGGG', grp: 'KKKKKKKKKKKK', name: '山田 花子', own: true, hasMail: true, cx: false };
   root.EDITSAMPLE = function () {
     return {
       events: { get: function () { return Promise.resolve(snap(evs)); }, where: function () { return { get: function () { return Promise.resolve(snap(evs)); } }; }, doc: function (id) { return { get: function () { return Promise.resolve(one(evs, id)); } }; } },
@@ -30,7 +30,7 @@
       lookup: function () { return Promise.resolve({ ok: true, id: 'ABCDEFGHJKLM', r: rec() }); },
       normMail: function (m) { return m; }, isFixed: function () { return true; }, isId: function () { return true; }, newId: function () { return 'ABCDEFGHJKLM'; },
       dupNames: function () { return Promise.resolve([]); }, getGuest: function () { return Promise.resolve(GUEST); },
-      findByOwner: function () { return Promise.resolve({ ok: true, list: [] }); }, makeInvite: function () { return Promise.resolve('GGGGGGGGGGGG'); },
+      findByOwner: function () { return Promise.resolve({ ok: true, list: [] }); }, makeInvite: function () { return Promise.resolve('GGGGGGGGGGGG'); }, makeGroup: function () { return Promise.resolve({ grp: 'KKKKKKKKKKKK', members: ['GGGGGGGGGGGG', 'HHHHHHHHHHHH'] }); },
       syncParticipants: function () { return Promise.resolve({ ok: true }); }, renameGuest: function () { return Promise.resolve({ ok: true }); }, cancelGuest: function () { return Promise.resolve({ ok: true }); },
       change: function () { return Promise.resolve({ ok: false, msg: '' }); }, cancel: function () { return Promise.resolve({ ok: false, msg: '' }); }, book: function () { return Promise.resolve({ ok: false, msg: '' }); }
     };

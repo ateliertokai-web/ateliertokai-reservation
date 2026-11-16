@@ -46,6 +46,7 @@ button:focus-visible{outline:2px solid var(--accent2);outline-offset:2px}
 .sp{display:flex;flex-direction:column;align-items:center;gap:12px;padding:56px 0;color:var(--ink2);font-size:14px}
 .sp i{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
+.mem{list-style:none;padding:0;margin:6px 0}.mem li{padding:9px 12px;border:1px solid var(--line);border-radius:9px;margin:0 0 6px;font-size:14px;background:#fff}.mem .w{color:var(--ink2)}.mem .me{border-color:var(--accent)}
 .sample{margin:0 0 12px;text-align:center;font-size:12px;color:#8a5a00;background:#fff1d6;border-radius:8px;padding:4px 8px}
 @media (prefers-reduced-motion:reduce){.sp i{animation-duration:2.4s}}
 </style>
@@ -66,9 +67,15 @@ button:focus-visible{outline:2px solid var(--accent2);outline-offset:2px}
 var app=document.getElementById('app'),C;
 var GM=/[?&]g=([A-HJ-NP-Z2-9]{12})(&|$)/.exec(location.search);
 var SM=/[?&]sample=(\w+)/.exec(location.search);
-var PRM=!!(GM&&typeof PRAC!=='undefined'&&PRAC.isId(GM[1]));   // 練習用のURL（サーバーには何も保存しない）
-var D={getGuest:function(id){return C.getGuest(id)},saveGuest:function(g,v){return C.saveGuest(g,v)},cancelGuest:function(g,by){return C.cancelGuest(g,by)}};
-if(PRM){
+var KM=/[?&]k=([A-HJ-NP-Z2-9]{12}|PRAC[A-HJ-NP-Z2-9]{8})(&|$)/.exec(location.search);   // 全員共通のURL
+var PRM=!!(GM&&typeof PRAC!=='undefined'&&PRAC.isId(GM[1])),PRG=!!(KM&&typeof PRAC!=='undefined'&&PRAC.isId(KM[1]));   // 練習用のURL（サーバーには何も保存しない）
+var D={groupInfo:function(k){return C.getGroup(k)},claim:function(k,v){return C.claimGuest(k,v)},getGuest:function(id){return C.getGuest(id)},saveGuest:function(g,v){return C.saveGuest(g,v)},cancelGuest:function(g,by){return C.cancelGuest(g,by)}};
+if(PRM||PRG){
+  D.groupInfo=function(k){var gr=PRAC.get(k);if(!gr||!gr.members)return Promise.resolve(null);var l=gr.members.map(function(i){return PRAC.get(i)}).filter(Boolean).sort(function(a,b){return a.no-b.no});return Promise.resolve({id:k,host:gr.host,ev:gr.ev,date:gr.date,start:gr.start,end:gr.end,members:l})};
+  D.claim=function(k,v){var gr=PRAC.get(k);if(!gr)return Promise.resolve({ok:false,invalid:true});var ml=String(v.mail||'').trim().toLowerCase();
+    for(var i=0;i<gr.members.length;i++){var m=PRAC.get(gr.members[i]);if(!m||m.name||(m.cx&&m.cxBy==='owner'))continue;
+      if(!PRAC.put(m.id,Object.assign({},m,{name:String(v.name||'').trim().slice(0,50),own:!!v.own,hasMail:!!ml,mail:ml,cx:false,cxBy:'',cxName:''})))return Promise.reject(new Error('storage'));return Promise.resolve({ok:true,gid:m.id})}
+    return Promise.resolve({ok:false,full:true})};
   D.getGuest=function(id){return Promise.resolve(PRAC.get(id))};
   D.saveGuest=function(g,v){var cur=PRAC.get(g.id)||{},ml=String(v.mail||'').trim().toLowerCase();
     if(!PRAC.put(g.id,Object.assign({},cur,{name:String(v.name||'').trim().slice(0,50),own:!!v.own,hasMail:!!((g.hasMail&&!g.cx)||ml),mail:ml||(g.cx?'':(cur.mail||'')),cx:false,cxBy:'',cxName:''})))return Promise.reject(new Error('storage'));return Promise.resolve()};
@@ -112,12 +119,17 @@ TXT.add('お連れ様の入力ページ',{
  'gp.err.name':'お名前を入力してください','gp.err.mail':'メールアドレスを正しく入力してください',
  'gp.err.save':'保存できませんでした。もう一度お試しください。','gp.err.cancel':'取り消せませんでした。もう一度お試しください。',
  'gp.sample':'見本の表示です（保存されません）',
+ 'gp.form.title.grp':'ご参加者様の情報',
+ 'gp.full.title':'ご入力は、すでに全員分が済んでいます','gp.full.body':'この組のお連れ様のご入力は、すべて完了しています。ご不明な点は、代表者の方にご確認ください。',
+ 'gp.mem.title':'この組のご参加者','gp.mem.host':'{name}（代表者）','gp.mem.person':'{name} 様','gp.mem.you':'（あなた）','gp.mem.wait':'お名前の入力待ち',
+ 'gp.mem.note':'この組のURLを知っている方だけに表示されます。お名前のみ表示され、メールアドレスは表示されません。',
  'gp.practice':'【練習用のページです】入力した内容は、この端末のブラウザの中だけに保存されます。同じブラウザで開いている、代表者様の練習画面に反映されます。',
+ 'gp.practice.another':'【練習】べつのお連れ様として、入力してみる',
  'gp.practice.other':'この練習用のページは、URLを作った端末のブラウザの中でだけ開けます。別の端末では開けません。'
 });
 
 function page(inner){
-  app.innerHTML=(SM?'<p class="sample">'+esc(T('gp.sample'))+'</p>':(PRM?'<p class="sample">'+esc(T('gp.practice'))+'</p>':''))+
+  app.innerHTML=(SM?'<p class="sample">'+esc(T('gp.sample'))+'</p>':((PRM||PRG)?'<p class="sample">'+esc(T('gp.practice'))+'</p>':''))+
     '<div class="gh"><img src="apple-touch-icon.png" alt="" width="40" height="40"><span>'+esc(T('gp.brand'))+'</span></div>'+
     '<main class="gc"><div class="band"></div><div class="in">'+inner+'</div></main>';
 }
@@ -134,7 +146,7 @@ function viewForm(g){
   top();
   page(head(g)+'<p class="lead">'+esc(T('gp.lead'))+'</p>'+facts(g)+
    (g.cx?'<div class="box">'+esc(T('gp.reenter'))+'</div>':'')+
-   '<h2>'+esc(T('gp.form.title',{no:g.no}))+'</h2>'+
+   '<h2>'+esc(g.grpMode?T('gp.form.title.grp'):T('gp.form.title',{no:g.no}))+'</h2>'+
    '<form id="gf" novalidate><label>'+esc(T('gp.form.name'))+'<input id="gn" required maxlength="50" autocomplete="name" value="'+esc(g.cx?'':g.name||'')+'"></label>'+
    '<label>'+esc(T('gp.form.mail'))+'<input id="gm" type="email" autocomplete="email" placeholder="'+esc(g.hasMail&&!g.cx?T('gp.form.mail.saved'):'')+'"></label>'+
    '<label class="chk"><input type="checkbox" id="go"'+(g.own&&!g.cx?' checked':'')+'>'+esc(T('gp.form.own'))+'</label>'+
@@ -147,6 +159,13 @@ function viewForm(g){
     if(ml&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ml)){er.textContent=T('gp.err.mail');return}
     er.textContent='';busy(true,q('gs'),T('gp.btn.sending'));
     if(SM){return show(Object.assign({},g,{name:nm,own:q('go').checked,cx:false}),'saved')}
+    if(g.grpMode){
+      try{var cr=await D.claim(g.grp,{name:nm,mail:ml,own:q('go').checked});
+        if(cr.full)return viewFull(g);if(!cr.ok)throw new Error('claim');
+        try{localStorage.setItem('rv_gk_'+g.grp,cr.gid)}catch(x){}
+        return await open(cr.gid,'saved')}
+      catch(x){er.textContent=T('gp.err.save');busy(false,q('gs'),T('gp.btn.send'));return}
+    }
     try{await D.saveGuest(g,{name:nm,mail:ml,own:q('go').checked});await open(g.id,'saved')}
     catch(x){er.textContent=T('gp.err.save');busy(false,q('gs'),T('gp.btn.send'))}
   };
@@ -173,10 +192,35 @@ function viewByOwner(g){top();page(head(g)+facts(g)+'<div class="box ng">'+esc(T
 
 // 状態に応じて表示を切り替える（g：入力欄の内容、state：form / saved / canceled）
 function show(g,state){
-  if(g.cx&&g.cxBy==='owner')return viewByOwner(g);
-  if(state==='saved')return viewSaved(g);
-  if(state==='canceled')return viewCanceled(g);
-  return viewForm(g);
+  if(g.cx&&g.cxBy==='owner')viewByOwner(g);
+  else if(state==='saved')viewSaved(g);
+  else if(state==='canceled')viewCanceled(g);
+  else viewForm(g);
+  if(g.grp)loadMem(g.grp,g.id);
+}
+function viewFull(g){top();page('<h1>'+esc(T('gp.full.title'))+'</h1><p class="lead">'+esc(T('gp.full.body'))+'</p>');if(g&&g.grp)loadMem(g.grp,'')}
+// 同じ組のご参加者（お名前だけ）。その組のURLを持っている方だけが見られる
+async function loadMem(grp,myId){
+  var info=null;
+  try{info=SM?{host:SG.host,members:[{id:'a',no:2,name:'山田 花子'},{id:'b',no:3,name:''}]}:await tmo(D.groupInfo(grp))}catch(e){return}
+  var inn=app.querySelector('.in');if(!info||!inn)return;
+  var li='<li>'+esc(T('gp.mem.host',{name:info.host}))+'</li>'+info.members.filter(function(m){return !(m.cx&&m.cxBy==='owner')}).map(function(m){
+    var done=m.name&&!m.cx;return '<li class="'+(m.id===myId?'me':'')+(done?'':' w')+'">'+(done?esc(T('gp.mem.person',{name:m.name}))+(m.id===myId?esc(T('gp.mem.you')):''):esc(T('gp.mem.wait')))+'</li>'}).join('');
+  inn.insertAdjacentHTML('beforeend','<h2>'+esc(T('gp.mem.title'))+'</h2><ul class="mem">'+li+'</ul><p class="note">'+esc(T('gp.mem.note'))+'</p>');
+}
+async function openGroup(k){
+  top();page('<div class="sp" role="status"><i></i>読み込み中…</div>');
+  var info=null;
+  try{info=await tmo(D.groupInfo(k))}catch(e){return loadErr(function(){openGroup(k)})}
+  if(!info){if(PRG)return page('<h1>'+esc(T('gp.invalid.title'))+'</h1><p class="lead">'+esc(T('gp.practice.other'))+'</p>');return invalid()}
+  var mine='';try{mine=localStorage.getItem('rv_gk_'+k)||''}catch(e){}
+  var m=info.members.filter(function(x){return x.id===mine})[0];
+  if(m){show(m,m.cx&&m.cxBy==='guest'?'canceled':(m.name?'saved':'form'));
+    if(PRG){var inn=app.querySelector('.in');if(inn){inn.insertAdjacentHTML('beforeend','<p class="note" style="text-align:center"><button class="s" id="pa" type="button">'+esc(T('gp.practice.another'))+'</button></p>');q('pa').onclick=function(){try{localStorage.removeItem('rv_gk_'+k)}catch(e){}location.reload()}}}
+    return}   // この端末で、すでに入力した方は、ご自分の欄を開く
+  var g={grpMode:true,grp:k,id:'',no:null,host:info.host,ev:info.ev,date:info.date,start:info.start,end:info.end,name:'',own:false,hasMail:false,cx:false,cxBy:'',cxName:''};
+  if(!info.members.some(function(x){return !x.name&&!(x.cx&&x.cxBy==='owner')}))return viewFull(g);
+  show(g,'form');
 }
 async function open(gid,state){
   top();page('<div class="sp" role="status"><i></i>読み込み中…</div>');
@@ -187,10 +231,12 @@ async function open(gid,state){
 }
 
 /* ---------- 見本（管理画面の文言の編集用）。?sample=form / saved / canceled / byowner / invalid ---------- */
-var SG={id:'SAMPLE000000',no:2,ev:'新春ゴルフコンペ',date:'2027-01-10',start:'00:00',end:'24:00',host:'伊集院 剛',name:'',own:false,hasMail:false,cx:false,cxBy:'',cxName:''};
+var SG={id:'SAMPLE000000',grp:'SAMPLEGROUP',no:2,ev:'新春ゴルフコンペ',date:'2027-01-10',start:'00:00',end:'24:00',host:'伊集院 剛',name:'',own:false,hasMail:false,cx:false,cxBy:'',cxName:''};
 
 function sampleShow(k){
   if(k==='invalid')return invalid();
+  if(k==='group')return show(Object.assign({},SG,{grpMode:true,id:'',no:null}),'form');
+  if(k==='full')return viewFull(SG);
   if(k==='saved')return show(Object.assign({},SG,{name:'山田 花子',own:true,hasMail:true}),'saved');
   if(k==='canceled')return show(Object.assign({},SG,{cx:true,cxBy:'guest',cxName:'山田 花子'}),'canceled');
   if(k==='byowner')return show(Object.assign({},SG,{cx:true,cxBy:'owner'}),'form');
@@ -207,6 +253,7 @@ if(typeof TXT!=='undefined'&&TXT.edit&&SM){
   C=makeCore(firebase,FDB);
   TXT.load(FDB).then(function(){
     if(SM)return sampleShow(SM[1]);
+    if(KM)return openGroup(KM[1]);
     if(!GM)return invalid();
     return open(GM[1]);
   });

@@ -441,18 +441,30 @@ async function doneGuests(r,d,gn){
   S.rec=rec;
   var h='<h2 style="font-size:16px;margin-top:22px">'+T('お連れ様への、入力のご案内')+'</h2>';
   if(r.status!=='confirmed'){box.innerHTML=h+'<div class="box">'+T('お連れ様のご案内は、ご予約が確定したあとに、トップ画面の「あなたの予約」から開いて、送れます。')+'</div>';return}
-  h+='<p class="note" style="margin:0 0 6px">'+T('下の専用URLとQRコードを、お連れ様に送ってください（LINEやメール、または、その場でQRコードの読み取り）。お連れ様がお名前とメールアドレスを入力すると、ご予約に反映されます。')+'</p>';
-  gn.forEach(function(no){h+='<div class="card" style="margin:8px 0;padding:10px 12px"><div>'+T('参加者')+no+'</div><div data-gp="'+no+'"><div class="loading sm" role="status"><span class="spin"></span></div></div></div>'});
-  box.innerHTML=h+'<p class="note">'+T('お連れ様の入力状況は、トップ画面の「あなたの予約」から開くと、確認できます。')+'</p>';
-  for(var i=0;i<gn.length;i++){
-    var no=gn[i],pane=box.querySelector('[data-gp="'+no+'"]');
-    try{
-      var gid;
-      if(PRX){gid=PRAC.newId();PRAC.put(gid,{no:no,eid:rec.eventId,ev:rec.eventName||'',date:rec.date||'',start:rec.start||'',end:rec.end||'',host:rec.name||'',name:'',own:false,hasMail:false,cx:false,mail:''});rec.inv[no]=gid}
-      else{gid=await C.makeInvite(rec,no);rec.inv[no]=gid}
-      guestSharePane(pane,gid);
-    }catch(e){pane.innerHTML='<p class="err">'+T('URLを作れませんでした。ご予約は完了しています。トップ画面の「あなたの予約」を開いて、もう一度お試しください。')+'</p>'}
+  var multi=gn.length>=2;
+  box.innerHTML=h+'<div class="loading sm" role="status"><span class="spin"></span></div>';
+  var ids={},grp='';
+  try{
+    if(PRX){
+      var mem=[];gn.forEach(function(no){var gid=PRAC.newId();mem.push(gid);ids[no]=gid;rec.inv[no]=gid});
+      if(multi)grp=PRAC.newId();
+      gn.forEach(function(no){var o={no:no,eid:rec.eventId,ev:rec.eventName||'',date:rec.date||'',start:rec.start||'',end:rec.end||'',host:rec.name||'',name:'',own:false,hasMail:false,cx:false,mail:''};if(grp)o.grp=grp;PRAC.put(ids[no],o)});
+      if(grp)PRAC.put(grp,{members:mem,eid:rec.eventId,ev:rec.eventName||'',date:rec.date||'',start:rec.start||'',end:rec.end||'',host:rec.name||''});
+    }else if(multi){
+      var mg=await C.makeGroup(rec,gn);grp=mg.grp;gn.forEach(function(no,i){ids[no]=mg.members[i];rec.inv[no]=mg.members[i]});
+    }else{ids[gn[0]]=await C.makeInvite(rec,gn[0]);rec.inv[gn[0]]=ids[gn[0]]}
+  }catch(e){box.innerHTML=h+'<p class="err">'+T('URLを作れませんでした。ご予約は完了しています。トップ画面の「あなたの予約」を開いて、もう一度お試しください。')+'</p>';return}
+  h+=(PRX?'<p class="note" style="color:#c0392b">'+T('練習用のURLです。この端末のブラウザの中だけで開けます。')+'</p>':'');
+  if(grp){
+    h+='<div class="card" style="margin:8px 0;padding:10px 12px"><b>'+T('全員共通のURL（おすすめ）')+'</b><p class="note" style="margin:4px 0 0">'+T('お連れ様の全員に、同じURLを送れます。お連れ様が入力して送信した順に、空いている枠へ入ります（お連れ様は、自分の番号を知らなくて大丈夫です）。同じ組のご参加者のお名前は、お連れ様にも表示されます。')+'</p><div data-gp="grp"></div></div>'+
+      '<details style="margin:8px 0"><summary class="note" style="cursor:pointer">'+T('1人ずつ別のURLで送る場合')+'</summary>'+gn.map(function(no){return '<div class="card" style="margin:8px 0;padding:10px 12px"><div>'+T('参加者')+no+'</div><div data-gp="'+no+'"></div></div>'}).join('')+'</details>';
+  }else{
+    h+='<p class="note" style="margin:0 0 6px">'+T('下の専用URLとQRコードを、お連れ様に送ってください（LINEやメール、または、その場でQRコードの読み取り）。お連れ様がお名前とメールアドレスを入力すると、ご予約に反映されます。')+'</p>'+
+      gn.map(function(no){return '<div class="card" style="margin:8px 0;padding:10px 12px"><div>'+T('参加者')+no+'</div><div data-gp="'+no+'"></div></div>'}).join('');
   }
+  box.innerHTML=h+'<p class="note">'+T('お連れ様の入力状況は、トップ画面の「あなたの予約」から開くと、確認できます。')+'</p>';
+  if(grp)guestSharePane(box.querySelector('[data-gp="grp"]'),grp,true);
+  gn.forEach(function(no){guestSharePane(box.querySelector('[data-gp="'+no+'"]'),ids[no])});
 }
 
 /* ---------- 予約の確認・変更・キャンセル ---------- */
@@ -594,8 +606,8 @@ function guestShareText(r,url){
   return (T('【ゴルフ参加者情報のご入力のお願い】')+'\n')+r.name+(' '+T('様からのご案内です。\n\n■')+' ')+r.eventName+'\n■ '+day(r.date)+' '+rng(r)+('\n\n'+T('お手数ですが、下のURLから、お名前とメールアドレス（スコアボードの送信に使います）をご入力ください。')+'\n')+url+('\n\n'+T('レクサス鹿児島東開'));
 }
 function guestUrl(gid){return location.origin+location.pathname.replace(/[^/]*$/,'')+'guest.html?g='+gid}
-function guestSharePane(pane,gid){
-  var url=guestUrl(gid),txt=guestShareText(S.rec,url),E=encodeURIComponent,img='';
+function guestSharePane(pane,gid,isGrp){
+  var url=isGrp?guestUrl(gid).replace('?g=','?k='):guestUrl(gid),txt=guestShareText(S.rec,url),E=encodeURIComponent,img='';
   try{img='<img src="'+QR.dataURL(url,6)+'" alt="QRコード" style="width:180px;height:180px;image-rendering:pixelated;display:block;margin:8px auto 4px;border:1px solid #ddd">'}catch(e){}
   pane.innerHTML=('<div class="tools" style="margin:10px 0 4px;flex-wrap:wrap"><button type="button" class="s" data-sh="line">'+T('LINEで送る')+'</button><button type="button" class="s" data-sh="mail">'+T('メールで送る')+'</button><button type="button" class="s" data-sh="copy">'+T('文章をコピー')+'</button></div>')+
     img+(img?('<p class="note" style="text-align:center;margin:0 0 6px">'+T('QRコードは、長押しで保存できます。その場で、お連れ様のスマホで読み取ってもらうこともできます。')+'</p>'):'')+
@@ -623,6 +635,8 @@ async function loadGuests(){
   var h=(PRX?'<p class="note" style="color:#c0392b;margin:6px 0"><b>【練習】</b>ここでの操作は、サーバーには保存されません。お連れ様の練習ページに入力した内容は、この端末のブラウザの中で、ここに反映されます（本番では、予約の参加者名にも反映され、管理画面・CSVにも出ます）。</p>':'')+
     ('<div style="text-align:right"><button type="button" class="l" id="gref">'+T('最新の状態に更新')+'</button></div>')+
     (notes.length?('<div class="box" style="border-color:#c0392b"><b>'+T('お知らせ')+'</b><br>')+notes.join('<br>')+('<br><small>'+T('人数を減らす場合は、下の「内容を変更する」から変更してください。')+'</small></div>'):'');
+  var grpId='';rows.forEach(function(x){if(x.g&&x.g.grp&&!grpId)grpId=x.g.grp});
+  if(grpId)h+='<div class="card" style="margin:8px 0;padding:10px 12px"><b>'+T('全員共通のURL')+'</b><div class="tools" style="margin:8px 0 0"><button type="button" class="s" id="gv">'+T('共通URL・QRを表示')+'</button></div><div data-gp="grp"></div></div>';
   h+=rows.map(function(x){
     var g=x.g,st,btn='';
     if(!g){st=('<span class="note">'+T('未入力')+'</span>');btn='<button type="button" class="s" data-ga="send" data-no="'+x.no+('">'+T('URLを送る')+'</button>')}
@@ -641,6 +655,7 @@ async function loadGuests(){
   var rf=q('gref');if(rf)rf.onclick=function(){loadGuests()};
   window.onfocus=function(){var bx=q('gst');if(bx&&!document.hidden&&!bx.querySelector('[data-gp]:not(:empty)'))loadGuests()};
   var byNo={};rows.forEach(function(x){byNo[x.no]=x.g});
+  var gvb=q('gv');if(gvb)gvb.onclick=function(){guestSharePane(box.querySelector('[data-gp="grp"]'),grpId,true)};
   box.querySelectorAll('[data-ga]').forEach(function(b){b.onclick=async function(){
     var no=+b.dataset.no,a=b.dataset.ga,g=byNo[no],pane=box.querySelector('[data-gp="'+no+'"]');
     if(PRX){
