@@ -42,7 +42,8 @@ fieldset{border:1px solid var(--line);border-radius:8px;padding:4px 12px 12px;ma
 fieldset:disabled{background:#f1efe9}
 legend{font-size:14px;font-weight:600;padding:0 6px}
 .note{font-size:13px;color:var(--ink2)}
-.pnr{display:flex;gap:12px;align-items:flex-end}
+.pnr{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}
+.pnr .pgl{flex-basis:100%;margin:0 0 8px;font-size:13px}
 .pnr>label:first-child{flex:1;min-width:0}
 .pnr .plxl{flex:none;margin:6px 0 16px;font-size:13px;white-space:nowrap}
 small.help{display:block;font-size:12px;font-weight:400;color:var(--ink2);line-height:1.5;margin-top:2px}
