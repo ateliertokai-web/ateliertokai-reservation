@@ -468,6 +468,8 @@ function detailView(){
   if(r.status==='wait')h+='<div class="box">キャンセル待ちです。空きが出た場合は、店舗からご連絡します。</div>';
   if(r.status==='lottery')h+='<div class="box">抽選結果は、締切後にこの画面で確認できます。</div>';
   if(r.status==='lost')h+='<div class="box">今回は抽選の結果、ご案内できませんでした。</div>';
+  var golfG=can&&S.ev&&S.ev.golf&&r.n>=2;
+  if(golfG)h+='<h2 style="font-size:16px;margin-top:22px">お連れ様の入力<small>お連れ様ご本人に、お名前とメールアドレスを入力してもらえます</small></h2><div id="gst"><div class="loading sm" role="status"><span class="spin"></span>読み込み中…</div></div>';
   if(can)h+=keepHTML(r);
   // 変更を保存した直後は、押し間違いを防ぐためキャンセルボタンを出さない（トップから開き直すと表示される）
   var just=S.justChanged;S.justChanged=false;
@@ -475,6 +477,7 @@ function detailView(){
   app.innerHTML=h;
   q('bk').onclick=home;
   if(can)wireKeep(r);
+  if(golfG)loadGuests();
   if(can){q('ed').onclick=function(){
       if(S.rec.status==='confirmed'||S.rec.status==='won'){
         if(!confirm('ご予約内容の変更について\n\n時間帯を変更される場合、変更先に空きがあれば、そのままお手続きいただけます。\n\n変更先が満席の場合は、順番の並び直しとなり、「キャンセル待ち」となる、またはご変更をお受けできない場合がございます。（キャンセル待ちとなった場合、元のお時間のご予約は解放されます。）\n\n内容を変更しますか？'))return;
@@ -489,6 +492,171 @@ function cancelView(){
     if(!x.ok){alert(x.msg);return}
     S.rec.status='cancel';S.msg='キャンセルしました';detailView();
   }).catch(function(){alert('通信に失敗しました。もう一度お試しください。')});
+}
+
+/* ---------- QRコード（外部ライブラリなし。バイトモード・誤り訂正M・型番1〜10） ---------- */
+var QR=(function(){
+  var ECC=[0,10,16,26,18,24,16,18,22,22,26],BLK=[0,1,1,1,2,2,4,4,4,5,5];
+  function raw(v){var r=(16*v+128)*v+64;if(v>=2){var n=Math.floor(v/7)+2;r-=(25*n-10)*n-55;if(v>=7)r-=36}return r}
+  function dataCw(v){return Math.floor(raw(v)/8)-ECC[v]*BLK[v]}
+  function mul(x,y){var z=0;for(var i=7;i>=0;i--){z=(z<<1)^((z>>>7)*0x11D);z^=((y>>>i)&1)*x}return z&255}
+  function div(d){var r=[];for(var i=0;i<d-1;i++)r.push(0);r.push(1);var root=1;for(i=0;i<d;i++){for(var j=0;j<r.length;j++){r[j]=mul(r[j],root);if(j+1<r.length)r[j]^=r[j+1]}root=mul(root,2)}return r}
+  function rem(data,dv){var r=dv.map(function(){return 0});data.forEach(function(b){var f=b^r.shift();r.push(0);dv.forEach(function(c,i){r[i]^=mul(c,f)})});return r}
+  function utf8(s){var o=[],e=unescape(encodeURIComponent(s));for(var i=0;i<e.length;i++)o.push(e.charCodeAt(i));return o}
+  function make(text){
+    var bytes=utf8(text),v,cap;
+    for(v=1;v<=10;v++){cap=dataCw(v)*8;if(4+(v<10?8:16)+bytes.length*8<=cap)break}
+    if(v>10)throw new Error('too long');
+    var bits=[],push=function(val,n){for(var i=n-1;i>=0;i--)bits.push((val>>>i)&1)};
+    push(4,4);push(bytes.length,v<10?8:16);bytes.forEach(function(b){push(b,8)});
+    push(0,Math.min(4,cap-bits.length));while(bits.length%8)bits.push(0);
+    for(var p=0xEC;bits.length<cap;p^=0xEC^0x11)push(p,8);
+    var data=[];for(var i=0;i<bits.length;i+=8){var b=0;for(var j=0;j<8;j++)b=(b<<1)|bits[i+j];data.push(b)}
+    // 誤り訂正とインターリーブ
+    var nb=BLK[v],el=ECC[v],rc=Math.floor(raw(v)/8),ns=nb-rc%nb,sl=Math.floor(rc/nb),dv=div(el),blocks=[],k=0;
+    for(i=0;i<nb;i++){var d=data.slice(k,k+sl-el+(i<ns?0:1));k+=d.length;var ec=rem(d,dv);if(i<ns)d.push(0);blocks.push(d.concat(ec))}
+    var all=[];for(i=0;i<blocks[0].length;i++)for(j=0;j<nb;j++)if(i!==sl-el||j>=ns)all.push(blocks[j][i]);
+    var size=v*4+17,M=[],F=[];for(i=0;i<size;i++){M.push([]);F.push([]);for(j=0;j<size;j++){M[i].push(false);F[i].push(false)}}
+    var set=function(x,y,dk){M[y][x]=dk;F[y][x]=true};
+    for(i=0;i<size;i++){set(6,i,i%2===0);set(i,6,i%2===0)}
+    [[3,3],[size-4,3],[3,size-4]].forEach(function(c){for(var dy=-4;dy<=4;dy++)for(var dx=-4;dx<=4;dx++){var x=c[0]+dx,y=c[1]+dy,dd=Math.max(Math.abs(dx),Math.abs(dy));if(x>=0&&x<size&&y>=0&&y<size)set(x,y,dd!==2&&dd!==4)}});
+    if(v>1){var na=Math.floor(v/7)+2,step=Math.ceil((v*4+4)/(na*2-2))*2,pos=[6];for(var q=size-7;pos.length<na;q-=step)pos.splice(1,0,q);
+      for(i=0;i<na;i++)for(j=0;j<na;j++){if((i===0&&j===0)||(i===0&&j===na-1)||(i===na-1&&j===0))continue;for(var ay=-2;ay<=2;ay++)for(var ax=-2;ax<=2;ax++)set(pos[i]+ax,pos[j]+ay,Math.max(Math.abs(ax),Math.abs(ay))!==1)}}
+    var fmt=function(mask){var dd=(0<<3)|mask,r=dd;for(var t=0;t<10;t++)r=(r<<1)^((r>>>9)*0x537);var b=((dd<<10)|r)^0x5412,g=function(n){return ((b>>>n)&1)!==0};
+      for(var t2=0;t2<=5;t2++)set(8,t2,g(t2));set(8,7,g(6));set(8,8,g(7));set(7,8,g(8));for(t2=9;t2<15;t2++)set(14-t2,8,g(t2));
+      for(t2=0;t2<8;t2++)set(size-1-t2,8,g(t2));for(t2=8;t2<15;t2++)set(8,size-15+t2,g(t2));set(8,size-8,true)};
+    fmt(0);
+    if(v>=7){var r7=v;for(i=0;i<12;i++)r7=(r7<<1)^((r7>>>11)*0x1F25);var vb=(v<<12)|r7;for(i=0;i<18;i++){var bt=((vb>>>i)&1)!==0,a=size-11+i%3,c2=Math.floor(i/3);set(a,c2,bt);set(c2,a,bt)}}
+    var n=0;for(var right=size-1;right>=1;right-=2){if(right===6)right=5;for(var vt=0;vt<size;vt++)for(j=0;j<2;j++){var x=right-j,up=((right+1)&2)===0,y=up?size-1-vt:vt;if(!F[y][x]&&n<all.length*8){M[y][x]=((all[n>>>3]>>>(7-(n&7)))&1)!==0;n++}}}
+    var cond=function(m,x,y){switch(m){case 0:return (x+y)%2===0;case 1:return y%2===0;case 2:return x%3===0;case 3:return (x+y)%3===0;case 4:return (Math.floor(x/3)+Math.floor(y/2))%2===0;case 5:return x*y%2+x*y%3===0;case 6:return (x*y%2+x*y%3)%2===0;default:return ((x+y)%2+x*y%3)%2===0}};
+    var apply=function(m){for(var y=0;y<size;y++)for(var x=0;x<size;x++)if(!F[y][x]&&cond(m,x,y))M[y][x]=!M[y][x]};
+    var pen=function(){var s=0,dark=0,x,y,run,c;
+      for(y=0;y<size;y++){run=1;for(x=1;x<size;x++){if(M[y][x]===M[y][x-1]){run++;if(run===5)s+=3;else if(run>5)s++}else run=1}}
+      for(x=0;x<size;x++){run=1;for(y=1;y<size;y++){if(M[y][x]===M[y-1][x]){run++;if(run===5)s+=3;else if(run>5)s++}else run=1}}
+      for(y=0;y<size-1;y++)for(x=0;x<size-1;x++){c=M[y][x];if(c===M[y][x+1]&&c===M[y+1][x]&&c===M[y+1][x+1])s+=3}
+      for(y=0;y<size;y++)for(x=0;x<size;x++)if(M[y][x])dark++;
+      s+=Math.floor(Math.abs(dark*20-size*size*10)/(size*size))*10;return s};
+    var best=0,bp=1e9;for(var m=0;m<8;m++){apply(m);fmt(m);var pp=pen();if(pp<bp){bp=pp;best=m}apply(m)}
+    apply(best);fmt(best);
+    return M;
+  }
+  // 画像（PNGのdata URL）にする。長押しで保存できるように <img> で表示する
+  function dataURL(text,scale){
+    var M=make(text),s=scale||6,q=4,n=M.length,cv=document.createElement('canvas'),cx;
+    cv.width=cv.height=(n+q*2)*s;cx=cv.getContext('2d');cx.fillStyle='#fff';cx.fillRect(0,0,cv.width,cv.height);cx.fillStyle='#000';
+    for(var y=0;y<n;y++)for(var x=0;x<n;x++)if(M[y][x])cx.fillRect((x+q)*s,(y+q)*s,s,s);
+    return cv.toDataURL('image/png');
+  }
+  return {make:make,dataURL:dataURL};
+})();
+
+/* ---------- ゴルフ: お連れ様の入力（代表者の予約画面） ---------- */
+function guestShareText(r,url){
+  return '【ゴルフ参加者情報のご入力のお願い】\n'+r.name+' 様からのご案内です。\n\n■ '+r.eventName+'\n■ '+day(r.date)+' '+rng(r)+'\n\nお手数ですが、下のURLから、お名前とメールアドレス（スコアボードの送信に使います）をご入力ください。\n'+url+'\n\nレクサス鹿児島東開';
+}
+function guestUrl(gid){return location.origin+location.pathname+'?g='+gid}
+function guestSharePane(pane,gid){
+  var url=guestUrl(gid),txt=guestShareText(S.rec,url),E=encodeURIComponent,img='';
+  try{img='<img src="'+QR.dataURL(url,6)+'" alt="QRコード" style="width:180px;height:180px;image-rendering:pixelated;display:block;margin:8px auto 4px;border:1px solid #ddd">'}catch(e){}
+  pane.innerHTML='<div class="tools" style="margin:10px 0 4px;flex-wrap:wrap"><button type="button" class="s" data-sh="line">LINEで送る</button><button type="button" class="s" data-sh="mail">メールで送る</button><button type="button" class="s" data-sh="copy">文章をコピー</button></div>'+
+    img+(img?'<p class="note" style="text-align:center;margin:0 0 6px">QRコードは、長押しで保存できます。その場で、お連れ様のスマホで読み取ってもらうこともできます。</p>':'')+
+    '<p class="note" style="word-break:break-all;margin:4px 0 0">'+esc(url)+'</p>';
+  pane.querySelector('[data-sh="line"]').onclick=function(){location.href='https://line.me/R/share?text='+E(txt)};
+  pane.querySelector('[data-sh="mail"]').onclick=function(){location.href='mailto:?subject='+E('【ゴルフ参加者情報のご入力のお願い】'+S.rec.eventName)+'&body='+E(txt)};
+  pane.querySelector('[data-sh="copy"]').onclick=function(){var t=this;copyText(txt).then(function(){t.textContent='コピーしました'}).catch(function(){t.textContent='コピーできませんでした'})};
+}
+async function loadGuests(){
+  var box=q('gst');if(!box)return;
+  var r=S.rec,inv=r.inv||{},rows=[],sync=false,ps=(r.participants||[]).slice(),notes=[];
+  for(var no=2;no<=r.n;no++){
+    var g=null;
+    if(inv[no]){try{g=await C.getGuest(inv[no])}catch(e){}}
+    rows.push({no:no,g:g});
+    if(!g)continue;
+    var cur=ps[no-1]||'',want=null;
+    if(!g.cx&&g.name&&cur!==g.name)want=g.name;
+    else if(g.cx&&g.cxName&&cur===g.cxName)want='';
+    if(want!==null){while(ps.length<no)ps.push('');ps[no-1]=want;sync=true}
+    if(g.cx&&g.cxBy==='guest')notes.push('参加者'+no+'の'+(g.cxName?esc(g.cxName)+' 様':'お連れ様')+'が、入力を取り消しました。');
+  }
+  // お連れ様が入力したお名前を、予約の参加者名にも反映する
+  if(sync){try{await C.syncParticipants(r.id,ps);S.rec.participants=ps}catch(e){}}
+  var h=notes.length?'<div class="box" style="border-color:#c0392b"><b>お知らせ</b><br>'+notes.join('<br>')+'<br><small>人数を減らす場合は、下の「内容を変更する」から変更してください。</small></div>':'';
+  h+=rows.map(function(x){
+    var g=x.g,st,btn='';
+    if(!g){st='<span class="note">未入力</span>';btn='<button type="button" class="s" data-ga="send" data-no="'+x.no+'">URLを送る</button>'}
+    else{
+      if(g.cx)st='<span class="note">取り消し（'+(g.cxName?esc(g.cxName)+' 様・':'')+'ご本人が取り消しました）</span>';
+      else if(g.name)st='<b>'+esc(g.name)+'</b> 様 <span class="tag k">入力済み</span>';
+      else st='<span class="note">未入力（URL送付済み）</span>';
+      btn='<button type="button" class="s" data-ga="send" data-no="'+x.no+'">URL・QRを表示</button>'+
+        (g.name&&!g.cx?'<button type="button" class="s" data-ga="ren" data-no="'+x.no+'">名前を直す</button>':'')+
+        '<button type="button" class="s d" data-ga="del" data-no="'+x.no+'">取り消す</button>';
+    }
+    return '<div class="card" style="margin:8px 0;padding:10px 12px"><div>参加者'+x.no+'：'+st+'</div><div class="tools" style="margin:8px 0 0;flex-wrap:wrap">'+btn+'</div><div data-gp="'+x.no+'"></div></div>';
+  }).join('');
+  box.innerHTML=h;
+  var byNo={};rows.forEach(function(x){byNo[x.no]=x.g});
+  box.querySelectorAll('[data-ga]').forEach(function(b){b.onclick=async function(){
+    var no=+b.dataset.no,a=b.dataset.ga,g=byNo[no],pane=box.querySelector('[data-gp="'+no+'"]');
+    if(PV){pane.innerHTML='<p class="note">確認画面のため、この操作はできません。</p>';return}
+    b.disabled=true;
+    try{
+      if(a==='send'){
+        var gid=await C.makeInvite(S.rec,no);S.rec.inv=Object.assign({},S.rec.inv||{});S.rec.inv[no]=gid;
+        guestSharePane(pane,gid);if(!g)b.textContent='URL・QRを表示';
+      }else if(a==='ren'){
+        var nm=prompt('参加者'+no+'のお名前',g.name||'');
+        if(nm&&nm.trim()){await C.renameGuest(g,nm);await loadGuests();return}
+      }else if(a==='del'){
+        if(!confirm('参加者'+no+(g.name||g.cxName?'（'+(g.name||g.cxName)+' 様）':'')+'の入力を取り消します。送ったURLは使えなくなります。よろしいですか？')){b.disabled=false;return}
+        var ps2=await C.cancelGuest(g,'owner',S.rec);
+        var inv2=Object.assign({},S.rec.inv||{});delete inv2[no];S.rec.inv=inv2;if(ps2)S.rec.participants=ps2;
+        await loadGuests();return;
+      }
+    }catch(e){pane.innerHTML='<p class="err">うまくいきませんでした。もう一度お試しください。</p>'}
+    b.disabled=false;
+  }});
+}
+
+/* ---------- ゴルフ: お連れ様の入力画面（?g=ID で開く） ---------- */
+async function guestView(gid,done){
+  top();
+  app.innerHTML='<div class="loading" role="status"><span class="spin"></span>読み込み中…</div>';
+  var g=null;
+  try{g=await tmo(C.getGuest(gid))}catch(e){app.innerHTML='<div class="card err">読み込めませんでした。電波の良い場所で、もう一度お試しください。<br><button class="s" id="rt" style="margin-top:10px">もう一度読み込む</button></div>';q('rt').onclick=function(){guestView(gid)};return}
+  if(!g){app.innerHTML='<div class="card err">このURLは無効です。代表者の方に、もう一度URLを送ってもらってください。</div>';return}
+  var info='<div class="card"><b>'+esc(g.ev)+'</b><br>'+(g.date?day(g.date)+' '+rng(g):'')+'<br>代表者：'+esc(g.host)+' 様</div>';
+  if(g.cx&&g.cxBy==='owner'){app.innerHTML='<h2>参加者情報のご入力</h2>'+info+'<div class="card err">このURLは、代表者様により取り消されました。ご不明な点は、代表者様にご確認ください。</div>';return}
+  if(done==='saved'){
+    app.innerHTML='<h2>ご入力ありがとうございました</h2>'+info+'<div class="box">参加者'+g.no+'：<b>'+esc(g.name)+'</b> 様 で保存しました。内容は、代表者様のご予約に反映されます。</div><button class="s" id="re" style="margin-top:14px">入力内容を直す</button>';
+    q('re').onclick=function(){guestView(gid)};return;
+  }
+  if(done==='canceled'){
+    app.innerHTML='<h2>入力を取り消しました</h2>'+info+'<div class="box">参加者'+g.no+'のご入力を取り消しました。代表者様に、お知らせします。</div><p class="note">もう一度参加される場合は、このURLから入力し直せます。</p><button class="s" id="re" style="margin-top:8px">もう一度入力する</button>';
+    q('re').onclick=function(){guestView(gid)};return;
+  }
+  app.innerHTML='<h2>参加者情報のご入力<small>参加者'+g.no+'様</small></h2>'+info+
+   (g.cx?'<div class="box">ご入力は、取り消されています。もう一度参加される場合は、入力してください。</div>':'')+
+   '<form id="gf"><label>お名前<input id="gn" required maxlength="50" autocomplete="name" value="'+esc(g.name||'')+'"></label>'+
+   '<label>メールアドレス（任意・スコアボードの送信に使います）<input id="gm" type="email" autocomplete="email" placeholder="'+(g.hasMail&&!g.cx?'保存済みです。変更するときだけ入力してください':'例：name@example.com')+'"></label>'+
+   '<label class="chk" style="margin:10px 0"><input type="checkbox" id="go"'+(g.own&&!g.cx?' checked':'')+'>レクサス鹿児島東開のオーナーです</label>'+
+   '<div class="err" id="er"></div><button class="p" id="gs" type="submit">保存する</button></form>'+
+   (g.name&&!g.cx?'<div style="text-align:center;margin-top:18px"><button class="s d" id="gc" type="button">入力を取り消す</button></div>':'')+
+   '<p class="note" style="margin-top:14px">ご入力いただいたメールアドレスは、店舗だけが確認します。代表者様には、お名前だけが表示されます。</p>';
+  q('gf').onsubmit=async function(e){
+    e.preventDefault();var nm=q('gn').value.trim(),ml=q('gm').value.trim(),er=q('er');
+    if(!nm){er.textContent='お名前を入力してください';return}
+    if(ml&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ml)){er.textContent='メールアドレスを正しく入力してください';return}
+    er.textContent='';busy(true,q('gs'),'保存中…');
+    try{await C.saveGuest(g,{name:nm,mail:ml,own:q('go').checked});guestView(gid,'saved')}
+    catch(x){er.textContent='保存できませんでした。もう一度お試しください。';busy(false,q('gs'),'保存する')}
+  };
+  if(q('gc'))q('gc').onclick=async function(){
+    if(!confirm('ご自分の入力（お名前・メールアドレスなど）を取り消します。代表者様にお知らせが届きます。よろしいですか？'))return;
+    this.disabled=true;
+    try{await C.cancelGuest(g,'guest');guestView(gid,'canceled')}catch(x){this.disabled=false;q('er').textContent='取り消せませんでした。もう一度お試しください。'}
+  };
 }
 
 /* ---------- メールの控えのリンクから開く（#r=予約番号&m=メール） ---------- */
@@ -513,7 +681,8 @@ if(typeof firebase==='undefined'||typeof makeCore==='undefined'){
   firebase.initializeApp(FIREBASE_CONFIG);
   var FDB=firebase.firestore();try{FDB.settings({experimentalAutoDetectLongPolling:true,merge:true})}catch(e){}
   C=makeCore(firebase,FDB);
-  syncTime().then(openFromLink);
+  var GM=/[?&]g=([A-HJ-NP-Z2-9]{12})(&|$)/.exec(location.search);
+  syncTime().then(function(){return GM?guestView(GM[1]):openFromLink()});
 }
 })();
 </script>

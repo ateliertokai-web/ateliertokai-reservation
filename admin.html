@@ -127,13 +127,22 @@ function resView(){
   q('se').onchange=async function(){S.evId=this.value;S.fSlot='';await loadSlots();resView()};
   q('ss').onchange=function(){S.fSlot=this.value;draw()};
   q('sf').onchange=function(){S.fSt=this.value;draw()};
-  S.unsub=C.res.where('eventId','==',S.evId).onSnapshot(function(sn){
+  S.gs={};S.gm={};
+  var u1=C.res.where('eventId','==',S.evId).onSnapshot(function(sn){
     S.rs=sn.docs.map(function(d){return Object.assign({id:d.id},d.data())});draw();
   },function(e){say('予約を読み込めませんでした: '+e.message)});
+  // ゴルフのお連れ様の入力内容（名前・オーナーかどうか・メール）
+  var u2=C.guests.where('eid','==',S.evId).onSnapshot(function(sn){S.gs={};sn.docs.forEach(function(d){S.gs[d.id]=d.data()});if(S.rs)draw()},function(){});
+  var u3=C.gmail.where('eid','==',S.evId).onSnapshot(function(sn){S.gm={};sn.docs.forEach(function(d){S.gm[d.id]=d.data().mail||''});if(S.rs)draw()},function(){});
+  S.unsub=function(){u1();u2();u3()};
 }
 function kidsN(r){return (+r.k||0)+(+r.s||0)+(+r.m||0)}
 // 参加者名。ゴルフで「レクサスオーナー」にチェックがある方には（オーナー）を付ける
 function pTxt(r,html){var l=r.lexus||[];return (r.participants||[]).map(function(p,i){return p?(html?esc(p):p)+(l[i]?(html?'<b style="color:var(--gold-d)">（オーナー）</b>':'（オーナー）'):''):''}).filter(Boolean).join('、')}
+function guestList(r){var inv=r.inv||{},out=[];for(var no=2;no<=r.n;no++){var gid=inv[no];if(!gid)continue;var g=(S.gs||{})[gid]||{},m=(S.gm||{})[gid]||'';out.push({no:no,gid:gid,name:g.name||'',own:!!g.own,mail:m,cx:!!g.cx,cxName:g.cxName||''})}return out}
+function guestTxt(x){if(x.cx)return '参加者'+x.no+'：取り消し'+(x.cxName?'（'+x.cxName+'）':'');return '参加者'+x.no+'：'+(x.name||'未入力')+(x.own?'（東開オーナー）':'')+(x.mail?' '+x.mail:'')}
+// お連れ様が入力したお名前を、予約の参加者名にも反映する（スプレッドシートにも出るように）
+function syncGuests(list){S.syncing=S.syncing||{};list.forEach(function(r){if(r.status==='cancel'||S.syncing[r.id])return;var ps=(r.participants||[]).slice(),ch=false;guestList(r).forEach(function(x){var cur=ps[x.no-1]||'',w=null;if(!x.cx&&x.name&&cur!==x.name)w=x.name;else if(x.cx&&x.cxName&&cur===x.cxName)w='';if(w!==null){while(ps.length<x.no)ps.push('');ps[x.no-1]=w;ch=true}});if(ch){S.syncing[r.id]=1;C.syncParticipants(r.id,ps).catch(function(){}).then(function(){delete S.syncing[r.id]})}})}
 function carTxt(r){if(r.order)return 'ご注文中・新規';var c=r.car||{};return [c.pref,c.cls,c.kana,c.num].join(' ')+' '+(c.model||'')}
 function draw(){
   var ev=S.events.filter(function(e){return e.id===S.evId})[0]||{};
@@ -181,12 +190,13 @@ function draw(){
   if(ev.method==='抽選'&&!ev.drawn)tl+='<button class="s" id="dr">抽選を実行する</button>';
   if(ev.method==='抽選'&&ev.drawn)tl+='<span class="tag k">抽選済み</span>';
   q('tl').innerHTML=tl;
-  var hasP=list.some(function(r){return (r.participants||[]).some(Boolean)}),hasN=list.some(function(r){return r.note}),hasO=list.some(function(r){return r.owner});
+  syncGuests(S.rs||[]);
+  var hasP=list.some(function(r){return (r.participants||[]).some(Boolean)||guestList(r).length}),hasN=list.some(function(r){return r.note}),hasO=list.some(function(r){return r.owner});
   var h='<tr><th>予約番号</th><th>受付</th><th>状態</th><th>日時</th><th>代表者</th><th>人数</th><th>連絡先</th><th>メール</th>'+(hasO?'<th>オーナーズカードID</th>':'')+'<th>車両</th><th>店舗・担当</th>'+(hasP?'<th>参加者</th>':'')+(hasN?'<th>備考</th>':'')+(ev.method==='抽選'?'<th>招待枠</th>':'')+'<th></th></tr>';
   list.forEach(function(r){
     h+='<tr data-id="'+r.id+'"><td style="white-space:nowrap;font-family:monospace">'+r.id.replace(/(.{4})(?=.)/g,'$1-')+'</td><td>'+ts(r.createdAt)+'</td><td>'+ST[r.status]+(r.status==='wait'?' '+(r.waitNo||''):'')+((S.dupIds||{})[r.id]?'<br><span class="tag w">同姓同名?</span>':'')+'</td><td>'+md(r.date)+' '+rng(r)+'</td><td>'+esc(r.name)+(r.corp?'<br><small>'+esc(r.corp)+'</small>':'')+'</td>'+
      '<td>'+r.n+'（大'+(+r.a||0)+(kidsN(r)?' 子'+kidsN(r):'')+'）</td><td>'+esc(r.tel)+'</td><td>'+esc(r.mail)+'</td>'+(hasO?'<td>'+esc(r.owner||'')+'</td>':'')+'<td>'+esc(carTxt(r))+'</td><td>'+(r.stores||[]).map(function(k){return esc(k)+':'+esc((r.staff||{})[k]||'')}).join('<br>')+'</td>'+
-     (hasP?'<td>'+pTxt(r,true)+'</td>':'')+(hasN?'<td style="white-space:normal;min-width:140px">'+esc(r.note)+'</td>':'')+
+     (hasP?'<td>'+pTxt(r,true)+guestList(r).map(function(x){return '<br><small>'+esc(guestTxt(x))+'</small>'}).join('')+'</td>':'')+(hasN?'<td style="white-space:normal;min-width:140px">'+esc(r.note)+'</td>':'')+
      (ev.method==='抽選'?'<td>'+(r.status==='lottery'?'<input type="checkbox" data-a="inv"'+(r.invited?' checked':'')+' style="width:auto">':(r.invited?'○':''))+'</td>':'')+
      '<td>'+(r.status==='wait'?'<button class="s" data-a="pro">繰り上げ</button> ':'')+(r.status!=='cancel'&&r.status!=='lost'?'<button class="s d" data-a="cx">取消</button>':'')+'</td></tr>';
   });
@@ -212,12 +222,12 @@ function draw(){
 function csv(list){
   var head=['予約番号','受付日時','状態','イベント','日付','開始','終了','代表者','法人名','連絡先','メール','大人','未就学児','小学生','中学生以上','合計'];
   for(var i=1;i<=12;i++)head.push('参加者'+i);
-  head=head.concat(['登録ナンバー','車種','ご注文中・新規','利用店舗','担当スタッフ','備考','オーナーズカードID']);
+  head=head.concat(['登録ナンバー','車種','ご注文中・新規','利用店舗','担当スタッフ','備考','オーナーズカードID','お連れ様（入力内容）']);
   var rows=list.map(function(r){
     var c=r.car||{},p=r.participants||[];
     var a=[r.id,ts(r.createdAt),ST[r.status]+(r.status==='wait'?(r.waitNo||''):''),r.eventName,r.date,r.start,r.end,r.name,r.corp||'',r.tel,r.mail,r.a,r.k,r.s,r.m,r.n];
     for(var i=0;i<12;i++)a.push(p[i]?(p[i]+((r.lexus||[])[i]?'（オーナー）':'')):'');
-    return a.concat([r.order?'':[c.pref,c.cls,c.kana,c.num].join(' '),r.order?'':(c.model||''),r.order?'○':'',(r.stores||[]).join(' / '),(r.stores||[]).map(function(k){return (r.staff||{})[k]||''}).join(' / '),r.note||'',r.owner||'']);
+    return a.concat([r.order?'':[c.pref,c.cls,c.kana,c.num].join(' '),r.order?'':(c.model||''),r.order?'○':'',(r.stores||[]).join(' / '),(r.stores||[]).map(function(k){return (r.staff||{})[k]||''}).join(' / '),r.note||'',r.owner||'',guestList(r).map(guestTxt).join(' / ')]);
   });
   var text=[head].concat(rows).map(function(r){return r.map(function(v){v=String(v==null?'':v);return '"'+v.replace(/"/g,'""')+'"'}).join(',')}).join('\r\n');
   var a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['﻿'+text],{type:'text/csv'}));
@@ -280,7 +290,8 @@ function readOpt(p,name){
 function rgRow(s,e,m){return '<div class="row rg"><label>開始<input type="time" class="rs" value="'+(s||'')+'"></label><label>終了<input type="time" class="re" value="'+(e||'')+'"></label><label>1枠の長さ(分)<input type="number" class="rm" value="'+(m||60)+'" min="5" style="width:80px"></label><button type="button" class="s d rx">削除</button></div>'}
 function evView(){
   var p=q('pane');
-  var h='<details open><summary>枠を作成する</summary><form id="cf" class="card">'+
+  var h='<details><summary>代理予約用：重複を許可する電話番号</summary><div class="card"><p class="note">ここに登録した電話番号は、同じイベントに何回でも予約できます（店舗スタッフの代理予約用）。1行に1件、入力してください。</p><textarea id="dupt" rows="4" placeholder="例：099-000-0000"></textarea><div class="tools"><button type="button" class="s" id="dups">保存</button></div></div></details>'+
+   '<details open><summary>枠を作成する</summary><form id="cf" class="card">'+
    '<div class="row"><label>イベント名<input id="cn" list="cnl" required placeholder="例：サッカー観戦"></label><datalist id="cnl">'+S.events.map(function(e){return '<option value="'+esc(e.name)+'">'}).join('')+'</datalist></div>'+
    '<div id="dates"><div class="row dr"><label>日付<input type="date" class="dt" required></label></div></div><button type="button" class="s" id="ad">＋ 日付を追加</button>'+
    '<div style="margin-top:12px"><b style="font-size:14px">時間帯（飛び飛びに複数作れます）</b><div id="rngs">'+rgRow('10:00','17:00',60)+'</div><div class="tools"><button type="button" class="s" id="ar">＋ 時間帯を追加</button><label class="chk" style="margin:0"><input type="checkbox" id="cad">終日（1枠）</label></div><p class="note" style="margin:0">例：10:00〜11:30（90分）と 14:00〜15:30（90分）。「1枠の長さ」で時間帯を区切って、枠を作ります。</p></div>'+
@@ -300,6 +311,8 @@ function evView(){
   q('ar').onclick=function(){var rows=app.querySelectorAll('.rg'),m=rows[0]?rows[0].querySelector('.rm').value:60,d=document.createElement('div');d.innerHTML=rgRow('','',m);q('rngs').appendChild(d.firstChild);rgWire()};
   q('cad').onchange=function(){var on=q('cad').checked;['cbs','cbe','cbc','ar'].forEach(function(i){q(i).disabled=on});app.querySelectorAll('.rs,.re,.rm,.rx').forEach(function(x){x.disabled=on})};
   wireImgs('nw',[]);
+  C.getDupTels().then(function(t){var d=q('dupt');if(d)d.value=t.join('\n')}).catch(function(){});
+  q('dups').onclick=async function(){try{var t=await C.setDupTels(q('dupt').value.split(/[\n,、]/));q('dupt').value=t.join('\n');say('電話番号を保存しました（'+t.length+'件）')}catch(x){say('失敗しました: '+x.message)}};
   var cxMan=false;q('cx').oninput=function(){cxMan=true};var syncCx=function(){var g=+q('cg').value,p=+q('cp').value;if(!cxMan&&!g&&p>0)q('cx').value=p};q('cg').oninput=syncCx;q('cp').oninput=syncCx;syncCx();
   q('cn').oninput=function(){var ex=S.events.some(function(e){return e.name===q('cn').value.trim()});q('newopt').hidden=ex};
   q('cf').onsubmit=async function(e){
