@@ -154,7 +154,7 @@ async function home(){
       var notYet=e.openAtMs&&nowS()<e.openAtMs;
       if(notYet&&(!soon||e.openAtMs<soon))soon=e.openAtMs;
       var closed=e.method==='抽選'&&(e.drawn||(e.deadlineMs&&nowS()>e.deadlineMs));
-      var inner='<b>'+esc(e.name)+'</b>'+(PV&&e.visible===false?'<span class="tag w">非表示（練習用）</span>':'')+(e.pvDraft?'<span class="tag w">未保存の設定</span>':'')+(e.savedTest?'<span class="tag k">テスト用・本当に保存</span>':'')+
+      var inner='<b>'+esc(e.name)+'</b>'+(PV&&e.visible===false&&!e.test?'<span class="tag w">受付終了</span>':'')+(e.pvDraft?'<span class="tag w">未保存の設定</span>':'')+(e.savedTest?'<span class="tag k">準備中・本当に保存</span>':'')+
         (e.method==='抽選'?'<span class="tag k">抽選</span><span>'+(closed?'受付は終了しました':'締切 '+dl(e))+'</span>':'<span class="tag">先着順</span>')+
         (notYet?'<div class="note" style="margin-top:6px;color:#8a6d2f"><b>ご予約は '+openText(e.openAtMs)+' からです</b><br><span class="cd" data-t="'+e.openAtMs+'"></span></div>':'');
       h+='<button class="ev" data-i="'+i+'"'+((closed||notYet)?' disabled style="opacity:.55"':'')+'>'+(e.thumb?'<div class="evr"><img class="evimg" src="'+esc(e.thumb)+'" alt=""><div>'+inner+'</div></div>':inner)+'</button>';
@@ -222,7 +222,7 @@ async function pickSlot(){
     S.slots=snap.docs.map(function(d){return Object.assign({id:d.id},d.data())}).sort(function(a,b){return (a.date+a.start)<(b.date+b.start)?-1:1});
   }catch(e){app.innerHTML='<div class="card err">読み込めませんでした。電波の良い場所で、もう一度お試しください。<br><button class="s" id="rt" style="margin-top:10px">もう一度読み込む</button></div>';var rt=q('rt');if(rt)rt.onclick=pickSlot;return}
   var ev=S.ev,h='<button class="l" id="bk">← イベント一覧へ</button><h2>'+esc(ev.name)+'<small>'+(ev.method==='抽選'?'抽選のお申し込みです（締切 '+dl(ev)+'）':'先着順のお申し込みです')+'</small></h2>';
-  if(PV&&realTest(ev))h+='<div class="box" style="border-color:#c0392b"><b>テスト用イベントです。</b>ここでの予約・変更・キャンセルは<b>本当に保存</b>されます（お客様には見えません）。試し終わったら、管理画面でこのイベントを削除してください。</div>';
+  if(PV&&realTest(ev))h+='<div class="box" style="border-color:#c0392b"><b>準備中のイベントです。</b>ここでの予約・変更・キャンセルは<b>本当に保存</b>されます（お客様には見えません）。試し終わったら、管理画面でこのイベントを削除するか、予約を取り消してください。</div>';
   if(ev.msg)h+='<div class="box">'+esc(ev.msg).replace(/\n/g,'<br>')+'</div>';
   if(ev.imgN>0){h+=(ev.thumb?'<img class="gthumb" id="gt" src="'+esc(ev.thumb)+'" alt="">':'')+'<div id="gal"><button class="s" id="gb">写真・パンフレットを見る（'+ev.imgN+'枚）</button></div>'}
   var cur='';
