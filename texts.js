@@ -117,5 +117,5 @@
     if (e.data.type === 'tx-all') { setAll(e.data.v); CH = {}; Object.keys(TXO).forEach(function (k) { CH[k] = TXO[k]; }); document.querySelectorAll('.txe').forEach(function (s) { refresh(s.getAttribute('data-k')); }); }
     if (e.data.type === 'tx-set') { var k = e.data.key; if (e.data.value) { TXO[k] = clean(e.data.value).slice(0, 800); CH[k] = TXO[k]; } else { delete TXO[k]; delete CH[k]; } refresh(k); }
   });
-  try { root.parent.postMessage({ type: 'tx-ready' }, location.origin); } catch (e) {}
+  try { root.parent.postMessage({ type: 'tx-ready', defs: TX }, location.origin); } catch (e) {}
 })(typeof window !== 'undefined' ? window : globalThis);

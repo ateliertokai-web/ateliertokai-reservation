@@ -24,6 +24,9 @@
 <script src="firebase-config.js"></script>
 <script src="core.js"></script>
 <script src="guide-text.js"></script>
+<script src="texts.js"></script>
+<script>window.TXH=TXT.h;window.TXC=TXT.clean;try{delete window.T;delete window.TXT}catch(e){window.T=undefined}</script>
+<script src="texts-editor.js"></script>
 <script>
 (function(){
 'use strict';
@@ -86,8 +89,8 @@ async function loadSlots(){
 }
 function shell(){
   app.className='wide';
-  app.innerHTML='<div class="tools" style="justify-content:space-between"><div class="tabs" style="border:0;margin:0"><button data-t="res" class="'+(S.tab==='res'?'on':'')+'">予約一覧</button><button data-t="ev" class="'+(S.tab==='ev'?'on':'')+'">イベント・枠</button><button data-t="cs" class="'+(S.tab==='cs'?'on':'')+'">お客様画面</button>'+(isOwnerUser(auth.currentUser)?'<button data-t="st" class="'+(S.tab==='st'?'on':'')+'">スタッフ</button>':'')+'</div><div class="tools" style="margin:0;align-items:center"><a class="s" href="staff-guide.html" target="_blank" rel="noopener">使い方</a><button class="s" id="lo">ログアウト</button></div></div><div id="msg" class="box" '+(S.msg?'':'hidden')+'>'+esc(S.msg)+'</div><div id="pane"></div>';
-  app.querySelectorAll('[data-t]').forEach(function(b){b.onclick=function(){S.tab=b.dataset.t;S.msg='';go()}});
+  app.innerHTML='<div class="tools" style="justify-content:space-between"><div class="tabs" style="border:0;margin:0"><button data-t="res" class="'+(S.tab==='res'?'on':'')+'">予約一覧</button><button data-t="ev" class="'+(S.tab==='ev'?'on':'')+'">イベント・枠</button><button data-t="cs" class="'+(S.tab==='cs'?'on':'')+'">お客様画面</button><button data-t="tx" class="'+(S.tab==='tx'?'on':'')+'">お客様画面の文言</button>'+(isOwnerUser(auth.currentUser)?'<button data-t="st" class="'+(S.tab==='st'?'on':'')+'">スタッフ</button>':'')+'</div><div class="tools" style="margin:0;align-items:center"><a class="s" href="staff-guide.html" target="_blank" rel="noopener">使い方</a><button class="s" id="lo">ログアウト</button></div></div><div id="msg" class="box" '+(S.msg?'':'hidden')+'>'+esc(S.msg)+'</div><div id="pane"></div>';
+  app.querySelectorAll('[data-t]').forEach(function(b){b.onclick=function(){if(S.tab==='tx'&&S.txed&&S.txed.dirty()&&b.dataset.t!=='tx'&&!confirm('文言の変更が、まだ保存されていません。保存せずに、移動しますか？'))return;S.tab=b.dataset.t;S.msg='';go()}});
   q('lo').onclick=function(){auth.signOut()};
 }
 function toast(m){if(!m)return;var t=document.getElementById('toast');if(!t){t=document.createElement('div');t.id='toast';t.style.cssText='position:fixed;left:50%;bottom:28px;transform:translateX(-50%);background:#111;color:#e8c872;border:1px solid #b8963e;padding:13px 22px;border-radius:10px;z-index:9999;font-size:15px;max-width:90vw;box-shadow:0 4px 16px rgba(0,0,0,.35)';document.body.appendChild(t)}t.textContent=m;t.hidden=false;clearTimeout(t._h);t._h=setTimeout(function(){t.hidden=true},4000)}
@@ -96,7 +99,7 @@ async function go(){
   if(S.unsub){S.unsub();S.unsub=null}
   shell();q('pane').innerHTML='<div class="loading" role="status"><span class="spin"></span>読み込み中…</div>';
   try{await loadEvents();await loadSlots()}catch(e){say('読み込めませんでした: '+(e.code==='permission-denied'?'このアカウントは管理者として登録されていません。オーナーにスタッフ登録を依頼してください':e.message));return}
-  if(S.tab==='res')resView();else if(S.tab==='cs')csView();else if(S.tab==='st'&&isOwnerUser(auth.currentUser))staffView();else evView();
+  if(S.tab==='res')resView();else if(S.tab==='cs')csView();else if(S.tab==='tx')S.txed=TXED.view(q('pane'),{C:C,say:say,esc:esc});else if(S.tab==='st'&&isOwnerUser(auth.currentUser))staffView();else evView();
   scrubOnce();
   migrateOnce();
 }

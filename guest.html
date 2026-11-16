@@ -189,18 +189,24 @@ async function open(gid,state){
 /* ---------- 見本（管理画面の文言の編集用）。?sample=form / saved / canceled / byowner / invalid ---------- */
 var SG={id:'SAMPLE000000',no:2,ev:'新春ゴルフコンペ',date:'2027-01-10',start:'00:00',end:'24:00',host:'伊集院 剛',name:'',own:false,hasMail:false,cx:false,cxBy:'',cxName:''};
 
-if(typeof firebase==='undefined'||typeof makeCore==='undefined'||typeof TXT==='undefined'){
+function sampleShow(k){
+  if(k==='invalid')return invalid();
+  if(k==='saved')return show(Object.assign({},SG,{name:'山田 花子',own:true,hasMail:true}),'saved');
+  if(k==='canceled')return show(Object.assign({},SG,{cx:true,cxBy:'guest',cxName:'山田 花子'}),'canceled');
+  if(k==='byowner')return show(Object.assign({},SG,{cx:true,cxBy:'owner'}),'form');
+  return show(SG,'form');
+}
+if(typeof TXT!=='undefined'&&TXT.edit&&SM){
+  /* 管理画面の「お客様画面の文言」用：データベースにはつながず、見本だけを表示する */
+  sampleShow(SM[1]);
+}else if(typeof firebase==='undefined'||typeof makeCore==='undefined'||typeof TXT==='undefined'){
   app.innerHTML='<div class="box ng">必要なファイルを読み込めませんでした。電波の良い場所で、もう一度お試しください。</div><button class="s" onclick="location.reload()">もう一度読み込む</button>';
 }else{
   firebase.initializeApp(FIREBASE_CONFIG);
   var FDB=firebase.firestore();try{FDB.settings({experimentalAutoDetectLongPolling:true,merge:true})}catch(e){}
   C=makeCore(firebase,FDB);
   TXT.load(FDB).then(function(){
-    if(SM){var k=SM[1];if(k==='invalid')return invalid();
-      if(k==='saved')return show(Object.assign({},SG,{name:'山田 花子',own:true,hasMail:true}),'saved');
-      if(k==='canceled')return show(Object.assign({},SG,{cx:true,cxBy:'guest',cxName:'山田 花子'}),'canceled');
-      if(k==='byowner')return show(Object.assign({},SG,{cx:true,cxBy:'owner'}),'form');
-      return show(SG,'form')}
+    if(SM)return sampleShow(SM[1]);
     if(!GM)return invalid();
     return open(GM[1]);
   });

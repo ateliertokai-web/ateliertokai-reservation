@@ -32,6 +32,7 @@ a.innerHTML='<div class="card err">読み込みに時間がかかっています
 <script src="core.js"></script>
 <script src="practice.js"></script>
 <script src="texts.js"></script>
+<script src="edit-sample.js"></script>
 <script>
 (function(){
 'use strict';
@@ -72,8 +73,8 @@ function openText(ms){
 function fixModel(v){return v.replace(/[ａ-ｚＡ-Ｚ０-９]/g,function(c){return String.fromCharCode(c.charCodeAt(0)-65248)})}
 /* この端末に予約番号を覚えておく（メールアドレスも一緒に保存。共用端末では「この端末から消す」で削除できます） */
 var MYKEY='yoyaku_my_v1';
-function myGet(){try{var a=JSON.parse(localStorage.getItem(MYKEY)||'[]');return Array.isArray(a)?a:[]}catch(e){return[]}}
-function mySet(a){try{localStorage.setItem(MYKEY,JSON.stringify(a.slice(0,20)))}catch(e){}}
+function myGet(){if(TXT.edit)return [{id:'ABCDEFGHJKLM',mail:'sample@example.com'}];try{var a=JSON.parse(localStorage.getItem(MYKEY)||'[]');return Array.isArray(a)?a:[]}catch(e){return[]}}
+function mySet(a){if(TXT.edit)return;try{localStorage.setItem(MYKEY,JSON.stringify(a.slice(0,20)))}catch(e){}}
 function myAdd(id,mail){if(PV)return;var a=myGet().filter(function(x){return x.id!==id});a.unshift({id:id,mail:mail});mySet(a)}
 function myDel(id){mySet(myGet().filter(function(x){return x.id!==id}))}
 try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){} // ブラウザに、保存した記録を消さないよう頼む
@@ -200,9 +201,9 @@ async function loadMine(mine){
   rows.forEach(function(x,i){
     if(x.rec){var r=x.rec;
       out+='<div class="card"><div>'+stBadge(r)+'</div><p style="margin:8px 0 0"><b>'+esc(r.eventName)+'</b><br>'+day(r.date)+' '+rng(r)+'<br>'+esc(r.name)+(' '+T('様')+'　')+r.n+(T('名')+'<br><span class="note">'+T('予約番号')+' ')+fmtCode(x.id)+'</span></p>'+
-       '<button class="s" data-o="'+i+'">開く（変更・キャンセル）</button> <button class="s" data-d="'+i+'">この端末から消す</button></div>';
+       '<button class="s" data-o="'+i+('">'+T('開く（変更・キャンセル）')+'</button> <button class="s" data-d="')+i+('">'+T('この端末から消す')+'</button></div>');
     }else{
-      out+=('<div class="card"><p class="note" style="margin:0">'+T('予約番号')+' ')+fmtCode(x.id)+(x.gone?('<br>'+T('予約が見つかりませんでした。')):('<br>'+T('読み込めませんでした。')))+'</p><button class="s" data-d="'+i+'">この端末から消す</button></div>';
+      out+=('<div class="card"><p class="note" style="margin:0">'+T('予約番号')+' ')+fmtCode(x.id)+(x.gone?('<br>'+T('予約が見つかりませんでした。')):('<br>'+T('読み込めませんでした。')))+'</p><button class="s" data-d="'+i+('">'+T('この端末から消す')+'</button></div>');
     }
   });
   box.innerHTML=out;
@@ -283,7 +284,7 @@ function formView(){
    ('<fieldset><legend>'+T('ご利用店舗（両方可）')+'</legend>')+Object.keys(RV.STORES).map(function(k,i){
       var on=stores.indexOf(k)>=0;
       return '<label class="chk"><input type="checkbox" class="st" data-k="'+esc(k)+'"'+(on?' checked':'')+'>'+esc(k)+'</label>'+
-        '<label class="stf" data-k="'+esc(k)+'"'+(on?'':' hidden')+('>'+T('担当スタッフ（'))+esc(k)+'）<select data-k="'+esc(k)+'"><option value="">選択してください</option>'+RV.STORES[k].map(function(n){return '<option'+(((r.staff||{})[k]===n)?' selected':'')+'>'+esc(n)+'</option>'}).join('')+'</select></label>';
+        '<label class="stf" data-k="'+esc(k)+'"'+(on?'':' hidden')+('>'+T('担当スタッフ（'))+esc(k)+'）<select data-k="'+esc(k)+('"><option value="">'+T('選択してください')+'</option>')+RV.STORES[k].map(function(n){return '<option'+(((r.staff||{})[k]===n)?' selected':'')+'>'+esc(n)+'</option>'}).join('')+'</select></label>';
     }).join('')+'</fieldset>'+
    (ev.note?('<label>'+T('備考（ご要望・ご連絡事項など）')+'<textarea id="nt" rows="3" maxlength="500">')+esc(r.note)+'</textarea></label>':'')+
    ('<p class="note privacy">'+T('ご入力いただいた個人情報は、本イベントのご案内・ご連絡およびご予約の管理にのみ使用し、法令に基づく場合を除き、第三者に提供することはありません。')+'</p>')+
@@ -451,7 +452,7 @@ function ownerFindView(){
       if(!r.ok){q('er').textContent=r.msg;return}
       q('er').textContent='';
       q('fl').innerHTML=('<h2 style="font-size:16px">'+T('見つかったご予約')+'</h2>')+r.list.map(function(x,i){var v=x.r;
-        return '<div class="card"><div>'+stBadge(v)+'</div><p style="margin:8px 0 0"><b>'+esc(v.eventName)+'</b><br>'+day(v.date)+' '+rng(v)+'<br>'+esc(v.name)+(' '+T('様')+'　')+v.n+(T('名')+'<br><span class="note">'+T('予約番号')+' ')+fmtCode(x.id)+'</span></p><button class="s" data-o="'+i+'">開く（変更・キャンセル）</button></div>'}).join('');
+        return '<div class="card"><div>'+stBadge(v)+'</div><p style="margin:8px 0 0"><b>'+esc(v.eventName)+'</b><br>'+day(v.date)+' '+rng(v)+'<br>'+esc(v.name)+(' '+T('様')+'　')+v.n+(T('名')+'<br><span class="note">'+T('予約番号')+' ')+fmtCode(x.id)+'</span></p><button class="s" data-o="'+i+('">'+T('開く（変更・キャンセル）')+'</button></div>')}).join('');
       q('fl').querySelectorAll('[data-o]').forEach(function(b){b.onclick=async function(){
         var x=r.list[+b.dataset.o];S.rec=Object.assign({id:x.id},x.r);myAdd(x.id,S.rec.mail);S.msg='';b.disabled=true;
         try{await loadForRec();detailView()}catch(er){b.disabled=false;alert(T('通信に失敗しました。もう一度お試しください。'))}}});
@@ -591,14 +592,14 @@ async function loadGuests(){
     (notes.length?('<div class="box" style="border-color:#c0392b"><b>'+T('お知らせ')+'</b><br>')+notes.join('<br>')+('<br><small>'+T('人数を減らす場合は、下の「内容を変更する」から変更してください。')+'</small></div>'):'');
   h+=rows.map(function(x){
     var g=x.g,st,btn='';
-    if(!g){st=('<span class="note">'+T('未入力')+'</span>');btn='<button type="button" class="s" data-ga="send" data-no="'+x.no+'">URLを送る</button>'}
+    if(!g){st=('<span class="note">'+T('未入力')+'</span>');btn='<button type="button" class="s" data-ga="send" data-no="'+x.no+('">'+T('URLを送る')+'</button>')}
     else{
       if(g.cx)st=('<span class="note">'+T('取り消し（'))+(g.cxName?esc(g.cxName)+(' '+T('様・')):'')+(T('ご本人が取り消しました）')+'</span>');
       else if(g.name)st='<b>'+esc(g.name)+('</b> '+T('様')+' <span class="tag k">'+T('入力済み')+'</span>');
       else st=('<span class="note">'+T('未入力（URL送付済み）')+'</span>');
-      btn='<button type="button" class="s" data-ga="send" data-no="'+x.no+'">URL・QRを表示</button>'+
-        (g.name&&!g.cx?'<button type="button" class="s" data-ga="ren" data-no="'+x.no+'">名前を直す</button>':'')+
-        '<button type="button" class="s d" data-ga="del" data-no="'+x.no+'">取り消す</button>';
+      btn='<button type="button" class="s" data-ga="send" data-no="'+x.no+('">'+T('URL・QRを表示')+'</button>')+
+        (g.name&&!g.cx?'<button type="button" class="s" data-ga="ren" data-no="'+x.no+('">'+T('名前を直す')+'</button>'):'')+
+        '<button type="button" class="s d" data-ga="del" data-no="'+x.no+('">'+T('取り消す')+'</button>');
     }
     return ('<div class="card" style="margin:8px 0;padding:10px 12px"><div>'+T('参加者'))+x.no+'：'+st+'</div><div class="tools" style="margin:8px 0 0;flex-wrap:wrap">'+btn+'</div><div data-gp="'+x.no+'"></div></div>';
   }).join('');
@@ -665,7 +666,35 @@ async function openFromLink(){
 
 /* ---------- 起動 ---------- */
 var RV=window.RV;
-if(typeof firebase==='undefined'||typeof makeCore==='undefined'){
+if(TXT.edit&&window.EDITSAMPLE){
+  /* 管理画面の「お客様画面の文言」用：見本のデータで、どの画面も開ける（保存はしない） */
+  C=EDITSAMPLE();var ED=EDITDATA,E=ED.EV,SLS=ED.SL;
+  function eset(ev,slot,rec,mode){S.ev=Object.assign({id:ev},E[ev]);S.slot=slot?Object.assign({id:slot},SLS[slot]):null;S.rec=rec||null;S.mode=mode||'new';S.msg=''}
+  var SCR={
+    home:function(){home()},
+    pick:function(){eset('E1');pickSlot()},
+    pickLot:function(){eset('E3');pickSlot()},
+    form:function(){eset('E1','S1');formView()},
+    formFull:function(){eset('E1','S2');formView()},
+    formLot:function(){eset('E3','S4');formView()},
+    formGolf:function(){eset('E2','S3');formView()},
+    done:function(){eset('E1','S1');doneView({id:'ABCDEFGHJKLM',status:'confirmed'},{name:'鹿児島 太郎',a:2,k:0,s:0,m:0,mail:'sample@example.com'})},
+    doneWait:function(){eset('E1','S2');doneView({id:'ABCDEFGHJKLM',status:'wait',waitNo:3},{name:'鹿児島 太郎',a:2,k:0,s:0,m:0,mail:'sample@example.com'})},
+    doneLot:function(){eset('E3','S4');doneView({id:'ABCDEFGHJKLM',status:'lottery'},{name:'鹿児島 太郎',a:2,k:0,s:0,m:0,mail:'sample@example.com'})},
+    lookup:function(){lookupView()},
+    owner:function(){ownerFindView()},
+    detail:function(){eset('E1','S1',ED.rec());detailView()},
+    detailWait:function(){eset('E1','S2',ED.rec({status:'wait',waitNo:3,slotId:'S2',start:'11:00',end:'12:00'}));detailView()},
+    detailLot:function(){eset('E3','S4',ED.rec({eventId:'E3',eventName:E.E3.name,slotId:'S4',date:SLS.S4.date,start:'10:00',end:'12:00',status:'lottery'}));detailView()},
+    detailLost:function(){eset('E3','S4',ED.rec({eventId:'E3',eventName:E.E3.name,slotId:'S4',date:SLS.S4.date,start:'10:00',end:'12:00',status:'lost'}));detailView()},
+    detailCancel:function(){eset('E1','S1',ED.rec({status:'cancel'}));detailView()},
+    detailGolf:function(){eset('E2','S3',ED.rec({eventId:'E2',eventName:E.E2.name,slotId:'S3',date:SLS.S3.date,start:'00:00',end:'24:00',n:3,a:3,participants:['鹿児島 太郎','山田 花子','知覧 大輔'],inv:{'2':'GGGGGGGGGGGG'}}));loadForRec=async function(){};detailView()},
+    edit:function(){eset('E1','S1',ED.rec(),'edit');formView()}
+  };
+  window.addEventListener('message',function(e){if(e.origin!==location.origin||!e.data||e.data.type!=='tx-go')return;var f=SCR[e.data.screen];if(f){document.querySelectorAll('.txp').forEach(function(p){p.remove()});f()}});
+  TXT.screens=Object.keys(SCR);
+  home();
+}else if(typeof firebase==='undefined'||typeof makeCore==='undefined'){
   app.innerHTML='<div class="card err">必要なファイルを読み込めませんでした。電波の良い場所で、もう一度お試しください。<br><button class="s" style="margin-top:10px" onclick="location.reload()">もう一度読み込む</button></div>';
 }else if(!window.FIREBASE_CONFIG||/ここに/.test(FIREBASE_CONFIG.apiKey)){
   app.innerHTML='<div class="card err">Firebaseの設定が未入力です（firebase-config.js）。</div>';
