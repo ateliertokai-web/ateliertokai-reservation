@@ -59,12 +59,22 @@ button:focus-visible{outline:2px solid var(--accent2);outline-offset:2px}
 <script src="firebase-config.js"></script>
 <script src="core.js"></script>
 <script src="texts.js"></script>
+<script src="practice.js"></script>
 <script>
 (function(){
 'use strict';
 var app=document.getElementById('app'),C;
 var GM=/[?&]g=([A-HJ-NP-Z2-9]{12})(&|$)/.exec(location.search);
-var SM=/[?&]sample=(\w+)/.exec(location.search);   // 管理画面の文言の編集で使う見本の表示（何も読み書きしない）
+var SM=/[?&]sample=(\w+)/.exec(location.search);
+var PRM=!!(GM&&typeof PRAC!=='undefined'&&PRAC.isId(GM[1]));   // 練習用のURL（サーバーには何も保存しない）
+var D={getGuest:function(id){return C.getGuest(id)},saveGuest:function(g,v){return C.saveGuest(g,v)},cancelGuest:function(g,by){return C.cancelGuest(g,by)}};
+if(PRM){
+  D.getGuest=function(id){return Promise.resolve(PRAC.get(id))};
+  D.saveGuest=function(g,v){var cur=PRAC.get(g.id)||{},ml=String(v.mail||'').trim().toLowerCase();
+    if(!PRAC.put(g.id,Object.assign({},cur,{name:String(v.name||'').trim().slice(0,50),own:!!v.own,hasMail:!!((g.hasMail&&!g.cx)||ml),mail:ml||(g.cx?'':(cur.mail||'')),cx:false,cxBy:'',cxName:''})))return Promise.reject(new Error('storage'));return Promise.resolve()};
+  D.cancelGuest=function(g,by){var cur=PRAC.get(g.id)||{},nm=(g.name||g.cxName||'').slice(0,50);
+    if(!PRAC.put(g.id,Object.assign({},cur,{name:'',own:false,hasMail:false,mail:'',cx:true,cxBy:by,cxName:nm})))return Promise.reject(new Error('storage'));return Promise.resolve()};
+}   // 管理画面の文言の編集で使う見本の表示（何も読み書きしない）
 var esc=function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})};
 var q=function(id){return document.getElementById(id)};
 var WD='日月火水木金土';
@@ -101,11 +111,13 @@ TXT.add('お連れ様の入力ページ',{
  'gp.err.load':'読み込めませんでした。電波の良い場所で、もう一度お試しください。','gp.btn.retry':'もう一度読み込む',
  'gp.err.name':'お名前を入力してください','gp.err.mail':'メールアドレスを正しく入力してください',
  'gp.err.save':'保存できませんでした。もう一度お試しください。','gp.err.cancel':'取り消せませんでした。もう一度お試しください。',
- 'gp.sample':'見本の表示です（保存されません）'
+ 'gp.sample':'見本の表示です（保存されません）',
+ 'gp.practice':'【練習用のページです】入力した内容は、この端末のブラウザの中だけに保存されます。同じブラウザで開いている、代表者様の練習画面に反映されます。',
+ 'gp.practice.other':'この練習用のページは、URLを作った端末のブラウザの中でだけ開けます。別の端末では開けません。'
 });
 
 function page(inner){
-  app.innerHTML=(SM?'<p class="sample">'+esc(T('gp.sample'))+'</p>':'')+
+  app.innerHTML=(SM?'<p class="sample">'+esc(T('gp.sample'))+'</p>':(PRM?'<p class="sample">'+esc(T('gp.practice'))+'</p>':''))+
     '<div class="gh"><img src="apple-touch-icon.png" alt="" width="40" height="40"><span>'+esc(T('gp.brand'))+'</span></div>'+
     '<main class="gc"><div class="band"></div><div class="in">'+inner+'</div></main>';
 }
@@ -135,14 +147,14 @@ function viewForm(g){
     if(ml&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ml)){er.textContent=T('gp.err.mail');return}
     er.textContent='';busy(true,q('gs'),T('gp.btn.sending'));
     if(SM){return show(Object.assign({},g,{name:nm,own:q('go').checked,cx:false}),'saved')}
-    try{await C.saveGuest(g,{name:nm,mail:ml,own:q('go').checked});await open(g.id,'saved')}
+    try{await D.saveGuest(g,{name:nm,mail:ml,own:q('go').checked});await open(g.id,'saved')}
     catch(x){er.textContent=T('gp.err.save');busy(false,q('gs'),T('gp.btn.send'))}
   };
   if(q('gc'))q('gc').onclick=async function(){
     if(!confirm(T('gp.cx.confirm')))return;
     this.disabled=true;
     if(SM){return show(Object.assign({},g,{name:'',cx:true,cxBy:'guest'}),'canceled')}
-    try{await C.cancelGuest(g,'guest');await open(g.id,'canceled')}catch(x){this.disabled=false;q('er').textContent=T('gp.err.cancel')}
+    try{await D.cancelGuest(g,'guest');await open(g.id,'canceled')}catch(x){this.disabled=false;q('er').textContent=T('gp.err.cancel')}
   };
 }
 function viewSaved(g){
@@ -169,8 +181,8 @@ function show(g,state){
 async function open(gid,state){
   top();page('<div class="sp" role="status"><i></i>読み込み中…</div>');
   var g=null;
-  try{g=await tmo(C.getGuest(gid))}catch(e){return loadErr(function(){open(gid,state)})}
-  if(!g)return invalid();
+  try{g=await tmo(D.getGuest(gid))}catch(e){return loadErr(function(){open(gid,state)})}
+  if(!g){if(typeof PRAC!=='undefined'&&PRAC.isId(gid)){top();page('<h1>'+esc(T('gp.invalid.title'))+'</h1><p class="lead">'+esc(T('gp.practice.other'))+'</p>');return}return invalid()}
   show(g,state);
 }
 
