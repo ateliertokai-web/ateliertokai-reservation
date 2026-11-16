@@ -2,8 +2,10 @@
 (function (root) {
 'use strict';
 var STORES = { '鹿児島東開': ['小園','原田','寺床','植木','日髙','濱崎','下石原','坂口','西','新田','不明'], 'CPO川内': ['瀬戸口','石野','小川','不明'] };
+/* お客様画面の文言（管理画面で直せる）。texts.js が無い画面（管理画面など）では、もとの文のまま */
+function _T(s, v) { if (root.T) return root.T(s, v); return v ? s.replace(/\{(\w+)\}/g, function (m, k) { return v[k] != null ? v[k] : m; }) : s; }
 var ALPH = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-var LAP_TEXT = 'お席に限りが御座います。未就学児のお子様は保護者のお膝の上でよろしければ人数に含まなくても結構です。';
+var LAP_TEXT = 'お席に限りが御座います。未就学児のお子様は保護者のお膝の上でよろしければ人数に含まなくても結構です。';  // 表示するときに T() を通す（index.html）
 
 function makeCore(firebase, db, opts) {
   opts = opts || {};
@@ -82,7 +84,7 @@ function makeCore(firebase, db, opts) {
         throw e;
       }
     }
-    return fail('混み合っていて処理できませんでした。少し待ってもう一度お試しください');
+    return fail(_T('混み合っていて処理できませんでした。少し待ってもう一度お試しください'));
   }
 
   var fits = function (s, n, extraGroups) { return (!s.capG || (s.booked || 0) + (extraGroups || 1) <= s.capG) && (!s.capP || (s.people || 0) + n <= s.capP); };
@@ -98,26 +100,26 @@ function makeCore(firebase, db, opts) {
     return withRetry(function () {
       return db.runTransaction(async function (tx) {
         var sRef = slots.doc(slotId), sS = await tx.get(sRef);
-        if (!sS.exists) return fail('この枠は削除されました');
+        if (!sS.exists) return fail(_T('この枠は削除されました'));
         var s = sS.data(), eS = await tx.get(events.doc(s.eventId));
-        if (!eS.exists) return fail('このイベントは削除されました');
+        if (!eS.exists) return fail(_T('このイベントは削除されました'));
         var ev = eS.data();
-        if (!ev.visible && !ev.test) return fail('このイベントは受付を終了しました'); // テスト用イベントは非表示でも予約できる（動作確認用）
+        if (!ev.visible && !ev.test) return fail(_T('このイベントは受付を終了しました')); // テスト用イベントは非表示でも予約できる（動作確認用）
         var lot = ev.method === '抽選';
         if (lot) {
-          if (ev.drawn) return fail('抽選は終了したため、新しいお申し込みはできません');
-          if (ev.deadlineMs && now() > ev.deadlineMs) return fail('申込の受付は締め切りました');
+          if (ev.drawn) return fail(_T('抽選は終了したため、新しいお申し込みはできません'));
+          if (ev.deadlineMs && now() > ev.deadlineMs) return fail(_T('申込の受付は締め切りました'));
         }
         var n = (+d.a || 0) + (+d.k || 0) + (+d.s || 0) + (+d.m || 0);
-        if (n < 1 || n > s.maxPer) return fail('人数は1〜' + s.maxPer + '名で入力してください');
+        if (n < 1 || n > s.maxPer) return fail(_T('人数は1〜{n}名で入力してください', { n: s.maxPer }));
         var ak = await appKey(ev, s.eventId, d.mail, d.tel), aRef = apps.doc(ak), aS = await tx.get(aRef);
-        if (aS.exists && !dupOk) return fail('このメールアドレス（メールなしの場合は連絡先）は、すでにこのイベントにお申し込み済みです。内容の変更・キャンセルは「予約の確認・変更」から行えます');
+        if (aS.exists && !dupOk) return fail(_T('このメールアドレス（メールなしの場合は連絡先）は、すでにこのイベントにお申し込み済みです。内容の変更・キャンセルは「予約の確認・変更」から行えます'));
         var nRefs = await nameRefs(s.eventId, nameList(ev, d.participants)), nSnaps = await readNames(tx, nRefs);
         var status, upd = null, waitNo = 0;
         if (lot) status = 'lottery';
         else if (fits(s, n)) { status = 'confirmed'; upd = { booked: (s.booked || 0) + 1, people: (s.people || 0) + n, lastRes: id }; }
         else if (ev.wait) { status = 'wait'; waitNo = (s.waitSeq || 0) + 1; upd = { waitSeq: waitNo, lastRes: id }; }
-        else return fail('この枠は満席です');
+        else return fail(_T('この枠は満席です'));
         var doc = Object.assign({}, d, { dupOk: dupOk, n: n, eventId: s.eventId, eventName: ev.name, slotId: slotId, date: s.date, start: s.start, end: s.end,
           status: status, waitNo: waitNo, invited: false, createdAt: FV.serverTimestamp(), updatedAt: FV.serverTimestamp() });
         tx.set(res.doc(id), doc);
@@ -132,16 +134,16 @@ function makeCore(firebase, db, opts) {
 
   async function lookup(id, mail) {
     id = String(id || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-    if (!/^[A-HJ-NP-Z2-9]{12}$/.test(id)) return fail('予約番号の形式が正しくありません');
+    if (!/^[A-HJ-NP-Z2-9]{12}$/.test(id)) return fail(_T('予約番号の形式が正しくありません'));
     var s = await res.doc(id).get();
-    if (!s.exists || s.data().mail !== normMail(mail)) return fail('予約番号またはメールアドレスが違います');
+    if (!s.exists || s.data().mail !== normMail(mail)) return fail(_T('予約番号またはメールアドレスが違います'));
     return ok({ id: id, r: s.data() });
   }
 
   /* ---------- 予約番号を忘れたとき: オーナーズカードID＋メールアドレスで探す ---------- */
   async function findByOwner(owner, mail) {
     owner = normOwner(owner); mail = normMail(mail);
-    var NG = '見つかりませんでした。オーナーズカードIDとメールアドレスを、お申し込みのときと同じ内容で、ご確認ください';
+    var NG = _T('見つかりませんでした。オーナーズカードIDとメールアドレスを、お申し込みのときと同じ内容で、ご確認ください');
     if (!owner || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)) return fail(NG);
     var s = await owners.doc(await ownerKey(owner, mail)).get();
     var ids = (s.exists && s.data().ids) || [], out = [];
@@ -160,10 +162,10 @@ function makeCore(firebase, db, opts) {
     return withRetry(function () {
       return db.runTransaction(async function (tx) {
         var rRef = res.doc(id), rS = await tx.get(rRef);
-        if (!rS.exists) return fail('予約が見つかりません');
+        if (!rS.exists) return fail(_T('予約が見つかりません'));
         var r = rS.data();
-        if (!admin && r.mail !== normMail(mail)) return fail('予約番号またはメールアドレスが違います');
-        if (r.status === 'cancel') return fail('すでにキャンセル済みです');
+        if (!admin && r.mail !== normMail(mail)) return fail(_T('予約番号またはメールアドレスが違います'));
+        if (r.status === 'cancel') return fail(_T('すでにキャンセル済みです'));
         var sRef = slots.doc(r.slotId), sS = await tx.get(sRef), eS = await tx.get(events.doc(r.eventId));
         var cRefs = await nameRefs(r.eventId, nameList(eS.exists ? eS.data() : null, r.participants)), cSnaps = await readNames(tx, cRefs);
         var ak = await appKey(eS.exists ? eS.data() : null, r.eventId, r.mail, r.tel);
@@ -186,10 +188,10 @@ function makeCore(firebase, db, opts) {
     return withRetry(function () {
       return db.runTransaction(async function (tx) {
         var rRef = res.doc(id), rS = await tx.get(rRef);
-        if (!rS.exists) return fail('予約が見つかりません');
+        if (!rS.exists) return fail(_T('予約が見つかりません'));
         var r = rS.data();
-        if (r.mail !== normMail(mail)) return fail('予約番号またはメールアドレスが違います');
-        if (r.status === 'cancel') return fail('キャンセル済みの予約は変更できません');
+        if (r.mail !== normMail(mail)) return fail(_T('予約番号またはメールアドレスが違います'));
+        if (r.status === 'cancel') return fail(_T('キャンセル済みの予約は変更できません'));
         var oldRef = slots.doc(r.slotId), oldS = await tx.get(oldRef);
         var moving = newSlotId && newSlotId !== r.slotId, newRef = null, newS = null;
         if (moving) { newRef = slots.doc(newSlotId); newS = await tx.get(newRef); }
@@ -207,18 +209,18 @@ function makeCore(firebase, db, opts) {
         var n = (+m2.a || 0) + (+m2.k || 0) + (+m2.s || 0) + (+m2.m || 0);
         upd.n = n;
         var target = moving ? newS : oldS;
-        if (!target.exists) return fail('この枠は削除されました');
+        if (!target.exists) return fail(_T('この枠は削除されました'));
         var t = target.data();
         if (n < 1 || n > t.maxPer) return fail('人数は1〜' + t.maxPer + '名で入力してください');
         if (moving) {
-          if (t.eventId !== r.eventId) return fail('別のイベントの枠には変更できません');
-          if (r.status === 'wait') return fail('キャンセル待ちの方は時間帯を変更できません。いったんキャンセルして申し込み直してください');
-          if (ev.method === '抽選' && ev.drawn) return fail('抽選後は時間帯を変更できません');
+          if (t.eventId !== r.eventId) return fail(_T('別のイベントの枠には変更できません'));
+          if (r.status === 'wait') return fail(_T('キャンセル待ちの方は時間帯を変更できません。いったんキャンセルして申し込み直してください'));
+          if (ev.method === '抽選' && ev.drawn) return fail(_T('抽選後は時間帯を変更できません'));
           var toWait = false, newWaitNo = 0;
           if (isFixed(r.status) && !fits(t, n)) {
             // 変更先が満席: キャンセル待ちを受け付けるイベントなら、並び直してキャンセル待ちへ。受け付けないイベントは変更不可（元の予約はそのまま）
             if (ev.wait !== false && ev.method !== '抽選') { toWait = true; newWaitNo = (t.waitSeq || 0) + 1; }
-            else return fail('変更先の時間帯は満席のため、変更できませんでした。現在のご予約はそのままです');
+            else return fail(_T('変更先の時間帯は満席のため、変更できませんでした。現在のご予約はそのままです'));
           }
           if (isFixed(r.status)) {
             var o = oldS.data();
@@ -228,7 +230,7 @@ function makeCore(firebase, db, opts) {
           }
           Object.assign(upd, { slotId: newSlotId, date: t.date, start: t.start, end: t.end });
         } else if (isFixed(r.status) && n !== r.n) {
-          if (t.capP && (t.people || 0) - r.n + n > t.capP) return fail('この枠の定員人数を超えるため、人数を増やせません');
+          if (t.capP && (t.people || 0) - r.n + n > t.capP) return fail(_T('この枠の定員人数を超えるため、人数を増やせません'));
           tx.update(oldRef, { people: Math.max(0, (t.people || 0) - r.n + n), lastRes: id });
         }
         if (newOkey) tx.set(owners.doc(newOkey), { ids: FV.arrayUnion(id) }, { merge: true });
@@ -245,13 +247,13 @@ function makeCore(firebase, db, opts) {
     return withRetry(function () {
       return db.runTransaction(async function (tx) {
         var rRef = res.doc(id), rS = await tx.get(rRef);
-        if (!rS.exists) return fail('予約が見つかりません');
+        if (!rS.exists) return fail(_T('予約が見つかりません'));
         var r = rS.data();
-        if (r.status !== 'wait') return fail('キャンセル待ちの予約ではありません');
+        if (r.status !== 'wait') return fail(_T('キャンセル待ちの予約ではありません'));
         var sRef = slots.doc(r.slotId), sS = await tx.get(sRef);
-        if (!sS.exists) return fail('この枠は削除されています');
+        if (!sS.exists) return fail(_T('この枠は削除されています'));
         var s = sS.data();
-        if (!fits(s, r.n)) return fail('この枠にはまだ空きがありません');
+        if (!fits(s, r.n)) return fail(_T('この枠にはまだ空きがありません'));
         tx.update(rRef, { status: 'confirmed', waitNo: 0, updatedAt: FV.serverTimestamp() });
         tx.update(sRef, { booked: (s.booked || 0) + 1, people: (s.people || 0) + r.n, lastRes: id });
         return ok({});
@@ -270,10 +272,10 @@ function makeCore(firebase, db, opts) {
   // 抽選: 枠ごとに「招待枠」（invited）の方を先に当選させ、残りは無作為。外れた方は申込順でキャンセル待ち（なしの設定なら落選）
   async function runLottery(eventId) {
     var eS = await events.doc(eventId).get();
-    if (!eS.exists) return fail('イベントが見つかりません');
+    if (!eS.exists) return fail(_T('イベントが見つかりません'));
     var ev = eS.data();
-    if (ev.method !== '抽選') return fail('抽選のイベントではありません');
-    if (ev.drawn) return fail('すでに抽選済みです');
+    if (ev.method !== '抽選') return fail(_T('抽選のイベントではありません'));
+    if (ev.drawn) return fail(_T('すでに抽選済みです'));
     await migrateInvited(eventId);
     var rs = await res.where('eventId', '==', eventId).where('status', '==', 'lottery').get();
     var ss = await slots.where('eventId', '==', eventId).get();
@@ -356,7 +358,7 @@ function makeCore(firebase, db, opts) {
   }
   async function createSlots(eventId, ev, dates, o) {
     var times = makeTimes(o), ops = [];
-    if (!times.length) return fail('枠が作れません。時刻を確認してください');
+    if (!times.length) return fail(_T('枠が作れません。時刻を確認してください'));
     ops.push(function (b) { b.set(events.doc(eventId), ev, { merge: true }); });
     dates.forEach(function (date) {
       times.forEach(function (t) {
@@ -451,7 +453,7 @@ function makeCore(firebase, db, opts) {
     return withRetry(function () {
       return db.runTransaction(async function (tx) {
         var rRef = res.doc(id), rS = await tx.get(rRef);
-        if (!rS.exists) return fail('予約が見つかりません');
+        if (!rS.exists) return fail(_T('予約が見つかりません'));
         var r = rS.data(), eS = await tx.get(events.doc(r.eventId)), ev = eS.exists ? eS.data() : null;
         var oldN = nameList(ev, r.participants), newN = nameList(ev, ps);
         var addRefs = await nameRefs(r.eventId, newN.filter(function (n) { return oldN.indexOf(n) < 0; })), addSnaps = await readNames(tx, addRefs);
