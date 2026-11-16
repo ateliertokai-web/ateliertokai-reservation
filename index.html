@@ -408,8 +408,11 @@ function doneView(r,d){
   app.innerHTML='<h2>'+msg+'</h2><div class="card"><b>'+esc(ev.name)+'</b><br>'+day(s.date)+' '+rng(s)+'<br>'+esc(d.name)+' 様　'+(d.a+d.k+d.s+d.m)+'名</div>'+
    '<p class="note" style="margin:14px 0 0">予約番号（変更・キャンセル'+(ev.method==='抽選'?'・抽選結果の確認':'')+'に必要です）</p><div class="code">'+fmtCode(r.id)+'</div>'+
    '<div class="box">この予約番号は、この端末のトップ画面「あなたの予約」にも表示されます。別の端末で確認する場合に備えて、スクリーンショットを保存するか、予約番号をメモしてください。予約確認のメールは送信されません。</div>'+
-   keepHTML({mail:d.mail})+(PV&&realTest(ev)?'<button class="p" id="tr" style="margin-top:14px">この予約を開いて、変更・キャンセルを試す</button>':'')+'<button class="p" id="hm" style="margin-top:14px">トップへ戻る</button>';
+   keepHTML({mail:d.mail})+(PV&&realTest(ev)?'<button class="p" id="tr" style="margin-top:14px">この予約を開いて、変更・キャンセルを試す</button>':'')+
+   (PV&&!realTest(ev)&&ev.golf&&(d.a+d.k+d.s+d.m)>=2?'<button class="p" id="tg" style="margin-top:14px">お連れ様の入力の画面を見る（練習）</button>':'')+'<button class="p" id="hm" style="margin-top:14px">トップへ戻る</button>';
   q('hm').onclick=home;
+  // 練習画面（ゴルフ・テスト用ではないイベント）：保存されない見本の予約で、予約の確認画面（お連れ様の入力欄つき）を開く
+  if(q('tg'))q('tg').onclick=function(){S.rec={id:r.id,mail:C.normMail(d.mail),eventId:ev.id,eventName:ev.name,slotId:s.id,date:s.date,start:s.start,end:s.end,name:d.name,n:d.a+d.k+d.s+d.m,a:d.a,k:d.k,s:d.s,m:d.m,status:'confirmed',participants:d.participants||[],inv:{}};S.msg='';detailView()};
   if(q('tr'))q('tr').onclick=async function(){var b=this;b.disabled=true;
     try{var l=await C.lookup(r.id,d.mail);if(!l.ok){alert(l.msg);b.disabled=false;return}S.rec=Object.assign({id:l.id},l.r);S.msg='';await loadForRec();detailView()}
     catch(e){b.disabled=false;alert('通信に失敗しました。もう一度お試しください。')}};
@@ -599,7 +602,11 @@ async function loadGuests(){
   var byNo={};rows.forEach(function(x){byNo[x.no]=x.g});
   box.querySelectorAll('[data-ga]').forEach(function(b){b.onclick=async function(){
     var no=+b.dataset.no,a=b.dataset.ga,g=byNo[no],pane=box.querySelector('[data-gp="'+no+'"]');
-    if(PV){pane.innerHTML='<p class="note">確認画面のため、この操作はできません。</p>';return}
+    if(PV&&!realTest(S.ev)){
+      // 練習画面（テスト用ではないイベント）：何も保存せず、お連れ様用のURL・QRの見本だけを見せる
+      if(a==='send'){guestSharePane(pane,'SAMPLE000000');pane.insertAdjacentHTML('afterbegin','<p class="note" style="color:#c0392b;margin:8px 0 0"><b>【練習用の見本】</b>このURLは使えません。実際の予約では、押すとお連れ様専用のURLが作られます。</p>')}
+      else pane.innerHTML='<p class="note">確認画面のため、この操作はできません。</p>';
+      return}
     b.disabled=true;
     try{
       if(a==='send'){
