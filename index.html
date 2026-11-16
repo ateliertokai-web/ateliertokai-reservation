@@ -30,6 +30,7 @@ a.innerHTML='<div class="card err">読み込みに時間がかかっています
 <script>(window.firebase&&firebase.firestore)||document.write('<script src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-firestore-compat.js"><\/script>')</script>
 <script src="firebase-config.js"></script>
 <script src="core.js"></script>
+<script src="practice.js"></script>
 <script>
 (function(){
 'use strict';
@@ -409,7 +410,7 @@ function doneView(r,d){
    '<p class="note" style="margin:14px 0 0">予約番号（変更・キャンセル'+(ev.method==='抽選'?'・抽選結果の確認':'')+'に必要です）</p><div class="code">'+fmtCode(r.id)+'</div>'+
    '<div class="box">この予約番号は、この端末のトップ画面「あなたの予約」にも表示されます。別の端末で確認する場合に備えて、スクリーンショットを保存するか、予約番号をメモしてください。予約確認のメールは送信されません。</div>'+
    keepHTML({mail:d.mail})+(PV&&realTest(ev)?'<button class="p" id="tr" style="margin-top:14px">この予約を開いて、変更・キャンセルを試す</button>':'')+
-   (PV&&!realTest(ev)&&ev.golf&&(d.a+d.k+d.s+d.m)>=2?'<button class="p" id="tg" style="margin-top:14px">お連れ様の入力の画面を見る（練習）</button>':'')+'<button class="p" id="hm" style="margin-top:14px">トップへ戻る</button>';
+   (PV&&!realTest(ev)&&ev.golf&&(d.a+d.k+d.s+d.m)>=2?'<button class="p" id="tg" style="margin-top:14px">お連れ様の入力を練習する</button>':'')+'<button class="p" id="hm" style="margin-top:14px">トップへ戻る</button>';
   q('hm').onclick=home;
   // 練習画面（ゴルフ・テスト用ではないイベント）：保存されない見本の予約で、予約の確認画面（お連れ様の入力欄つき）を開く
   if(q('tg'))q('tg').onclick=function(){S.rec={id:r.id,mail:C.normMail(d.mail),eventId:ev.id,eventName:ev.name,slotId:s.id,date:s.date,start:s.start,end:s.end,name:d.name,n:d.a+d.k+d.s+d.m,a:d.a,k:d.k,s:d.s,m:d.m,status:'confirmed',participants:d.participants||[],inv:{}};S.msg='';detailView()};
@@ -570,10 +571,10 @@ function guestSharePane(pane,gid){
 }
 async function loadGuests(){
   var box=q('gst');if(!box)return;
-  var r=S.rec,inv=r.inv||{},rows=[],sync=false,ps=(r.participants||[]).slice(),notes=[];
+  var r=S.rec,inv=r.inv||{},rows=[],sync=false,ps=(r.participants||[]).slice(),notes=[],PRX=PV&&!realTest(S.ev);   // PRX：練習（何もサーバーに保存しない）
   for(var no=2;no<=r.n;no++){
     var g=null;
-    if(inv[no]){try{g=await C.getGuest(inv[no])}catch(e){}}
+    if(inv[no]){try{g=(PRX&&PRAC.isId(inv[no]))?PRAC.get(inv[no]):await C.getGuest(inv[no])}catch(e){}}
     rows.push({no:no,g:g});
     if(!g)continue;
     var cur=ps[no-1]||'',want=null;
@@ -583,8 +584,10 @@ async function loadGuests(){
     if(g.cx&&g.cxBy==='guest')notes.push('参加者'+no+'の'+(g.cxName?esc(g.cxName)+' 様':'お連れ様')+'が、入力を取り消しました。');
   }
   // お連れ様が入力したお名前を、予約の参加者名にも反映する
-  if(sync){try{await C.syncParticipants(r.id,ps);S.rec.participants=ps}catch(e){}}
-  var h=notes.length?'<div class="box" style="border-color:#c0392b"><b>お知らせ</b><br>'+notes.join('<br>')+'<br><small>人数を減らす場合は、下の「内容を変更する」から変更してください。</small></div>':'';
+  if(sync){if(PRX)S.rec.participants=ps;else{try{await C.syncParticipants(r.id,ps);S.rec.participants=ps}catch(e){}}}
+  var h=(PRX?'<p class="note" style="color:#c0392b;margin:6px 0"><b>【練習】</b>ここでの操作は、サーバーには保存されません。お連れ様の練習ページに入力した内容は、この端末のブラウザの中で、ここに反映されます（本番では、予約の参加者名にも反映され、管理画面・CSVにも出ます）。</p>':'')+
+    '<div style="text-align:right"><button type="button" class="l" id="gref">最新の状態に更新</button></div>'+
+    (notes.length?'<div class="box" style="border-color:#c0392b"><b>お知らせ</b><br>'+notes.join('<br>')+'<br><small>人数を減らす場合は、下の「内容を変更する」から変更してください。</small></div>':'');
   h+=rows.map(function(x){
     var g=x.g,st,btn='';
     if(!g){st='<span class="note">未入力</span>';btn='<button type="button" class="s" data-ga="send" data-no="'+x.no+'">URLを送る</button>'}
@@ -599,13 +602,34 @@ async function loadGuests(){
     return '<div class="card" style="margin:8px 0;padding:10px 12px"><div>参加者'+x.no+'：'+st+'</div><div class="tools" style="margin:8px 0 0;flex-wrap:wrap">'+btn+'</div><div data-gp="'+x.no+'"></div></div>';
   }).join('');
   box.innerHTML=h;
+  // 「最新の状態に更新」。別のタブ・端末でお連れ様が入力したあと、この画面に戻ってきたときも、自動で更新する（URL・QRを開いているときは更新しない）
+  var rf=q('gref');if(rf)rf.onclick=function(){loadGuests()};
+  window.onfocus=function(){var bx=q('gst');if(bx&&!document.hidden&&!bx.querySelector('[data-gp]:not(:empty)'))loadGuests()};
   var byNo={};rows.forEach(function(x){byNo[x.no]=x.g});
   box.querySelectorAll('[data-ga]').forEach(function(b){b.onclick=async function(){
     var no=+b.dataset.no,a=b.dataset.ga,g=byNo[no],pane=box.querySelector('[data-gp="'+no+'"]');
-    if(PV&&!realTest(S.ev)){
-      // 練習画面（テスト用ではないイベント）：何も保存せず、お連れ様用のURL・QRの見本だけを見せる
-      if(a==='send'){guestSharePane(pane,'SAMPLE000000');pane.insertAdjacentHTML('afterbegin','<p class="note" style="color:#c0392b;margin:8px 0 0"><b>【練習用の見本】</b>このURLは使えません。実際の予約では、押すとお連れ様専用のURLが作られます。</p>')}
-      else pane.innerHTML='<p class="note">確認画面のため、この操作はできません。</p>';
+    if(PRX){
+      // 練習画面（準備中ではないイベント）：サーバーには何も保存せず、この端末のブラウザの中だけで、お連れ様の入力まで試せる
+      try{
+        if(a==='send'){
+          var pg=(g&&PRAC.isId(g.id))?g.id:PRAC.newId();
+          if(!g&&!PRAC.put(pg,{no:no,eid:S.rec.eventId,ev:S.rec.eventName||'',date:S.rec.date||'',start:S.rec.start||'',end:S.rec.end||'',host:S.rec.name||'',name:'',own:false,hasMail:false,cx:false,mail:''})){pane.innerHTML='<p class="err">この端末では、練習用の保存ができませんでした（プライベートブラウズなど）。</p>';return}
+          S.rec.inv=Object.assign({},S.rec.inv||{});S.rec.inv[no]=pg;
+          guestSharePane(pane,pg);
+          pane.insertAdjacentHTML('afterbegin','<p class="note" style="color:#c0392b;margin:8px 0 0"><b>【練習用】</b>このURLは、この端末のブラウザの中だけで動きます。下のボタンで、お連れ様のページを開いて、入力を試してください。入力したら、このページに戻って「最新の状態に更新」を押します。</p><p style="margin:6px 0 0"><a class="s" href="'+esc(guestUrl(pg))+'" target="_blank" rel="noopener">お連れ様のページを開く（練習）</a></p>');
+          if(!g)b.textContent='URL・QRを表示';
+        }else if(a==='ren'){
+          var nm0=prompt('参加者'+no+'のお名前',g.name||'');
+          if(nm0&&nm0.trim()){PRAC.put(g.id,Object.assign({},PRAC.get(g.id),{name:nm0.trim().slice(0,50)}));await loadGuests()}
+        }else if(a==='del'){
+          if(!confirm('参加者'+no+(g.name||g.cxName?'（'+(g.name||g.cxName)+' 様）':'')+'の入力を取り消します。送ったURLは使えなくなります。よろしいですか？'))return;
+          var nm1=g.name||g.cxName||'';
+          PRAC.put(g.id,Object.assign({},PRAC.get(g.id),{name:'',own:false,hasMail:false,mail:'',cx:true,cxBy:'owner',cxName:nm1.slice(0,50)}));
+          var inv3=Object.assign({},S.rec.inv||{});delete inv3[no];S.rec.inv=inv3;
+          var ps3=(S.rec.participants||[]).slice();if(nm1&&ps3[no-1]===nm1){ps3[no-1]='';S.rec.participants=ps3}
+          await loadGuests();
+        }
+      }catch(e){pane.innerHTML='<p class="err">うまくいきませんでした。もう一度お試しください。</p>'}
       return}
     b.disabled=true;
     try{
