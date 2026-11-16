@@ -30,7 +30,7 @@
       lookup: function () { return Promise.resolve({ ok: true, id: 'ABCDEFGHJKLM', r: rec() }); },
       normMail: function (m) { return m; }, isFixed: function () { return true; }, isId: function () { return true; }, newId: function () { return 'ABCDEFGHJKLM'; },
       dupNames: function () { return Promise.resolve([]); }, getGuest: function () { return Promise.resolve(GUEST); },
-      findByOwner: function () { return Promise.resolve({ ok: true, list: [] }); }, makeInvite: function () { return Promise.resolve({ ok: true, id: 'GGGGGGGGGGGG' }); },
+      findByOwner: function () { return Promise.resolve({ ok: true, list: [] }); }, makeInvite: function () { return Promise.resolve('GGGGGGGGGGGG'); },
       syncParticipants: function () { return Promise.resolve({ ok: true }); }, renameGuest: function () { return Promise.resolve({ ok: true }); }, cancelGuest: function () { return Promise.resolve({ ok: true }); },
       change: function () { return Promise.resolve({ ok: false, msg: '' }); }, cancel: function () { return Promise.resolve({ ok: false, msg: '' }); }, book: function () { return Promise.resolve({ ok: false, msg: '' }); }
     };

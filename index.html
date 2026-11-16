@@ -273,7 +273,7 @@ function formView(){
    ('<h2 style="font-size:16px">'+T('来場人数')+'</h2><div class="g"><label>'+T('合計（1〜'))+max+(T('名）')+'<select id="tt"></select></label><label>'+T('うち大人')+'<select id="ad"></select></label></div>')+
    '<div class="note" id="kd"></div><div id="bd" class="g3" hidden></div><div class="note" id="bh"></div>'+
    (ev.lap?'<p class="box">'+esc(ev.lapText||T(RV.LAP_TEXT))+'</p>':'')+
-   ((ev.names||ev.golf)?('<h2 style="font-size:16px">'+T('参加者のお名前')+'</h2><div id="pn"></div>'):'')+
+   ((ev.names||ev.golf)?('<h2 style="font-size:16px">'+T('参加者のお名前')+'</h2>'+(ev.golf&&!edit?('<div class="box" id="pgbox"><b>'+T('お連れ様のお名前は、ご本人に入力してもらえます')+'</b><br>'+T('下の「お連れ様ご本人に入力してもらう」にチェックを入れると、ご予約の確定後、この画面に、お連れ様ごとの専用URLとQRコードが表示されます。LINEやメールでそのまま送れます（その場で、QRコードを読み取ってもらうこともできます）。')+'<label class="chk" style="margin:8px 0 0"><input type="checkbox" id="pall">'+T('参加者2人目以降を、すべて、ご本人に入力してもらう')+'</label></div>'):'')+'<div id="pn"></div>'):'')+
    (ev.order?'<label class="chk"><input type="checkbox" id="od"'+(r.order?' checked':'')+('>'+T('現在お車注文中でレクサス車未所有の方はチェックをお願い致します。')+'</label>'):'')+
    ('<fieldset id="car"><legend>'+T('保有レクサス車登録ナンバー')+'</legend><div class="plate">')+
    ('<label>'+T('地名')+'<input id="pf" maxlength="6" autocomplete="off" placeholder="鹿児島" value="')+esc(car.pref)+'"></label>'+
@@ -300,6 +300,12 @@ function formView(){
   fillAd(A0);
   if(ev.golf)ad.parentNode.style.display='none'; // ゴルフ: お子様の選択なし（全員大人）
   function bsum(){return ['bk_','bs_','bm_'].reduce(function(n,i){return n+(q(i)?+q(i).value:0)},0)}
+  function syncG(){   // お連れ様ご本人に入力してもらう欄は、名前の入力を止める
+    var rows=q('pn').querySelectorAll('.pnr'),all=true,any=false;
+    [].forEach.call(rows,function(row,i){var c=row.querySelector('.pgs'),n=row.querySelector('.pnm');if(!c)return;any=true;if(!c.checked)all=false;n.disabled=c.checked;if(c.checked){n.value='';n.placeholder=T('お連れ様が入力します')}else n.placeholder='';
+      c.onchange=function(){syncG()}});
+    var pa=q('pall');if(pa){pa.checked=any&&all;pa.onchange=function(){[].forEach.call(q('pn').querySelectorAll('.pgs'),function(c){c.checked=pa.checked});syncG()}}
+  }
   function hint(){var h=q('bh');if(!kids){h.textContent='';return}h.textContent=T('お子様の内訳の合計：')+bsum()+' / '+kids+T('名');h.style.color=bsum()===kids?'':'#b42318'}
   function upd(){
     var N=+tt.value,A=+ad.value;kids=N-A;
@@ -311,12 +317,15 @@ function formView(){
     if(kids)['bk_','bs_','bm_'].forEach(function(i){q(i).onchange=hint});
     hint();
     if(q('pn')){
-      var cur=[].map.call(q('pn').querySelectorAll('.pnm'),function(i){return i.value}),curL=[].map.call(q('pn').querySelectorAll('.plx'),function(i){return i.checked});
+      var cur=[].map.call(q('pn').querySelectorAll('.pnm'),function(i){return i.value}),curL=[].map.call(q('pn').querySelectorAll('.plx'),function(i){return i.checked}),curG=[].map.call(q('pn').querySelectorAll('.pgs'),function(i){return i.checked}),pall=q('pall'),canG=ev.golf&&!edit;
+      if(pall&&pall.checked)curG=[];
       if(!cur.length&&edit){cur=(r.participants||[]).slice();curL=(r.lexus||[]).slice()}
       // ゴルフ：参加者ごとに「レクサスオーナー」のチェック欄を右に出す
       var h='';for(var i=0;i<N;i++)h+=('<div class="pnr"><label style="margin:6px 0">'+T('参加者'))+(i+1)+'<input class="pnm" maxlength="40" value="'+esc(cur[i]!==undefined?cur[i]:(i===0?q('rn').value:''))+'"></label>'+
-        (ev.golf?'<label class="chk plxl"><input type="checkbox" class="plx"'+(curL[i]?' checked':'')+('>'+T('レクサスオーナー')+'</label>'):'')+'</div>';
+        (ev.golf?'<label class="chk plxl"><input type="checkbox" class="plx"'+(curL[i]?' checked':'')+('>'+T('レクサスオーナー')+'</label>'):'')+
+        (canG&&i>0?('<label class="chk pgl"><input type="checkbox" class="pgs"'+(((curG[i-1]!==undefined)?curG[i-1]:(pall&&pall.checked))?' checked':'')+'>'+T('お連れ様ご本人に入力してもらう')+'</label>'):'')+'</div>';
       q('pn').innerHTML=h;
+      if(canG)syncG();
       var f1=q('pn').querySelector('.pnm');if(f1)f1.oninput=function(){p1t=true};
     }
   }
@@ -351,6 +360,7 @@ function gather(){
   if(!/^[0-9０-９+\-ー－\s]{9,15}$/.test(d.tel))er.push(T('連絡先（電話番号）を正しく入力してください'));
   if(d.mail?!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.mail):(!S.ev.mailOpt&&S.mode!=='edit'))er.push(T('メールアドレスを正しく入力してください'));
   if(q('pn'))d.participants=[].map.call(q('pn').querySelectorAll('.pnm'),function(i){return i.value.trim()});
+  if(q('pn')&&ev.golf&&!edit){d.guestNos=[];[].forEach.call(q('pn').querySelectorAll('.pnr'),function(row,i){var c=row.querySelector('.pgs');if(c&&c.checked)d.guestNos.push(i+1)})}
   if(q('pn')&&ev.golf)d.lexus=[].map.call(q('pn').querySelectorAll('.plx'),function(i){return i.checked});
   if(!d.order){
     d.car={pref:get('pf'),cls:get('cl'),kana:get('kn'),num:get('nm'),model:fixModel(get('md'))};
@@ -366,7 +376,7 @@ function gather(){
   return {d:d,er:er};
 }
 async function submit(){
-  var g=gather(),er=q('er'),btn=q('go');
+  var g=gather(),er=q('er'),btn=q('go'),gn=g.d.guestNos||[];delete g.d.guestNos;
   if(g.er.length){er.textContent=g.er.join('\n');return}
   er.textContent='';busy(true,btn,T('送信中…'));
   // ゴルフ：参加者名がスペースを除いて完全一致する予約があれば、注意を出す（同姓同名の可能性もあるので、そのまま予約はできる）
@@ -394,9 +404,9 @@ async function submit(){
       r=await C.change(S.rec.id,S.rec.mail,patch,ns);
       if(r.ok){var l=await C.lookup(S.rec.id,S.rec.mail);S.rec=Object.assign({id:S.rec.id},l.r);S.justChanged=true;S.msg=r.waitlisted?T('ご希望の時間帯は満席のため、キャンセル待ち（')+r.waitNo+T('番目）として受け付けました。元のお時間のご予約は解放されています。空きが出た場合は、店舗からご連絡します。'):T('変更を保存しました');return detailView()}
     }else{
-      if(PV&&!realTest(S.ev)){r={ok:true,id:'PRACTICE0000',status:'confirmed'};return doneView(r,g.d)}
+      if(PV&&!realTest(S.ev)){r={ok:true,id:'PRACTICE0000',status:'confirmed'};return doneView(r,g.d,gn)}
       r=await C.book(S.slot.id,g.d);
-      if(r.ok){myAdd(r.id,g.d.mail);return doneView(r,g.d)}
+      if(r.ok){myAdd(r.id,g.d.mail);return doneView(r,g.d,gn)}
     }
     er.textContent=r.msg||T('処理できませんでした');
   }catch(e){er.textContent=e.code==='permission-denied'?T('お申し込みを受け付けられませんでした。受付開始前、または受付が終了している可能性があります。画面を更新して、もう一度お試しください。'):T('通信に失敗しました。電波の良い場所で、もう一度お試しください。（')+(e.code||e.message||'')+'）'}
@@ -404,7 +414,7 @@ async function submit(){
 }
 
 /* ---------- 完了 ---------- */
-function doneView(r,d){
+function doneView(r,d,gn){
   top();
   var s=S.slot,ev=S.ev;
   var msg=r.status==='confirmed'?T('ご予約が完了しました。'):r.status==='wait'?T('キャンセル待ちとして受け付けました（')+r.waitNo+T('番目）。空きが出た場合は、店舗からご連絡します。'):T('抽選のお申し込みを受け付けました。');
@@ -412,14 +422,37 @@ function doneView(r,d){
    ('<p class="note" style="margin:14px 0 0">'+T('予約番号（変更・キャンセル'))+(ev.method==='抽選'?T('・抽選結果の確認'):'')+(T('に必要です）')+'</p><div class="code">')+fmtCode(r.id)+'</div>'+
    ('<div class="box">'+T('この予約番号は、この端末のトップ画面「あなたの予約」にも表示されます。別の端末で確認する場合に備えて、スクリーンショットを保存するか、予約番号をメモしてください。予約確認のメールは送信されません。')+'</div>')+
    keepHTML({mail:d.mail})+(PV&&realTest(ev)?'<button class="p" id="tr" style="margin-top:14px">この予約を開いて、変更・キャンセルを試す</button>':'')+
-   (PV&&!realTest(ev)&&ev.golf&&(d.a+d.k+d.s+d.m)>=2?'<button class="p" id="tg" style="margin-top:14px">お連れ様の入力を練習する</button>':'')+('<button class="p" id="hm" style="margin-top:14px">'+T('トップへ戻る')+'</button>');
+   (PV&&!realTest(ev)&&ev.golf&&(d.a+d.k+d.s+d.m)>=2?'<button class="p" id="tg" style="margin-top:14px">お連れ様の入力を練習する</button>':'')+(gn&&gn.length?'<div id="dgs"></div>':'')+('<button class="p" id="hm" style="margin-top:14px">'+T('トップへ戻る')+'</button>');
   q('hm').onclick=home;
+  if(gn&&gn.length)doneGuests(r,d,gn);
   // 練習画面（ゴルフ・テスト用ではないイベント）：保存されない見本の予約で、予約の確認画面（お連れ様の入力欄つき）を開く
   if(q('tg'))q('tg').onclick=function(){S.rec={id:r.id,mail:C.normMail(d.mail),eventId:ev.id,eventName:ev.name,slotId:s.id,date:s.date,start:s.start,end:s.end,name:d.name,n:d.a+d.k+d.s+d.m,a:d.a,k:d.k,s:d.s,m:d.m,status:'confirmed',participants:d.participants||[],inv:{}};S.msg='';detailView()};
   if(q('tr'))q('tr').onclick=async function(){var b=this;b.disabled=true;
     try{var l=await C.lookup(r.id,d.mail);if(!l.ok){alert(l.msg);b.disabled=false;return}S.rec=Object.assign({id:l.id},l.r);S.msg='';await loadForRec();detailView()}
     catch(e){b.disabled=false;alert(T('通信に失敗しました。もう一度お試しください。'))}};
   wireKeep({id:r.id,mail:C.normMail(d.mail),eventName:ev.name,date:s.date,start:s.start,end:s.end});
+}
+
+
+/* 予約の完了画面：入力画面でチェックしたお連れ様の、専用URL・QRコードをすぐに出す */
+async function doneGuests(r,d,gn){
+  var box=q('dgs'),s=S.slot,ev=S.ev,PRX=PV&&!realTest(ev);
+  var rec={id:r.id,mail:C.normMail(d.mail),eventId:ev.id,eventName:ev.name,slotId:s.id,date:s.date,start:s.start,end:s.end,name:d.name,n:d.a+d.k+d.s+d.m,status:r.status,participants:d.participants||[],inv:{}};
+  S.rec=rec;
+  var h='<h2 style="font-size:16px;margin-top:22px">'+T('お連れ様への、入力のご案内')+'</h2>';
+  if(r.status!=='confirmed'){box.innerHTML=h+'<div class="box">'+T('お連れ様のご案内は、ご予約が確定したあとに、トップ画面の「あなたの予約」から開いて、送れます。')+'</div>';return}
+  h+='<p class="note" style="margin:0 0 6px">'+T('下の専用URLとQRコードを、お連れ様に送ってください（LINEやメール、または、その場でQRコードの読み取り）。お連れ様がお名前とメールアドレスを入力すると、ご予約に反映されます。')+'</p>';
+  gn.forEach(function(no){h+='<div class="card" style="margin:8px 0;padding:10px 12px"><div>'+T('参加者')+no+'</div><div data-gp="'+no+'"><div class="loading sm" role="status"><span class="spin"></span></div></div></div>'});
+  box.innerHTML=h+'<p class="note">'+T('お連れ様の入力状況は、トップ画面の「あなたの予約」から開くと、確認できます。')+'</p>';
+  for(var i=0;i<gn.length;i++){
+    var no=gn[i],pane=box.querySelector('[data-gp="'+no+'"]');
+    try{
+      var gid;
+      if(PRX){gid=PRAC.newId();PRAC.put(gid,{no:no,eid:rec.eventId,ev:rec.eventName||'',date:rec.date||'',start:rec.start||'',end:rec.end||'',host:rec.name||'',name:'',own:false,hasMail:false,cx:false,mail:''});rec.inv[no]=gid}
+      else{gid=await C.makeInvite(rec,no);rec.inv[no]=gid}
+      guestSharePane(pane,gid);
+    }catch(e){pane.innerHTML='<p class="err">'+T('URLを作れませんでした。ご予約は完了しています。トップ画面の「あなたの予約」を開いて、もう一度お試しください。')+'</p>'}
+  }
 }
 
 /* ---------- 予約の確認・変更・キャンセル ---------- */
@@ -688,6 +721,7 @@ if(TXT.edit&&window.EDITSAMPLE){
     detailLot:function(){eset('E3','S4',ED.rec({eventId:'E3',eventName:E.E3.name,slotId:'S4',date:SLS.S4.date,start:'10:00',end:'12:00',status:'lottery'}));detailView()},
     detailLost:function(){eset('E3','S4',ED.rec({eventId:'E3',eventName:E.E3.name,slotId:'S4',date:SLS.S4.date,start:'10:00',end:'12:00',status:'lost'}));detailView()},
     detailCancel:function(){eset('E1','S1',ED.rec({status:'cancel'}));detailView()},
+    doneGuest:function(){eset('E2','S3');doneView({id:'ABCDEFGHJKLM',status:'confirmed'},{name:'鹿児島 太郎',a:3,k:0,s:0,m:0,mail:'sample@example.com',participants:['鹿児島 太郎','','']},[2,3])},
     detailGolf:function(){eset('E2','S3',ED.rec({eventId:'E2',eventName:E.E2.name,slotId:'S3',date:SLS.S3.date,start:'00:00',end:'24:00',n:3,a:3,participants:['鹿児島 太郎','山田 花子','知覧 大輔'],inv:{'2':'GGGGGGGGGGGG'}}));loadForRec=async function(){};detailView()},
     edit:function(){eset('E1','S1',ED.rec(),'edit');formView()}
   };
