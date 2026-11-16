@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>ご参加のお願い</title>
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#1f4a3d">
+<style>
+/* お連れ様の専用入力ページ。予約ページとは別のデザイン（招待状のようなカード）。ほかのページへのリンクは置かない */
+:root{--bg:#e9efeb;--card:#fff;--ink:#1c2420;--ink2:#5b665f;--line:#d9e1dc;--accent:#1f4a3d;--accent2:#2f6b59;--gold:#b8955a;--err:#b42318;--ok:#1d6b3e}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.75 -apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",Meiryo,sans-serif;-webkit-text-size-adjust:100%;min-height:100vh;
+  padding:max(20px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(32px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left))}
+#app{max-width:520px;margin:0 auto}
+.gh{display:flex;align-items:center;justify-content:center;gap:10px;color:var(--accent);font-weight:700;letter-spacing:.12em;margin:4px 0 16px}
+.gh img{width:40px;height:40px;border-radius:10px;box-shadow:0 1px 6px rgba(0,0,0,.18)}
+.gc{background:var(--card);border-radius:16px;box-shadow:0 8px 30px rgba(31,74,61,.14);overflow:hidden}
+.gc .band{height:6px;background:linear-gradient(90deg,var(--accent),var(--gold))}
+.gc .in{padding:24px 22px 26px}
+.eyebrow{margin:0;text-align:center;font-size:12px;font-weight:700;letter-spacing:.22em;color:var(--gold)}
+h1{margin:8px 0 16px;font-size:19px;line-height:1.6;text-align:center;text-wrap:balance;word-break:auto-phrase;line-break:strict}
+.lead{margin:-6px 0 18px;text-align:center;color:var(--ink2);font-size:14px}
+dl.facts{margin:0 0 20px;padding:12px 16px;background:#f4f8f5;border-radius:10px;display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:14px}
+dl.facts dt{color:var(--ink2)}dl.facts dd{margin:0;font-weight:600}
+h2{margin:0 0 4px;font-size:15px;padding-bottom:6px;border-bottom:2px solid var(--accent)}
+label{display:block;font-size:14px;font-weight:600;margin:14px 0 0}
+input[type=text],input[type=email],input:not([type]){display:block;width:100%;margin-top:4px;padding:12px;font:inherit;border:1px solid #c5d0c9;border-radius:8px;background:#fff;color:var(--ink)}
+input:focus{outline:2px solid var(--accent2);border-color:var(--accent2)}
+label.chk{display:flex;gap:10px;align-items:flex-start;font-weight:400;margin:14px 0 0}
+label.chk input{width:20px;height:20px;margin-top:4px}
+button{font:inherit;cursor:pointer}
+button.p{display:block;width:100%;margin-top:18px;padding:14px;border:0;border-radius:10px;background:var(--accent);color:#fff;font-weight:700;letter-spacing:.06em}
+button.p:disabled{opacity:.55}
+button.s{display:block;width:100%;margin-top:12px;padding:12px;border:1px solid #c5d0c9;border-radius:10px;background:#fff;color:var(--accent)}
+button.d{color:var(--err);border-color:#f0c7c2}
+button:focus-visible{outline:2px solid var(--accent2);outline-offset:2px}
+.note{font-size:12.5px;color:var(--ink2);margin:16px 0 0;line-height:1.6}
+.err{color:var(--err);font-size:14px;margin:10px 0 0;min-height:1em;white-space:pre-wrap}
+.box{margin:0 0 6px;padding:12px 14px;border-radius:10px;background:#fbf7ec;border:1px solid #eadfc2;font-size:14px}
+.box.ok{background:#e9f5ee;border-color:#bfe0cc;color:var(--ok)}
+.box.ng{background:#fdeceb;border-color:#f2c9c5;color:var(--err)}
+.sp{display:flex;flex-direction:column;align-items:center;gap:12px;padding:56px 0;color:var(--ink2);font-size:14px}
+.sp i{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.sample{margin:0 0 12px;text-align:center;font-size:12px;color:#8a5a00;background:#fff1d6;border-radius:8px;padding:4px 8px}
+@media (prefers-reduced-motion:reduce){.sp i{animation-duration:2.4s}}
+</style>
+</head>
+<body>
+<div id="app"><div class="sp" role="status"><i></i>読み込み中…</div></div>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script>window.firebase||document.write('<script src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-app-compat.js"><\/script>')</script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>(window.firebase&&firebase.firestore)||document.write('<script src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-firestore-compat.js"><\/script>')</script>
+<script src="firebase-config.js"></script>
+<script src="core.js"></script>
+<script src="texts.js"></script>
+<script>
+(function(){
+'use strict';
+var app=document.getElementById('app'),C;
+var GM=/[?&]g=([A-HJ-NP-Z2-9]{12})(&|$)/.exec(location.search);
+var SM=/[?&]sample=(\w+)/.exec(location.search);   // 管理画面の文言の編集で使う見本の表示（何も読み書きしない）
+var esc=function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})};
+var q=function(id){return document.getElementById(id)};
+var WD='日月火水木金土';
+function day(s){var p=s.split('-'),d=new Date(+p[0],+p[1]-1,+p[2]);return (+p[1])+'月'+(+p[2])+'日（'+WD[d.getDay()]+'）'}
+function rng(s){return s.start==='00:00'&&s.end==='24:00'?'終日':s.start+'〜'+s.end}
+function tmo(p,ms){return Promise.race([p,new Promise(function(_,rej){setTimeout(function(){rej(new Error('timeout'))},ms||12000)})])}
+function busy(on,btn,txt){if(btn){btn.disabled=on;if(txt)btn.textContent=txt}}
+
+/* ---------- 文言（既定）。管理画面の「お客様画面の文言」で変更できる ---------- */
+TXT.add('お連れ様の入力ページ',{
+ 'gp.brand':'Atelier Tokai',
+ 'gp.eyebrow':'ご参加のお願い',
+ 'gp.invite':'{host} 様より、{event}の参加依頼が届いています。',
+ 'gp.lead':'お手数ですが、ご参加者様のお名前などを、下のフォームからご入力ください。',
+ 'gp.fact.event':'イベント','gp.fact.date':'日時','gp.fact.host':'ご依頼主','gp.fact.host.val':'{host} 様',
+ 'gp.form.title':'ご参加者様の情報（参加者{no}）',
+ 'gp.form.name':'お名前','gp.form.mail':'メールアドレス（任意・スコアボードの送信に使います）','gp.form.mail.saved':'保存済みです。変更するときだけ入力してください',
+ 'gp.form.own':'レクサス鹿児島東開のオーナーです',
+ 'gp.btn.send':'参加者情報を送信する','gp.btn.sending':'送信中…',
+ 'gp.note.privacy':'ご入力いただいたメールアドレスは、店舗だけが確認します。代表者様には、お名前だけが表示されます。',
+ 'gp.reenter':'ご入力は、取り消されています。もう一度参加される場合は、入力してください。',
+ 'gp.cx.hint':'ご都合がつかなくなった場合は、入力を取り消すことができます。',
+ 'gp.btn.cx':'参加できなくなった（入力を取り消す）',
+ 'gp.cx.confirm':'ご自分の入力（お名前・メールアドレスなど）を取り消します。代表者様にお知らせが届きます。よろしいですか？',
+ 'gp.done.title':'ご入力ありがとうございました',
+ 'gp.done.body':'参加者{no}：{name} 様 で保存しました。内容は、代表者様のご予約に反映されます。',
+ 'gp.btn.edit':'入力内容を変更する',
+ 'gp.cxd.title':'入力を取り消しました',
+ 'gp.cxd.body':'参加者{no}のご入力を取り消しました。代表者様に、お知らせします。',
+ 'gp.cxd.again':'もう一度参加される場合は、下のボタンから入力してください。',
+ 'gp.btn.again':'もう一度入力する',
+ 'gp.byowner':'この参加依頼は、{host} 様により取り消されました。ご不明な点は、代表者様にご確認ください。',
+ 'gp.invalid.title':'このURLは無効です','gp.invalid.body':'代表者の方に、もう一度URLを送ってもらってください。',
+ 'gp.err.load':'読み込めませんでした。電波の良い場所で、もう一度お試しください。','gp.btn.retry':'もう一度読み込む',
+ 'gp.err.name':'お名前を入力してください','gp.err.mail':'メールアドレスを正しく入力してください',
+ 'gp.err.save':'保存できませんでした。もう一度お試しください。','gp.err.cancel':'取り消せませんでした。もう一度お試しください。',
+ 'gp.sample':'見本の表示です（保存されません）'
+});
+
+function page(inner){
+  app.innerHTML=(SM?'<p class="sample">'+esc(T('gp.sample'))+'</p>':'')+
+    '<div class="gh"><img src="apple-touch-icon.png" alt="" width="40" height="40"><span>'+esc(T('gp.brand'))+'</span></div>'+
+    '<main class="gc"><div class="band"></div><div class="in">'+inner+'</div></main>';
+}
+function top(){window.scrollTo(0,0)}
+function head(g){return '<p class="eyebrow">'+esc(T('gp.eyebrow'))+'</p><h1>'+esc(T('gp.invite',{host:g.host,event:g.ev}))+'</h1>'}
+function facts(g){
+  return '<dl class="facts"><dt>'+esc(T('gp.fact.event'))+'</dt><dd>'+esc(g.ev)+'</dd>'+(g.date?'<dt>'+esc(T('gp.fact.date'))+'</dt><dd>'+esc(day(g.date)+' '+rng(g))+'</dd>':'')+
+    '<dt>'+esc(T('gp.fact.host'))+'</dt><dd>'+esc(T('gp.fact.host.val',{host:g.host}))+'</dd></dl>';
+}
+function invalid(){page('<h1>'+esc(T('gp.invalid.title'))+'</h1><p class="lead">'+esc(T('gp.invalid.body'))+'</p>');top()}
+function loadErr(retry){page('<div class="box ng">'+esc(T('gp.err.load'))+'</div><button class="s" id="rt" type="button">'+esc(T('gp.btn.retry'))+'</button>');q('rt').onclick=retry;top()}
+
+function viewForm(g){
+  top();
+  page(head(g)+'<p class="lead">'+esc(T('gp.lead'))+'</p>'+facts(g)+
+   (g.cx?'<div class="box">'+esc(T('gp.reenter'))+'</div>':'')+
+   '<h2>'+esc(T('gp.form.title',{no:g.no}))+'</h2>'+
+   '<form id="gf" novalidate><label>'+esc(T('gp.form.name'))+'<input id="gn" required maxlength="50" autocomplete="name" value="'+esc(g.cx?'':g.name||'')+'"></label>'+
+   '<label>'+esc(T('gp.form.mail'))+'<input id="gm" type="email" autocomplete="email" placeholder="'+esc(g.hasMail&&!g.cx?T('gp.form.mail.saved'):'')+'"></label>'+
+   '<label class="chk"><input type="checkbox" id="go"'+(g.own&&!g.cx?' checked':'')+'>'+esc(T('gp.form.own'))+'</label>'+
+   '<div class="err" id="er"></div><button class="p" id="gs" type="submit">'+esc(T('gp.btn.send'))+'</button></form>'+
+   (g.name&&!g.cx?'<p class="note" style="text-align:center">'+esc(T('gp.cx.hint'))+'</p><button class="s d" id="gc" type="button">'+esc(T('gp.btn.cx'))+'</button>':'')+
+   '<p class="note">'+esc(T('gp.note.privacy'))+'</p>');
+  q('gf').onsubmit=async function(e){
+    e.preventDefault();var nm=q('gn').value.trim(),ml=q('gm').value.trim(),er=q('er');
+    if(!nm){er.textContent=T('gp.err.name');return}
+    if(ml&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ml)){er.textContent=T('gp.err.mail');return}
+    er.textContent='';busy(true,q('gs'),T('gp.btn.sending'));
+    if(SM){return show(Object.assign({},g,{name:nm,own:q('go').checked,cx:false}),'saved')}
+    try{await C.saveGuest(g,{name:nm,mail:ml,own:q('go').checked});await open(g.id,'saved')}
+    catch(x){er.textContent=T('gp.err.save');busy(false,q('gs'),T('gp.btn.send'))}
+  };
+  if(q('gc'))q('gc').onclick=async function(){
+    if(!confirm(T('gp.cx.confirm')))return;
+    this.disabled=true;
+    if(SM){return show(Object.assign({},g,{name:'',cx:true,cxBy:'guest'}),'canceled')}
+    try{await C.cancelGuest(g,'guest');await open(g.id,'canceled')}catch(x){this.disabled=false;q('er').textContent=T('gp.err.cancel')}
+  };
+}
+function viewSaved(g){
+  top();
+  page(head(g)+facts(g)+'<div class="box ok"><b>'+esc(T('gp.done.title'))+'</b><br>'+esc(T('gp.done.body',{no:g.no,name:g.name}))+'</div>'+
+    '<button class="s" id="re" type="button">'+esc(T('gp.btn.edit'))+'</button><p class="note">'+esc(T('gp.note.privacy'))+'</p>');
+  q('re').onclick=function(){show(g,'form')};
+}
+function viewCanceled(g){
+  top();
+  page(head(g)+facts(g)+'<div class="box"><b>'+esc(T('gp.cxd.title'))+'</b><br>'+esc(T('gp.cxd.body',{no:g.no}))+'</div><p class="note" style="text-align:center">'+esc(T('gp.cxd.again'))+'</p>'+
+    '<button class="p" id="re" type="button">'+esc(T('gp.btn.again'))+'</button>');
+  q('re').onclick=function(){show(g,'form')};
+}
+function viewByOwner(g){top();page(head(g)+facts(g)+'<div class="box ng">'+esc(T('gp.byowner',{host:g.host}))+'</div>')}
+
+// 状態に応じて表示を切り替える（g：入力欄の内容、state：form / saved / canceled）
+function show(g,state){
+  if(g.cx&&g.cxBy==='owner')return viewByOwner(g);
+  if(state==='saved')return viewSaved(g);
+  if(state==='canceled')return viewCanceled(g);
+  return viewForm(g);
+}
+async function open(gid,state){
+  top();page('<div class="sp" role="status"><i></i>読み込み中…</div>');
+  var g=null;
+  try{g=await tmo(C.getGuest(gid))}catch(e){return loadErr(function(){open(gid,state)})}
+  if(!g)return invalid();
+  show(g,state);
+}
+
+/* ---------- 見本（管理画面の文言の編集用）。?sample=form / saved / canceled / byowner / invalid ---------- */
+var SG={id:'SAMPLE000000',no:2,ev:'新春ゴルフコンペ',date:'2027-01-10',start:'00:00',end:'24:00',host:'伊集院 剛',name:'',own:false,hasMail:false,cx:false,cxBy:'',cxName:''};
+
+if(typeof firebase==='undefined'||typeof makeCore==='undefined'||typeof TXT==='undefined'){
+  app.innerHTML='<div class="box ng">必要なファイルを読み込めませんでした。電波の良い場所で、もう一度お試しください。</div><button class="s" onclick="location.reload()">もう一度読み込む</button>';
+}else{
+  firebase.initializeApp(FIREBASE_CONFIG);
+  var FDB=firebase.firestore();try{FDB.settings({experimentalAutoDetectLongPolling:true,merge:true})}catch(e){}
+  C=makeCore(firebase,FDB);
+  TXT.load(FDB).then(function(){
+    if(SM){var k=SM[1];if(k==='invalid')return invalid();
+      if(k==='saved')return show(Object.assign({},SG,{name:'山田 花子',own:true,hasMail:true}),'saved');
+      if(k==='canceled')return show(Object.assign({},SG,{cx:true,cxBy:'guest',cxName:'山田 花子'}),'canceled');
+      if(k==='byowner')return show(Object.assign({},SG,{cx:true,cxBy:'owner'}),'form');
+      return show(SG,'form')}
+    if(!GM)return invalid();
+    return open(GM[1]);
+  });
+}
+})();
+</script>
+</body>
+</html>

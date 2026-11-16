@@ -557,7 +557,7 @@ var QR=(function(){
 function guestShareText(r,url){
   return '【ゴルフ参加者情報のご入力のお願い】\n'+r.name+' 様からのご案内です。\n\n■ '+r.eventName+'\n■ '+day(r.date)+' '+rng(r)+'\n\nお手数ですが、下のURLから、お名前とメールアドレス（スコアボードの送信に使います）をご入力ください。\n'+url+'\n\nレクサス鹿児島東開';
 }
-function guestUrl(gid){return location.origin+location.pathname+'?g='+gid}
+function guestUrl(gid){return location.origin+location.pathname.replace(/[^/]*$/,'')+'guest.html?g='+gid}
 function guestSharePane(pane,gid){
   var url=guestUrl(gid),txt=guestShareText(S.rec,url),E=encodeURIComponent,img='';
   try{img='<img src="'+QR.dataURL(url,6)+'" alt="QRコード" style="width:180px;height:180px;image-rendering:pixelated;display:block;margin:8px auto 4px;border:1px solid #ddd">'}catch(e){}
@@ -626,46 +626,6 @@ async function loadGuests(){
   }});
 }
 
-/* ---------- ゴルフ: お連れ様の入力画面（?g=ID で開く） ---------- */
-async function guestView(gid,done){
-  top();
-  app.innerHTML='<div class="loading" role="status"><span class="spin"></span>読み込み中…</div>';
-  var g=null;
-  try{g=await tmo(C.getGuest(gid))}catch(e){app.innerHTML='<div class="card err">読み込めませんでした。電波の良い場所で、もう一度お試しください。<br><button class="s" id="rt" style="margin-top:10px">もう一度読み込む</button></div>';q('rt').onclick=function(){guestView(gid)};return}
-  if(!g){app.innerHTML='<div class="card err">このURLは無効です。代表者の方に、もう一度URLを送ってもらってください。</div>';return}
-  var info='<div class="card"><b>'+esc(g.ev)+'</b><br>'+(g.date?day(g.date)+' '+rng(g):'')+'<br>代表者：'+esc(g.host)+' 様</div>';
-  if(g.cx&&g.cxBy==='owner'){app.innerHTML='<h2>参加者情報のご入力</h2>'+info+'<div class="card err">このURLは、代表者様により取り消されました。ご不明な点は、代表者様にご確認ください。</div>';return}
-  if(done==='saved'){
-    app.innerHTML='<h2>ご入力ありがとうございました</h2>'+info+'<div class="box">参加者'+g.no+'：<b>'+esc(g.name)+'</b> 様 で保存しました。内容は、代表者様のご予約に反映されます。</div><button class="s" id="re" style="margin-top:14px">入力内容を直す</button>';
-    q('re').onclick=function(){guestView(gid)};return;
-  }
-  if(done==='canceled'){
-    app.innerHTML='<h2>入力を取り消しました</h2>'+info+'<div class="box">参加者'+g.no+'のご入力を取り消しました。代表者様に、お知らせします。</div><p class="note">もう一度参加される場合は、このURLから入力し直せます。</p><button class="s" id="re" style="margin-top:8px">もう一度入力する</button>';
-    q('re').onclick=function(){guestView(gid)};return;
-  }
-  app.innerHTML='<h2>参加者情報のご入力<small>参加者'+g.no+'様</small></h2>'+info+
-   (g.cx?'<div class="box">ご入力は、取り消されています。もう一度参加される場合は、入力してください。</div>':'')+
-   '<form id="gf"><label>お名前<input id="gn" required maxlength="50" autocomplete="name" value="'+esc(g.name||'')+'"></label>'+
-   '<label>メールアドレス（任意・スコアボードの送信に使います）<input id="gm" type="email" autocomplete="email" placeholder="'+(g.hasMail&&!g.cx?'保存済みです。変更するときだけ入力してください':'例：name@example.com')+'"></label>'+
-   '<label class="chk" style="margin:10px 0"><input type="checkbox" id="go"'+(g.own&&!g.cx?' checked':'')+'>レクサス鹿児島東開のオーナーです</label>'+
-   '<div class="err" id="er"></div><button class="p" id="gs" type="submit">保存する</button></form>'+
-   (g.name&&!g.cx?'<div style="text-align:center;margin-top:18px"><button class="s d" id="gc" type="button">入力を取り消す</button></div>':'')+
-   '<p class="note" style="margin-top:14px">ご入力いただいたメールアドレスは、店舗だけが確認します。代表者様には、お名前だけが表示されます。</p>';
-  q('gf').onsubmit=async function(e){
-    e.preventDefault();var nm=q('gn').value.trim(),ml=q('gm').value.trim(),er=q('er');
-    if(!nm){er.textContent='お名前を入力してください';return}
-    if(ml&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ml)){er.textContent='メールアドレスを正しく入力してください';return}
-    er.textContent='';busy(true,q('gs'),'保存中…');
-    try{await C.saveGuest(g,{name:nm,mail:ml,own:q('go').checked});guestView(gid,'saved')}
-    catch(x){er.textContent='保存できませんでした。もう一度お試しください。';busy(false,q('gs'),'保存する')}
-  };
-  if(q('gc'))q('gc').onclick=async function(){
-    if(!confirm('ご自分の入力（お名前・メールアドレスなど）を取り消します。代表者様にお知らせが届きます。よろしいですか？'))return;
-    this.disabled=true;
-    try{await C.cancelGuest(g,'guest');guestView(gid,'canceled')}catch(x){this.disabled=false;q('er').textContent='取り消せませんでした。もう一度お試しください。'}
-  };
-}
-
 /* ---------- メールの控えのリンクから開く（#r=予約番号&m=メール） ---------- */
 async function openFromLink(){
   var m=/^#r=([A-Za-z0-9]{12})&m=(.*)$/.exec(location.hash||'');
@@ -689,7 +649,8 @@ if(typeof firebase==='undefined'||typeof makeCore==='undefined'){
   var FDB=firebase.firestore();try{FDB.settings({experimentalAutoDetectLongPolling:true,merge:true})}catch(e){}
   C=makeCore(firebase,FDB);
   var GM=/[?&]g=([A-HJ-NP-Z2-9]{12})(&|$)/.exec(location.search);
-  syncTime().then(function(){return GM?guestView(GM[1]):openFromLink()});
+  if(GM){location.replace(location.pathname.replace(/[^/]*$/,'')+'guest.html'+location.search)}
+  else syncTime().then(openFromLink);
 }
 })();
 </script>
