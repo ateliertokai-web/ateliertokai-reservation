@@ -10,20 +10,18 @@
 <link rel="manifest" href="admin-manifest.json">
 <meta name="theme-color" content="#111111">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="予約管理">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <header class="top"><h1>Atelier Tokai reservation</h1><small>ADMIN</small></header>
-<main id="app" class="wide"><div class="loading" role="status"><span class="spin"></span>読み込み中…</div></main>
+<main id="app" class="wide"></main>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
 <script src="core.js"></script>
-<script src="guide-text.js"></script>
 <script>
 (function(){
 'use strict';
@@ -39,38 +37,14 @@ var ST={confirmed:'確定',won:'当選',lottery:'抽選待ち',wait:'待ち',los
 var S={tab:'res',events:[],evId:'',slots:[],rs:[],unsub:null,fSlot:'',fSt:'live',msg:''};
 
 /* ---------- ログイン ---------- */
-// オーナーかどうかは、Firebase のルール（isOwner）で判断する。メールアドレスはこのファイルに書かない
-var isOwnerUser=function(){return !!S.owner};
-function authMsg(c){return /invalid-credential|wrong-password|user-not-found|invalid-email/.test(c)?'メールアドレスまたはパスワードが違います':/email-already-in-use/.test(c)?'このメールアドレスのアカウントはすでにあります。ログインするか「パスワードを忘れた方」から再設定してください':/weak-password/.test(c)?'パスワードは10文字以上にしてください':/too-many-requests/.test(c)?'試行が多すぎます。しばらく待ってからお試しください':'うまくいきませんでした'}
-function loginView(msg,mode){
+function loginView(msg){
   if(S.unsub){S.unsub();S.unsub=null}
   app.className='';
-  var su=mode==='signup';
-  app.innerHTML='<h2>'+(su?'はじめてログインするスタッフの方':'管理者ログイン')+'</h2>'+
-    (su?'<p class="note">オーナーに登録されたメールアドレスで、パスワードを決めてアカウントを作ります。作成後に届く確認メールのリンクを開くと、ログインできるようになります。</p>':'')+
-    '<form id="f" class="card"><label>メールアドレス<input id="em" type="email" autocomplete="username" required></label><label>パスワード'+(su?'（10文字以上）':'')+'<input id="pw" type="password" autocomplete="'+(su?'new-password':'current-password')+'" '+(su?'minlength="10" ':'')+'required></label><div class="err" id="er">'+esc(msg||'')+'</div><button class="p" type="submit">'+(su?'アカウントを作る':'ログイン')+'</button></form>'+
-    '<div class="tools" style="justify-content:center;gap:18px">'+(su?'<button type="button" class="l" id="bk">← ログインに戻る</button>':'<button type="button" class="l" id="fp">パスワードを忘れた方</button><button type="button" class="l" id="su">はじめてログインするスタッフの方</button>')+'</div>';
-  if(q('bk'))q('bk').onclick=function(){loginView()};
-  if(q('su'))q('su').onclick=function(){loginView('','signup')};
-  if(q('fp'))q('fp').onclick=function(){var m=q('em').value.trim();if(!m){q('er').textContent='メールアドレスを入力してから押してください';return}
-    auth.sendPasswordResetEmail(m).then(function(){q('er').textContent='';say('パスワード再設定のメールを送りました（登録されているメールアドレスの場合）。メールのリンクから新しいパスワードを決めてください')}).catch(function(e){q('er').textContent=authMsg((e&&e.code)||'')})};
+  app.innerHTML='<h2>管理者ログイン</h2><form id="f" class="card"><label>メールアドレス<input id="em" type="email" autocomplete="username" required></label><label>パスワード<input id="pw" type="password" autocomplete="current-password" required></label><div class="err" id="er">'+esc(msg||'')+'</div><button class="p" type="submit">ログイン</button></form>';
   q('f').onsubmit=function(e){
-    e.preventDefault();q('er').textContent='';var m=q('em').value.trim(),pw=q('pw').value;
-    if(su){
-      if(pw.length<10){q('er').textContent='パスワードは10文字以上にしてください';return}
-      auth.createUserWithEmailAndPassword(m,pw).then(function(r){return r.user.sendEmailVerification()}).then(function(){return auth.signOut()}).then(function(){loginView('');say('確認メールを送りました。メールのリンクを開いてから、ログインしてください')}).catch(function(e){q('er').textContent=authMsg((e&&e.code)||'')+'（'+((e&&e.code)||'')+'）'});
-    }else{
-      auth.signInWithEmailAndPassword(m,pw).catch(function(e){var c=(e&&e.code)||'';q('er').textContent=authMsg(c)+'（'+(c||(e&&e.message)||'')+'）'});
-    }
+    e.preventDefault();q('er').textContent='';
+    auth.signInWithEmailAndPassword(q('em').value.trim(),q('pw').value).catch(function(e){var c=(e&&e.code)||'';q('er').textContent=(/invalid-credential|wrong-password|user-not-found|invalid-email/.test(c)?'メールアドレスまたはパスワードが違います':'ログインできませんでした')+'（'+(c||(e&&e.message)||'')+'）'});
   };
-}
-/* スタッフ：メールアドレスの確認がまだのとき */
-function verifyView(u){
-  app.className='';
-  app.innerHTML='<h2>メールアドレスの確認</h2><div class="card"><p style="margin-top:0">'+esc(u.email)+' あてに届いた確認メールのリンクを開いてから、「確認しました」を押してください。</p><div class="tools"><button class="p" id="vd" style="max-width:220px">確認しました</button><button class="s" id="vr">確認メールをもう一度送る</button><button class="s" id="vo">ログアウト</button></div><div class="err" id="er"></div></div>';
-  q('vd').onclick=function(){u.reload().then(function(){return u.getIdToken(true)}).then(function(){if(auth.currentUser&&auth.currentUser.emailVerified)go();else q('er').textContent='まだ確認が済んでいません。メールのリンクを開いてください'}).catch(function(e){q('er').textContent=e.message})};
-  q('vr').onclick=function(){u.sendEmailVerification().then(function(){say('確認メールを送りました')}).catch(function(e){q('er').textContent=authMsg((e&&e.code)||'')})};
-  q('vo').onclick=function(){auth.signOut()};
 }
 
 /* ---------- 共通 ---------- */
@@ -86,7 +60,7 @@ async function loadSlots(){
 }
 function shell(){
   app.className='wide';
-  app.innerHTML='<div class="tools" style="justify-content:space-between"><div class="tabs" style="border:0;margin:0"><button data-t="res" class="'+(S.tab==='res'?'on':'')+'">予約一覧</button><button data-t="ev" class="'+(S.tab==='ev'?'on':'')+'">イベント・枠</button><button data-t="cs" class="'+(S.tab==='cs'?'on':'')+'">お客様画面</button>'+(isOwnerUser(auth.currentUser)?'<button data-t="st" class="'+(S.tab==='st'?'on':'')+'">スタッフ</button>':'')+'</div><div class="tools" style="margin:0;align-items:center"><a class="s" href="staff-guide.html" target="_blank" rel="noopener">使い方</a><button class="s" id="lo">ログアウト</button></div></div><div id="msg" class="box" '+(S.msg?'':'hidden')+'>'+esc(S.msg)+'</div><div id="pane"></div>';
+  app.innerHTML='<div class="tools" style="justify-content:space-between"><div class="tabs" style="border:0;margin:0"><button data-t="res" class="'+(S.tab==='res'?'on':'')+'">予約一覧</button><button data-t="ev" class="'+(S.tab==='ev'?'on':'')+'">イベント・枠</button></div><button class="s" id="lo">ログアウト</button></div><div id="msg" class="box" '+(S.msg?'':'hidden')+'>'+esc(S.msg)+'</div><div id="pane"></div>';
   app.querySelectorAll('[data-t]').forEach(function(b){b.onclick=function(){S.tab=b.dataset.t;S.msg='';go()}});
   q('lo').onclick=function(){auth.signOut()};
 }
@@ -94,30 +68,13 @@ function toast(m){if(!m)return;var t=document.getElementById('toast');if(!t){t=d
 function say(m){S.msg=m;var e=q('msg');if(e){e.hidden=!m;e.textContent=m}toast(m)}
 async function go(){
   if(S.unsub){S.unsub();S.unsub=null}
-  shell();q('pane').innerHTML='<div class="loading" role="status"><span class="spin"></span>読み込み中…</div>';
-  try{await loadEvents();await loadSlots()}catch(e){say('読み込めませんでした: '+(e.code==='permission-denied'?'このアカウントは管理者として登録されていません。オーナーにスタッフ登録を依頼してください':e.message));return}
-  if(S.tab==='res')resView();else if(S.tab==='cs')csView();else if(S.tab==='st'&&isOwnerUser(auth.currentUser))staffView();else evView();
-  scrubOnce();
-  migrateOnce();
-}
-/* 招待枠の印を、古い項目名から invited へ移す（この端末で1回だけ。失敗しても次回また試す） */
-var migrating=false;
-function migrateOnce(){
-  var K='rv_migrate_invited_v1';try{if(localStorage.getItem(K))return}catch(e){}
-  if(migrating)return;migrating=true;
-  C.migrateInvited().then(function(){try{localStorage.setItem(K,'1')}catch(e){}}).catch(function(){}).then(function(){migrating=false});
-}
-/* 古い「申込済みの目印」に残っている予約番号を消す（この端末で1回だけ。失敗しても次回また試す） */
-var scrubbing=false;
-function scrubOnce(){
-  var K='rv_scrub_apps_v1';try{if(localStorage.getItem(K))return}catch(e){}
-  if(scrubbing)return;scrubbing=true;
-  C.scrubApplicants().then(function(r){try{localStorage.setItem(K,'1')}catch(e){}if(r.count)toast('申込記録を整理しました（'+r.count+'件）')}).catch(function(){}).then(function(){scrubbing=false});
+  shell();
+  try{await loadEvents();await loadSlots()}catch(e){say('読み込めませんでした: '+(e.code==='permission-denied'?'この管理者アカウントには権限がありません（firestore.rules の管理者メールを確認してください）':e.message));return}
+  if(S.tab==='res')resView();else evView();
 }
 
 /* ---------- 予約一覧 ---------- */
 function resView(){
-  if(S.unsub){S.unsub();S.unsub=null}
   var p=q('pane');
   if(!S.events.length){p.innerHTML='<div class="card note">イベントがまだありません。「イベント・枠」から作成してください。</div>';return}
   p.innerHTML='<div class="row"><label>イベント<select id="se">'+S.events.map(function(e){return '<option value="'+e.id+'"'+(e.id===S.evId?' selected':'')+'>'+esc(e.name)+'</option>'}).join('')+'</select></label>'+
@@ -127,13 +84,19 @@ function resView(){
   q('se').onchange=async function(){S.evId=this.value;S.fSlot='';await loadSlots();resView()};
   q('ss').onchange=function(){S.fSlot=this.value;draw()};
   q('sf').onchange=function(){S.fSt=this.value;draw()};
-  S.unsub=C.res.where('eventId','==',S.evId).onSnapshot(function(sn){
+  S.gs={};S.gm={};
+  var u1=C.res.where('eventId','==',S.evId).onSnapshot(function(sn){
     S.rs=sn.docs.map(function(d){return Object.assign({id:d.id},d.data())});draw();
   },function(e){say('予約を読み込めませんでした: '+e.message)});
+  // ゴルフのお連れ様の入力内容（名前・オーナーかどうか・メール）
+  var u2=C.guests.where('eid','==',S.evId).onSnapshot(function(sn){S.gs={};sn.docs.forEach(function(d){S.gs[d.id]=d.data()});if(S.rs)draw()},function(){});
+  var u3=C.gmail.where('eid','==',S.evId).onSnapshot(function(sn){S.gm={};sn.docs.forEach(function(d){S.gm[d.id]=d.data().mail||''});if(S.rs)draw()},function(){});
+  S.unsub=function(){u1();u2();u3()};
 }
-function kidsN(r){return (+r.k||0)+(+r.s||0)+(+r.m||0)}
-// 参加者名。ゴルフで「レクサスオーナー」にチェックがある方には（オーナー）を付ける
-function pTxt(r,html){var l=r.lexus||[];return (r.participants||[]).map(function(p,i){return p?(html?esc(p):p)+(l[i]?(html?'<b style="color:var(--gold-d)">（オーナー）</b>':'（オーナー）'):''):''}).filter(Boolean).join('、')}
+function guestList(r){var inv=r.inv||{},out=[];for(var no=2;no<=r.n;no++){var gid=inv[no];if(!gid)continue;var g=(S.gs||{})[gid]||{},m=(S.gm||{})[gid]||'';out.push({no:no,gid:gid,name:g.name||'',own:!!g.own,mail:m,cx:!!g.cx,cxName:g.cxName||''})}return out}
+function guestTxt(x){if(x.cx)return '参加者'+x.no+'：取り消し'+(x.cxName?'（'+x.cxName+'）':'');return '参加者'+x.no+'：'+(x.name||'未入力')+(x.own?'（東開オーナー）':'')+(x.mail?' '+x.mail:'')}
+// お連れ様が入力したお名前を、予約の参加者名にも反映する（スプレッドシートにも出るように）
+function syncGuests(list){S.syncing=S.syncing||{};list.forEach(function(r){if(r.status==='cancel'||S.syncing[r.id])return;var ps=(r.participants||[]).slice(),ch=false;guestList(r).forEach(function(x){var cur=ps[x.no-1]||'',w=null;if(!x.cx&&x.name&&cur!==x.name)w=x.name;else if(x.cx&&x.cxName&&cur===x.cxName)w='';if(w!==null){while(ps.length<x.no)ps.push('');ps[x.no-1]=w;ch=true}});if(ch){S.syncing[r.id]=1;C.res.doc(r.id).update({participants:ps,updatedAt:firebase.firestore.FieldValue.serverTimestamp()}).catch(function(){}).then(function(){delete S.syncing[r.id]})}})}
 function carTxt(r){if(r.order)return 'ご注文中・新規';var c=r.car||{};return [c.pref,c.cls,c.kana,c.num].join(' ')+' '+(c.model||'')}
 function draw(){
   var ev=S.events.filter(function(e){return e.id===S.evId})[0]||{};
@@ -159,17 +122,6 @@ function draw(){
       ws.map(function(r,i){return '<tr><td>'+(r.waitNo||'')+'</td><td>'+esc(r.name)+'</td><td>'+esc(r.tel)+'</td><td>'+r.n+'</td><td>'+ts(r.createdAt)+'</td><td>'+(i===0&&ok?'<button class="s" data-pid="'+r.id+'">繰り上げ</button>':'')+'</td></tr>'}).join('')+'</table>'+
       (ok?'<div class="note">空きが出ています。1番の方へ連絡のうえ「繰り上げ」を押すと、確定になります（メール通知を設定している場合は、自動でお知らせが届きます）。</div>':'')+'</div>';
   });
-  // ゴルフ：参加者名がスペースを除いて完全一致する予約（同姓同名の可能性）をまとめて表示し、新しく見つかったらお知らせする
-  if(ev.golf){
-    var nm={};S.rs.forEach(function(r){if(r.status==='cancel'||r.status==='lost')return;var seen={};(r.participants||[]).forEach(function(p){var k=C.normName(p);if(!k||seen[k])return;seen[k]=1;(nm[k]=nm[k]||[]).push(r)})});
-    var groups=Object.keys(nm).filter(function(k){return nm[k].length>1});
-    S.dupIds={};groups.forEach(function(k){nm[k].forEach(function(r){S.dupIds[r.id]=1})});
-    if(groups.length){
-      wl='<div class="box" style="border-color:#e0a59c;background:#fdf1ef"><b style="color:var(--err)">同姓同名の可能性があります（要確認）</b>'+groups.map(function(k){return '<div style="margin-top:4px">'+esc(k)+'：'+nm[k].map(function(r){return esc(r.id.replace(/(.{4})(?=.)/g,'$1-'))+'（代表 '+esc(r.name)+'様）'}).join('、')+'</div>'}).join('')+'<div class="note">ご本人の重複申し込みか、本当の同姓同名かを、店舗でご確認ください。</div></div>'+wl;
-      var key=S.evId+'|'+groups.map(function(k){return k+':'+nm[k].map(function(r){return r.id}).sort().join(',')}).sort().join('/');
-      if(S.dupKey!==key){S.dupKey=key;toast('同姓同名の可能性がある予約が '+groups.length+'件 あります（要確認）')}
-    }
-  }else S.dupIds={};
   q('wl').innerHTML=wl;
   q('wl').onclick=async function(e){
     var b=e.target.closest('[data-pid]');if(!b)return;
@@ -181,13 +133,14 @@ function draw(){
   if(ev.method==='抽選'&&!ev.drawn)tl+='<button class="s" id="dr">抽選を実行する</button>';
   if(ev.method==='抽選'&&ev.drawn)tl+='<span class="tag k">抽選済み</span>';
   q('tl').innerHTML=tl;
-  var hasP=list.some(function(r){return (r.participants||[]).some(Boolean)}),hasN=list.some(function(r){return r.note}),hasO=list.some(function(r){return r.owner});
-  var h='<tr><th>予約番号</th><th>受付</th><th>状態</th><th>日時</th><th>代表者</th><th>人数</th><th>連絡先</th><th>メール</th>'+(hasO?'<th>オーナーズカードID</th>':'')+'<th>車両</th><th>店舗・担当</th>'+(hasP?'<th>参加者</th>':'')+(hasN?'<th>備考</th>':'')+(ev.method==='抽選'?'<th>招待枠</th>':'')+'<th></th></tr>';
+  syncGuests(S.rs||[]);
+  var hasP=list.some(function(r){return (r.participants||[]).some(Boolean)||guestList(r).length}),hasN=list.some(function(r){return r.note}),hasO=list.some(function(r){return r.owner});
+  var h='<tr><th>予約番号</th><th>受付</th><th>状態</th><th>日時</th><th>代表者</th><th>人数</th><th>連絡先</th><th>メール</th>'+(hasO?'<th>オーナーズカードID</th>':'')+'<th>車両</th><th>店舗・担当</th>'+(hasP?'<th>参加者</th>':'')+(hasN?'<th>備考</th>':'')+(ev.method==='抽選'?'<th>忖度</th>':'')+'<th></th></tr>';
   list.forEach(function(r){
-    h+='<tr data-id="'+r.id+'"><td style="white-space:nowrap;font-family:monospace">'+r.id.replace(/(.{4})(?=.)/g,'$1-')+'</td><td>'+ts(r.createdAt)+'</td><td>'+ST[r.status]+(r.status==='wait'?' '+(r.waitNo||''):'')+((S.dupIds||{})[r.id]?'<br><span class="tag w">同姓同名?</span>':'')+'</td><td>'+md(r.date)+' '+rng(r)+'</td><td>'+esc(r.name)+(r.corp?'<br><small>'+esc(r.corp)+'</small>':'')+'</td>'+
-     '<td>'+r.n+'（大'+(+r.a||0)+(kidsN(r)?' 子'+kidsN(r):'')+'）</td><td>'+esc(r.tel)+'</td><td>'+esc(r.mail)+'</td>'+(hasO?'<td>'+esc(r.owner||'')+'</td>':'')+'<td>'+esc(carTxt(r))+'</td><td>'+(r.stores||[]).map(function(k){return esc(k)+':'+esc((r.staff||{})[k]||'')}).join('<br>')+'</td>'+
-     (hasP?'<td>'+pTxt(r,true)+'</td>':'')+(hasN?'<td style="white-space:normal;min-width:140px">'+esc(r.note)+'</td>':'')+
-     (ev.method==='抽選'?'<td>'+(r.status==='lottery'?'<input type="checkbox" data-a="inv"'+(r.invited?' checked':'')+' style="width:auto">':(r.invited?'○':''))+'</td>':'')+
+    h+='<tr data-id="'+r.id+'"><td style="white-space:nowrap;font-family:monospace">'+r.id.replace(/(.{4})(?=.)/g,'$1-')+'</td><td>'+ts(r.createdAt)+'</td><td>'+ST[r.status]+(r.status==='wait'?' '+(r.waitNo||''):'')+'</td><td>'+md(r.date)+' '+rng(r)+'</td><td>'+esc(r.name)+(r.corp?'<br><small>'+esc(r.corp)+'</small>':'')+'</td>'+
+     '<td>'+r.n+'（大'+r.a+(r.k+r.s+r.m?' 子'+(r.k+r.s+r.m):'')+'）</td><td>'+esc(r.tel)+'</td><td>'+esc(r.mail)+'</td>'+(hasO?'<td>'+esc(r.owner||'')+'</td>':'')+'<td>'+esc(carTxt(r))+'</td><td>'+(r.stores||[]).map(function(k){return esc(k)+':'+esc((r.staff||{})[k]||'')}).join('<br>')+'</td>'+
+     (hasP?'<td>'+(r.participants||[]).filter(Boolean).map(esc).join('、')+guestList(r).map(function(x){return '<br><small>'+esc(guestTxt(x))+'</small>'}).join('')+'</td>':'')+(hasN?'<td style="white-space:normal;min-width:140px">'+esc(r.note)+'</td>':'')+
+     (ev.method==='抽選'?'<td>'+(r.status==='lottery'?'<input type="checkbox" data-a="fav"'+(r.fav?' checked':'')+' style="width:auto">':(r.fav?'○':''))+'</td>':'')+
      '<td>'+(r.status==='wait'?'<button class="s" data-a="pro">繰り上げ</button> ':'')+(r.status!=='cancel'&&r.status!=='lost'?'<button class="s d" data-a="cx">取消</button>':'')+'</td></tr>';
   });
   if(!list.length)h+='<tr><td colspan="12" class="note">該当する予約はありません</td></tr>';
@@ -196,28 +149,27 @@ function draw(){
     var b=e.target.closest('[data-a]');if(!b)return;
     var id=b.closest('tr').dataset.id,r=S.rs.filter(function(x){return x.id===id})[0],a=b.dataset.a;
     try{
-      if(a==='inv'){await C.res.doc(id).update({invited:b.checked,updatedAt:firebase.firestore.FieldValue.serverTimestamp()})}
+      if(a==='fav'){await C.res.doc(id).update({fav:b.checked,updatedAt:firebase.firestore.FieldValue.serverTimestamp()})}
       else if(a==='cx'){if(!confirm(r.name+' 様の予約を取り消します。よろしいですか？'))return;var x=await C.cancel(id,'',true);say(x.ok?'取り消しました'+(x.freed?'。枠に空きができました（キャンセル待ちの方は「繰り上げ」で確定できます）':''):x.msg);await loadSlots();draw()}
       else if(a==='pro'){if(!confirm(r.name+' 様を確定にします。店舗からご連絡済みですか？'))return;var y=await C.promote(id);say(y.ok?'確定にしました':y.msg);await loadSlots();draw()}
     }catch(er){say('失敗しました: '+er.message)}
   };
   q('csv').onclick=function(){csv(list)};
-  q('rc').onclick=async function(){var b=this;b.disabled=true;try{await C.recount(S.evId);await loadSlots();say('人数を数え直しました');draw()}catch(er){b.disabled=false;say('失敗しました: '+er.message)}};
+  q('rc').onclick=async function(){await C.recount(S.evId);await loadSlots();say('人数を数え直しました');draw()};
   if(q('dr'))q('dr').onclick=async function(){
     if(!confirm('「'+ev.name+'」の抽選を実行します。実行後は新しいお申し込みができなくなり、取り消せません。よろしいですか？'))return;
-    this.disabled=true;
     try{var r=await C.runLottery(S.evId);if(r.ok){say('抽選しました。当選 '+r.win+'組 / キャンセル待ち '+r.wait+'組 / 落選 '+r.lost+'組');await loadEvents();await loadSlots();resView()}else say(r.msg)}catch(er){say('失敗しました: '+er.message)}
   };
 }
 function csv(list){
   var head=['予約番号','受付日時','状態','イベント','日付','開始','終了','代表者','法人名','連絡先','メール','大人','未就学児','小学生','中学生以上','合計'];
   for(var i=1;i<=12;i++)head.push('参加者'+i);
-  head=head.concat(['登録ナンバー','車種','ご注文中・新規','利用店舗','担当スタッフ','備考','オーナーズカードID']);
+  head=head.concat(['登録ナンバー','車種','ご注文中・新規','利用店舗','担当スタッフ','備考','オーナーズカードID','お連れ様（入力内容）']);
   var rows=list.map(function(r){
     var c=r.car||{},p=r.participants||[];
     var a=[r.id,ts(r.createdAt),ST[r.status]+(r.status==='wait'?(r.waitNo||''):''),r.eventName,r.date,r.start,r.end,r.name,r.corp||'',r.tel,r.mail,r.a,r.k,r.s,r.m,r.n];
-    for(var i=0;i<12;i++)a.push(p[i]?(p[i]+((r.lexus||[])[i]?'（オーナー）':'')):'');
-    return a.concat([r.order?'':[c.pref,c.cls,c.kana,c.num].join(' '),r.order?'':(c.model||''),r.order?'○':'',(r.stores||[]).join(' / '),(r.stores||[]).map(function(k){return (r.staff||{})[k]||''}).join(' / '),r.note||'',r.owner||'']);
+    for(var i=0;i<12;i++)a.push(p[i]||'');
+    return a.concat([r.order?'':[c.pref,c.cls,c.kana,c.num].join(' '),r.order?'':(c.model||''),r.order?'○':'',(r.stores||[]).join(' / '),(r.stores||[]).map(function(k){return (r.staff||{})[k]||''}).join(' / '),r.note||'',r.owner||'',guestList(r).map(guestTxt).join(' / ')]);
   });
   var text=[head].concat(rows).map(function(r){return r.map(function(v){v=String(v==null?'':v);return '"'+v.replace(/"/g,'""')+'"'}).join(',')}).join('\r\n');
   var a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['﻿'+text],{type:'text/csv'}));
@@ -225,7 +177,7 @@ function csv(list){
 }
 
 /* ---------- イベント・枠 ---------- */
-var chk=function(id,on,label,help){return '<label class="chk" style="margin:4px 0"><input type="checkbox" id="'+id+'"'+(on?' checked':'')+'><span>'+label+(help?'<small class="help">'+help+'</small>':'')+'</span></label>'};
+var chk=function(id,on,label){return '<label class="chk" style="margin:4px 0"><input type="checkbox" id="'+id+'"'+(on?' checked':'')+'>'+label+'</label>'};
 /* ---------- 写真（イベントパンフなど） ---------- */
 var IMG={};
 function imgHTML(p){return '<div class="box" style="margin:10px 0"><b style="font-size:14px">写真・パンフレット（最大3枚）</b><div class="imgs" id="'+p+'im"></div><input type="file" accept="image/*" multiple id="'+p+'if"><p class="note" style="margin:6px 0 0">自動で小さくして保存します。1枚目が、お客様画面のイベント一覧に小さく表示されます。タップすると全部の写真を見られます。</p></div>'}
@@ -265,13 +217,13 @@ function optHTML(p,e){
    '<label>抽選の締切<input type="datetime-local" id="'+p+'d" value="'+dtl(e.deadlineMs)+'"></label>'+
    '<label>受付の開始日時（空欄なら、今すぐ受付）<input type="datetime-local" id="'+p+'a" value="'+dtl(e.openAtMs)+'"></label>'+
    '<label>同一イベントグループ名（連日予約防止用）<input id="'+p+'g" value="'+esc(e.group)+'" placeholder="例：サッカー観戦"></label></div>'+
-   '<div>'+chk(p+'v',e.visible!==false,'お客様画面に表示する','チェックを外すと、お客様画面に出さずに準備できます。')+chk(p+'ts',!!e.test,'<b>テスト用イベント</b>（お客様画面に表示しないまま、練習画面で予約・変更・キャンセルまで本当に試せます。試した予約は本当に保存されます）')+chk(p+'w',e.wait!==false,'満席時にキャンセル待ちを受け付ける')+chk(p+'l',!!e.lap,'未就学児の注意文を表示','カスタマイズイベントなどで、定員を超えて未就学児を連れてきたいご要望がありそうなときに使います。4名席のみの場合は「保護者の膝の上で」などの案内を、下の「未就学児の注意文」に入力してください。')+chk(p+'n',!!e.names,'参加者名の入力欄を表示','ゴルフやホテル宿泊など、お連れ様のお名前が必要なイベントで入力欄を出せます。未入力でも予約でき、あとからお客様が編集できます。')+chk(p+'gf',!!e.golf,'ゴルフ（お子様の選択なし・参加者名を自動で表示）','未就学児は参加できないため、2名以上でもお子様の選択肢が出ません。参加者1には申込者のお名前が自動で入ります。')+chk(p+'mo',!!e.mailOpt,'メールアドレスを任意にする（空欄でも予約できます）','必須のほうがセキュリティは高くなります（任意だと予約番号だけで変更できるため、やや低め）。個人情報をなるべく預からない観点では、任意がおすすめです。')+chk(p+'o',!!e.order,'ご注文中・新規のお客様チェック欄を表示','登録ナンバーで、お名前が違う場合（オーナーのご家族など）も判別できるようにしています。この欄を出すと、ご注文中で納車待ちのお客様も、ナンバーの入力を飛ばして参加できます。')+chk(p+'t',!!e.note,'お客様ページに備考欄を作成','お客様がご要望を入力できる備考欄を、お客様画面に出します（例：ゴルフ 9時ごろ希望）。')+'</div>'+
-   '<label>お客様画面に出すメッセージ（空欄なら非表示）<small class="help" style="font-weight:400">店舗からお客様へのご連絡や、補足のご案内に使えます。</small><textarea id="'+p+'s" rows="2">'+esc(e.msg)+'</textarea></label>'+
+   '<div>'+chk(p+'v',e.visible!==false,'お客様画面に表示する')+chk(p+'w',e.wait!==false,'満席時にキャンセル待ちを受け付ける')+chk(p+'l',!!e.lap,'未就学児の注意文を表示')+chk(p+'n',!!e.names,'参加者名の入力欄を表示')+chk(p+'gf',!!e.golf,'ゴルフ（お子様の選択なし・参加者名を自動で表示）')+chk(p+'mo',!!e.mailOpt,'メールアドレスを任意にする（空欄でも予約できます）')+chk(p+'o',!!e.order,'ご注文中・新規のお客様チェック欄を表示')+chk(p+'t',!!e.note,'お客様ページに備考欄を作成')+'</div>'+
+   '<label>お客様画面に出すメッセージ（空欄なら非表示）<textarea id="'+p+'s" rows="2">'+esc(e.msg)+'</textarea></label>'+
    '<label>未就学児の注意文（空欄なら標準の文）<textarea id="'+p+'p" rows="2">'+esc(e.lapText)+'</textarea></label>'+imgHTML(p);
 }
 function readOpt(p,name){
   var m=q(p+'m').value,dv=q(p+'d').value;
-  var o={name:name,method:m,test:q(p+'ts').checked,visible:q(p+'ts').checked?false:q(p+'v').checked,wait:q(p+'w').checked,lap:q(p+'l').checked,names:q(p+'n').checked,golf:q(p+'gf').checked,mailOpt:q(p+'mo').checked,order:q(p+'o').checked,note:q(p+'t').checked,
+  var o={name:name,method:m,visible:q(p+'v').checked,wait:q(p+'w').checked,lap:q(p+'l').checked,names:q(p+'n').checked,golf:q(p+'gf').checked,mailOpt:q(p+'mo').checked,order:q(p+'o').checked,note:q(p+'t').checked,
     group:q(p+'g').value.trim(),msg:q(p+'s').value.trim(),lapText:q(p+'p').value.trim()};
   o.deadlineMs=(m==='抽選'&&dv)?new Date(dv).getTime():0;
   var av=q(p+'a').value;o.openAtMs=av?new Date(av).getTime():0;
@@ -280,7 +232,8 @@ function readOpt(p,name){
 function rgRow(s,e,m){return '<div class="row rg"><label>開始<input type="time" class="rs" value="'+(s||'')+'"></label><label>終了<input type="time" class="re" value="'+(e||'')+'"></label><label>1枠の長さ(分)<input type="number" class="rm" value="'+(m||60)+'" min="5" style="width:80px"></label><button type="button" class="s d rx">削除</button></div>'}
 function evView(){
   var p=q('pane');
-  var h='<details open><summary>枠を作成する</summary><form id="cf" class="card">'+
+  var h='<details><summary>代理予約用：重複を許可する電話番号</summary><div class="card"><p class="note">ここに登録した電話番号は、同じイベントに何回でも予約できます（店舗スタッフの代理予約用）。1行に1件、入力してください。</p><textarea id="dupt" rows="4" placeholder="例：099-000-0000"></textarea><div class="tools"><button type="button" class="s" id="dups">保存</button></div></div></details>'+
+   '<details open><summary>枠を作成する</summary><form id="cf" class="card">'+
    '<div class="row"><label>イベント名<input id="cn" list="cnl" required placeholder="例：サッカー観戦"></label><datalist id="cnl">'+S.events.map(function(e){return '<option value="'+esc(e.name)+'">'}).join('')+'</datalist></div>'+
    '<div id="dates"><div class="row dr"><label>日付<input type="date" class="dt" required></label></div></div><button type="button" class="s" id="ad">＋ 日付を追加</button>'+
    '<div style="margin-top:12px"><b style="font-size:14px">時間帯（飛び飛びに複数作れます）</b><div id="rngs">'+rgRow('10:00','17:00',60)+'</div><div class="tools"><button type="button" class="s" id="ar">＋ 時間帯を追加</button><label class="chk" style="margin:0"><input type="checkbox" id="cad">終日（1枠）</label></div><p class="note" style="margin:0">例：10:00〜11:30（90分）と 14:00〜15:30（90分）。「1枠の長さ」で時間帯を区切って、枠を作ります。</p></div>'+
@@ -290,7 +243,7 @@ function evView(){
    '<div id="newopt">'+optHTML('nw',{})+'</div><div class="err" id="cer"></div><button class="p" type="submit" style="max-width:260px">枠を作成</button></form></details>'+
    '<h2 style="font-size:16px">作成済みのイベント</h2>';
   if(!S.events.length)h+='<div class="card note">イベントはまだありません。</div>';
-  S.events.forEach(function(e,i){h+='<div class="card" id="ev'+i+'"><div class="tools" style="justify-content:space-between;margin:0"><b>'+esc(e.name)+'</b><span>'+(e.method==='抽選'?'<span class="tag k">抽選'+(e.drawn?'・抽選済':'')+'</span>':'<span class="tag">先着</span>')+(e.test?'<span class="tag w">テスト用</span>':e.visible===false?'<span class="tag w">非表示中</span>':'')+'</span></div><button class="s" data-open="'+i+'">設定・枠を開く</button><div id="ed'+i+'"></div></div>'});
+  S.events.forEach(function(e,i){h+='<div class="card" id="ev'+i+'"><div class="tools" style="justify-content:space-between;margin:0"><b>'+esc(e.name)+'</b><span>'+(e.method==='抽選'?'<span class="tag k">抽選'+(e.drawn?'・抽選済':'')+'</span>':'<span class="tag">先着</span>')+(e.visible===false?'<span class="tag w">非表示中</span>':'')+'</span></div><button class="s" data-open="'+i+'">設定・枠を開く</button><div id="ed'+i+'"></div></div>'});
   p.innerHTML=h;
   var addDate=function(){var d=document.createElement('div');d.className='row dr';d.innerHTML='<label>日付<input type="date" class="dt"></label>';q('dates').appendChild(d)};
   q('ad').onclick=addDate;
@@ -300,11 +253,13 @@ function evView(){
   q('ar').onclick=function(){var rows=app.querySelectorAll('.rg'),m=rows[0]?rows[0].querySelector('.rm').value:60,d=document.createElement('div');d.innerHTML=rgRow('','',m);q('rngs').appendChild(d.firstChild);rgWire()};
   q('cad').onchange=function(){var on=q('cad').checked;['cbs','cbe','cbc','ar'].forEach(function(i){q(i).disabled=on});app.querySelectorAll('.rs,.re,.rm,.rx').forEach(function(x){x.disabled=on})};
   wireImgs('nw',[]);
+  C.getDupTels().then(function(t){var d=q('dupt');if(d)d.value=t.join('\n')}).catch(function(){});
+  q('dups').onclick=async function(){try{var t=await C.setDupTels(q('dupt').value.split(/[\n,、]/));q('dupt').value=t.join('\n');say('電話番号を保存しました（'+t.length+'件）')}catch(x){say('失敗しました: '+x.message)}};
   var cxMan=false;q('cx').oninput=function(){cxMan=true};var syncCx=function(){var g=+q('cg').value,p=+q('cp').value;if(!cxMan&&!g&&p>0)q('cx').value=p};q('cg').oninput=syncCx;q('cp').oninput=syncCx;syncCx();
   q('cn').oninput=function(){var ex=S.events.some(function(e){return e.name===q('cn').value.trim()});q('newopt').hidden=ex};
   q('cf').onsubmit=async function(e){
     e.preventDefault();q('cer').textContent='';
-    var name=q('cn').value.trim(),dates=[].map.call(app.querySelectorAll('.dt'),function(i){return i.value}).filter(function(v,i,a){return v&&a.indexOf(v)===i});
+    var name=q('cn').value.trim(),dates=[].map.call(app.querySelectorAll('.dt'),function(i){return i.value}).filter(Boolean);
     if(!name||!dates.length){q('cer').textContent='イベント名と日付を入力してください';return}
     var ex=S.events.filter(function(x){return x.name===name})[0];
     var ranges=[].map.call(app.querySelectorAll('.rg'),function(r){return {start:r.querySelector('.rs').value,end:r.querySelector('.re').value,minutes:r.querySelector('.rm').value}}).filter(function(r){return r.start||r.end});
@@ -316,35 +271,25 @@ function evView(){
     var evId=ex?ex.id:C.newId(),ev=ex?{}:Object.assign(readOpt('nw',name),{drawn:false});
     if(ex)ev={name:name};
     if(!ex&&ev.method==='抽選'&&!ev.deadlineMs){q('cer').textContent='抽選の締切を入力してください';return}
-    var sb=q('cf').querySelector('button[type=submit]');sb.disabled=true;
-    try{var r=await C.createSlots(evId,ev,dates,o);if(r.ok){if(!ex){try{await saveImages(evId,'nw')}catch(ix){S.msg='枠は作成しましたが、写真の保存に失敗しました: '+ix.message;S.evId=evId;go();return}}S.msg=r.count+'件の枠を作成しました';S.evId=evId;go()}else{q('cer').textContent=r.msg;sb.disabled=false}}catch(x){q('cer').textContent='失敗しました: '+x.message;sb.disabled=false}
+    try{var r=await C.createSlots(evId,ev,dates,o);if(r.ok){if(!ex){try{await saveImages(evId,'nw')}catch(ix){S.msg='枠は作成しましたが、写真の保存に失敗しました: '+ix.message;S.evId=evId;go();return}}S.msg=r.count+'件の枠を作成しました';S.evId=evId;go()}else q('cer').textContent=r.msg}catch(x){q('cer').textContent='失敗しました: '+x.message}
   };
-  app.querySelectorAll('[data-open]').forEach(function(b){b.onclick=function(){openEv(+b.dataset.open,b)}});
+  app.querySelectorAll('[data-open]').forEach(function(b){b.onclick=function(){openEv(+b.dataset.open)}});
 }
-async function openEv(i,btn){
+async function openEv(i){
   var e=S.events[i],box=q('ed'+i);
-  if(box.innerHTML){box.innerHTML='';if(btn)btn.textContent='設定・枠を開く';return}
-  if(btn)btn.disabled=true;
-  box.innerHTML='<div class="loading sm" role="status"><span class="spin"></span>読み込み中…</div>';
-  try{var sn=await C.slots.where('eventId','==',e.id).get()}catch(x){box.innerHTML='';say('読み込めませんでした: '+x.message);if(btn)btn.disabled=false;return}
-  if(btn){btn.disabled=false;btn.textContent='閉じる'}
+  var sn=await C.slots.where('eventId','==',e.id).get();
   var sl=sn.docs.map(function(d){return Object.assign({id:d.id},d.data())}).sort(function(a,b){return (a.date+a.start)<(b.date+b.start)?-1:1});
-  box.innerHTML='<div style="margin-top:10px">'+optHTML('e'+i,e)+'<div class="tools"><button class="s" data-a="save">設定を保存</button><button class="s" data-a="pv">保存前の設定でお客様画面を確認</button><button class="s d" data-a="del">イベントを削除</button></div></div>'+
+  box.innerHTML='<div style="margin-top:10px">'+optHTML('e'+i,e)+'<div class="tools"><button class="s" data-a="save">設定を保存</button><button class="s" data-a="pv">お客様画面で確認（練習）</button><button class="s d" data-a="del">イベントを削除</button></div></div>'+
    '<details open><summary>枠 '+sl.length+'件</summary><div class="scroll"><table><tr><th>日時</th><th>定員(組・0で人数管理)</th><th>定員(人数)</th><th>1組上限</th><th>現在</th><th></th></tr>'+sl.map(function(s){
      return '<tr data-s="'+s.id+'"><td>'+md(s.date)+' '+rng(s)+'</td><td><input type="number" data-k="g" value="'+s.capG+'"></td><td><input type="number" data-k="p" value="'+(s.capP||0)+'"></td><td><input type="number" data-k="x" value="'+s.maxPer+'"></td><td>'+(s.booked||0)+'組・'+(s.people||0)+'名</td><td><button class="s" data-a="ss">保存</button> <button class="s d" data-a="sd">削除</button></td></tr>';
    }).join('')+'</table></div></details>';
   try{var ei=await C.eimgs.doc(e.id).get();wireImgs('e'+i,ei.exists?ei.data().imgs:[])}catch(x){wireImgs('e'+i,[])}
-  box.oninput=function(ev){var t=ev.target,tr=t.closest&&t.closest('tr[data-s]');if(!tr||!t.dataset.k)return;
+  box.addEventListener('input',function(ev){var t=ev.target,tr=t.closest&&t.closest('tr[data-s]');if(!tr||!t.dataset.k)return;
     if(t.dataset.k==='x'){tr.dataset.xm='1';return}
-    if(tr.dataset.xm)return;var gv=+tr.querySelector('[data-k=g]').value,pv=+tr.querySelector('[data-k=p]').value;if(!gv&&pv>0)tr.querySelector('[data-k=x]').value=pv};
+    if(tr.dataset.xm)return;var gv=+tr.querySelector('[data-k=g]').value,pv=+tr.querySelector('[data-k=p]').value;if(!gv&&pv>0)tr.querySelector('[data-k=x]').value=pv});
   box.onclick=async function(ev){
     var b=ev.target.closest('[data-a]');if(!b)return;var a=b.dataset.a;
-    if(a==='pv'){
-      // 保存していない設定を、この端末の中だけでお客様画面（練習モード）に渡す。データベースには書かない
-      var o=readOpt('e'+i,e.name),im=IMG['e'+i],pv={id:e.id,ev:o,at:Date.now()};
-      try{if(im&&im.dirty){pv.imgs=im.list.map(function(x){return x.full});pv.imgN=pv.imgs.length;pv.thumb=im.list.length?(im.list[0].thumb||await thumbOf(im.list[0].full)):''}}catch(x){}
-      try{localStorage.setItem('rv_preview',JSON.stringify(pv))}catch(x){delete pv.imgs;delete pv.thumb;delete pv.imgN;try{localStorage.setItem('rv_preview',JSON.stringify(pv))}catch(y){say('確認画面に設定を渡せませんでした');return}}
-      window.open('./?pv=1&t='+Date.now(),'rvpreview');return}
+    if(a==='pv'){window.open('./?pv=1&t='+Date.now(),'_blank');return}
     try{
       if(a==='save'){
         var o=readOpt('e'+i,e.name);
@@ -355,90 +300,13 @@ async function openEv(i,btn){
         await C.deleteEvent(e.id);say('削除しました');await go()
       }else if(a==='ss'){
         var tr=b.closest('tr'),g=function(k){return +tr.querySelector('[data-k='+k+']').value};
-        var mx=g('x');if(!(mx>=1)||g('g')<0||g('p')<0){say('定員・上限人数を正しく入力してください（1組上限は1以上）');return}
-        await C.slots.doc(tr.dataset.s).update({capG:g('g'),capP:g('p'),maxPer:mx});tr.querySelector('[data-k=x]').value=mx;say('枠を保存しました')
+        var mx=g('x');await C.slots.doc(tr.dataset.s).update({capG:g('g'),capP:g('p'),maxPer:mx});tr.querySelector('[data-k=x]').value=mx;say('枠を保存しました')
       }else if(a==='sd'){
-        var tr2=b.closest('tr');
-        var left=(await C.res.where('slotId','==',tr2.dataset.s).get()).docs.filter(function(d){var st=d.data().status;return st!=='cancel'&&st!=='lost'}).length;
-        if(left){alert('この枠には、まだ '+left+'件の予約（確定・キャンセル待ち・抽選待ち）があります。先に「予約一覧」で取り消してから、削除してください。');return}
-        if(!confirm('この枠を削除します。よろしいですか？'))return;
+        var tr2=b.closest('tr');if(!confirm('この枠を削除します。この枠への予約が残っている場合は、先に取り消してください。'))return;
         await C.slots.doc(tr2.dataset.s).delete();tr2.remove();say('枠を削除しました')
       }
     }catch(x){say('失敗しました: '+x.message)}
   };
-}
-
-
-/* ---------- お客様画面（説明書ボタンの表示・説明書の文章） ---------- */
-function csView(){
-  var p=q('pane'),D=window.GUIDE_DEFAULT,M='①②③④⑤⑥⑦⑧⑨';
-  p.innerHTML='<div class="loading sm" role="status"><span class="spin"></span>読み込み中…</div>';
-  C.cfg.doc('guide').get().then(function(s){draw(s.exists?s.data():{})}).catch(function(e){p.innerHTML='';say('読み込めませんでした: '+(e.code==='permission-denied'?'Firestoreのルールに「config」の設定がまだありません。最新の firestore.rules を公開してください':e.message));draw({})});
-  function val(o,k,d){return (o&&typeof o[k]==='string'&&o[k].trim())?o[k]:d}
-  function draw(g){
-    var gs=g.steps||[];
-    var h='<div class="card"><h2 style="margin-top:0">説明書（ご予約の方法）</h2>'+
-      '<label class="chk"><input type="checkbox" id="gOn"'+(g.on?' checked':'')+'>お客様画面に説明書のボタンを表示する<span class="note">（「ご予約の確認・変更・キャンセル」の下に出ます）</span></label>'+
-      '<label>ボタンの文字<input id="gLabel" maxlength="40" value="'+esc(val(g,'label',D.label))+'"></label>'+
-      '<div class="tools"><a class="s" style="text-decoration:none;color:inherit;border:1px solid var(--line);border-radius:7px;padding:7px 12px;font-size:14px;background:#fff" href="guide.html" target="_blank" rel="noopener">説明書を開く（保存済みの内容）</a></div></div>'+
-      '<details><summary>説明書の文章を変更する</summary><div class="card">'+
-      '<label>ページの見出し<input id="gTitle" maxlength="60" value="'+esc(val(g,'title',D.title))+'"></label>'+
-      '<label>はじめの説明<textarea id="gIntro" rows="2" maxlength="300">'+esc(val(g,'intro',D.intro))+'</textarea></label>';
-    D.steps.forEach(function(st,i){
-      var e=gs[i]||{},en=e.notes||[],ec=e.caution||{},dc=st.caution||{};
-      h+='<fieldset><legend>STEP '+(i+1)+'</legend>'+
-        '<label>見出し<input id="gS'+i+'t" maxlength="60" value="'+esc(val(e,'title',st.title))+'"></label>'+
-        '<label>説明<textarea id="gS'+i+'l" rows="2" maxlength="300">'+esc(val(e,'lead',st.lead))+'</textarea></label>'+
-        st.notes.map(function(n,j){return '<label>'+M[j]+'（画面の'+M[j]+'の赤枠の説明）<textarea id="gS'+i+'n'+j+'" rows="2" maxlength="400">'+esc((en[j]&&en[j].trim())?en[j]:n)+'</textarea></label>'}).join('')+
-        '<label>ご注意の見出し<span class="note">（空欄なら「ご注意」）</span><input id="gS'+i+'ct" maxlength="60" value="'+esc(val(ec,'title',dc.title||''))+'"></label>'+
-        '<label>ご注意の内容<span class="note">（1行に1項目。空欄ならご注意の枠は出ません）</span><textarea id="gS'+i+'ci" rows="3" maxlength="800">'+esc(((ec.items&&ec.items.length)?ec.items:(dc.items||[])).join('\n'))+'</textarea></label></fieldset>';
-    });
-    var dh=D.home||{},gh=g.home||{},ln=function(a,b){a=(a||[]).filter(function(x){return x&&x.trim()});return (a.length?a:(b||[])).join('\n')};
-    h+='<fieldset><legend>ホーム画面に追加する（アプリのように使う）</legend>'+
-      '<label>見出し<input id="gHt" maxlength="60" value="'+esc(val(gh,'title',dh.title))+'"></label>'+
-      '<label>説明<textarea id="gHl" rows="2" maxlength="300">'+esc(val(gh,'lead',dh.lead))+'</textarea></label>'+
-      '<label>iPhone の手順<span class="note">（1行に1手順）</span><textarea id="gHi" rows="4" maxlength="800">'+esc(ln(gh.ios,dh.ios))+'</textarea></label>'+
-      '<label>Android の手順<span class="note">（1行に1手順）</span><textarea id="gHa" rows="4" maxlength="800">'+esc(ln(gh.android,dh.android))+'</textarea></label>'+
-      '<label>補足<textarea id="gHn" rows="3" maxlength="500">'+esc(val(gh,'note',dh.note))+'</textarea></label></fieldset>';
-    h+='<label>いちばん下の文<textarea id="gFoot" rows="2" maxlength="300">'+esc(val(g,'foot',D.foot))+'</textarea></label>'+
-      '<p class="note">空欄にした欄は、初期の文章で表示されます。</p></div></details>'+
-      '<div class="tools"><button class="p" id="gSave" style="max-width:260px">保存する</button><button class="s" id="gReset" type="button">文章を初期の内容に戻す</button></div>';
-    p.innerHTML=h;
-    q('gReset').onclick=function(){if(!confirm('説明書の文章を、初期の内容に戻します（「保存する」を押すまで反映されません）。よろしいですか？'))return;var on=q('gOn').checked;draw({on:on});q('gOn').checked=on;p.querySelector('details').open=true};
-    q('gSave').onclick=async function(){
-      var b=this,o={on:q('gOn').checked,label:q('gLabel').value.trim(),title:q('gTitle').value.trim(),intro:q('gIntro').value.trim(),foot:q('gFoot').value.trim(),steps:[],updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
-      var sp=function(id){return q(id).value.split('\n').map(function(x){return x.trim()}).filter(Boolean)};
-      o.home={title:q('gHt').value.trim(),lead:q('gHl').value.trim(),ios:sp('gHi'),android:sp('gHa'),note:q('gHn').value.trim()};
-      D.steps.forEach(function(st,i){o.steps.push({title:q('gS'+i+'t').value.trim(),lead:q('gS'+i+'l').value.trim(),notes:st.notes.map(function(n,j){return q('gS'+i+'n'+j).value.trim()}),
-        caution:{title:q('gS'+i+'ct').value.trim(),items:q('gS'+i+'ci').value.split('\n').map(function(x){return x.trim()}).filter(Boolean)}})});
-      b.disabled=true;
-      try{await C.cfg.doc('guide').set(o);say(o.on?'保存しました（お客様画面に説明書のボタンを表示しています）':'保存しました（説明書のボタンは非表示です）')}
-      catch(e){say('保存できませんでした: '+(e.code==='permission-denied'?'Firestoreのルールに「config」の設定がまだありません。最新の firestore.rules を公開してください':e.message))}
-      b.disabled=false;
-    };
-  }
-}
-
-
-/* ---------- スタッフ（管理画面に入れる人の登録・削除。オーナーのみ） ---------- */
-function staffView(){
-  var p=q('pane');p.innerHTML='<div class="loading sm" role="status"><span class="spin"></span>読み込み中…</div>';
-  db.collection('admins').get().then(function(s){
-    var list=s.docs.map(function(d){return Object.assign({email:d.id},d.data())}).sort(function(a,b){return a.email<b.email?-1:1});
-    p.innerHTML='<div class="card"><h2 style="margin-top:0">スタッフの登録</h2>'+
-      '<p class="note">登録したメールアドレスの方だけが、管理画面に入れます。登録後、スタッフの方に管理画面を開いてもらい、「はじめてログインするスタッフの方」からパスワードを決めてもらってください。確認メールのリンクを開くと、ログインできるようになります。</p>'+
-      '<form id="af" class="row"><label style="flex:1;min-width:220px">メールアドレス<input id="am" type="email" required style="width:100%"></label><label>お名前（任意）<input id="an" maxlength="30"></label><button class="s" type="submit">登録する</button></form></div>'+
-      '<div class="scroll"><table><tr><th>メールアドレス</th><th>お名前</th><th>登録日</th><th></th></tr>'+
-      '<tr><td>'+esc((auth.currentUser&&auth.currentUser.email)||'')+'</td><td>オーナー（あなた）</td><td></td><td class="note">削除できません</td></tr>'+
-      list.map(function(a){return '<tr><td>'+esc(a.email)+'</td><td>'+esc(a.name||'')+'</td><td>'+ts(a.addedAt)+'</td><td><button class="s d" data-del="'+esc(a.email)+'">削除</button></td></tr>'}).join('')+'</table></div>'+
-      '<p class="note">辞めた方は「削除」を押すと、すぐに管理画面に入れなくなります。</p>';
-    q('af').onsubmit=async function(e){e.preventDefault();var m=q('am').value.trim().toLowerCase();
-      if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(m)){say('メールアドレスを正しく入力してください');return}
-      if(auth.currentUser&&m===String(auth.currentUser.email||'').toLowerCase()){say('オーナーは登録しなくても入れます');return}
-      try{await db.collection('admins').doc(m).set({name:q('an').value.trim(),addedAt:firebase.firestore.FieldValue.serverTimestamp(),addedBy:auth.currentUser.email});say(m+' を登録しました');staffView()}catch(x){say('登録できませんでした: '+(x.code==='permission-denied'?'最新の firestore.rules を公開してください（オーナーだけが登録できます）':x.message))}};
-    p.querySelectorAll('[data-del]').forEach(function(b){b.onclick=async function(){var m=b.dataset.del;if(!confirm(m+' を削除します。この方は管理画面に入れなくなります。よろしいですか？'))return;
-      try{await db.collection('admins').doc(m).delete();say(m+' を削除しました');staffView()}catch(x){say('削除できませんでした: '+x.message)}}});
-  }).catch(function(e){p.innerHTML='';say('読み込めませんでした: '+(e.code==='permission-denied'?'最新の firestore.rules を公開してください':e.message))});
 }
 
 /* ---------- 起動 ---------- */
@@ -447,16 +315,7 @@ if(typeof firebase==='undefined'||!window.FIREBASE_CONFIG||/ここに/.test(FIRE
 }else{
   firebase.initializeApp(FIREBASE_CONFIG);
   db=firebase.firestore();try{db.settings({experimentalAutoDetectLongPolling:true,merge:true})}catch(e){}auth=firebase.auth();C=makeCore(firebase,db);
-  // ログインしたら、オーナーか（スタッフタブを出すか）と、管理画面に入れるかを、データベースのルールに確かめる
-  var can=function(p){return p.then(function(){return true},function(){return false})};
-  auth.onAuthStateChanged(function(u){
-    if(!u){S.owner=false;loginView();return}
-    app.innerHTML='<div class="loading" role="status"><span class="spin"></span>読み込み中…</div>';
-    Promise.all([can(db.collection('ownerCheck').doc('me').get()),can(C.res.limit(1).get())]).then(function(r){
-      S.owner=r[0];
-      if(r[1]||u.emailVerified)go();else verifyView(u);
-    });
-  });
+  auth.onAuthStateChanged(function(u){if(u)go();else loginView()});
 }
 })();
 </script>
