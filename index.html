@@ -37,7 +37,7 @@ a.innerHTML='<div class="card err">読み込みに時間がかかっています
 (function(){
 'use strict';
 var PV=/[?&#]pv=1(&|$)/.test(location.search+location.hash);
-if(PV){var pvb=document.createElement('div');pvb.id='pvbar';pvb.style.cssText='position:sticky;top:0;z-index:50;background:#c0392b;color:#fff;text-align:center;padding:12px 10px;line-height:1.4';pvb.innerHTML='<div style="font-size:22px;font-weight:700;letter-spacing:.05em">確認画面中です</div><div style="font-size:13px;margin-top:2px">練習用の画面です。お客様には見えません。予約は保存されません。</div>';var pm=document.getElementById('app');pm.parentNode.insertBefore(pvb,pm)}
+if(PV){var pvb=document.createElement('div');pvb.id='pvbar';pvb.style.cssText='position:sticky;top:0;z-index:50;background:#c0392b;color:#fff;text-align:center;padding:12px 10px;line-height:1.4';pvb.innerHTML='<div style="text-align:left;margin:-4px 0 6px"><a href="admin.html" style="color:#fff;font-size:14px;font-weight:700;text-decoration:underline">← 管理画面へ戻る</a></div><div style="font-size:22px;font-weight:700;letter-spacing:.05em">確認画面中です</div><div style="font-size:13px;margin-top:2px">練習用の画面です。お客様には見えません。予約は保存されません。</div>';var pm=document.getElementById('app');pm.parentNode.insertBefore(pvb,pm)}
 /* 管理画面の「保存前の設定でお客様画面を確認」から渡された、未保存の設定（練習モードのときだけ使う） */
 function pvGet(){if(!PV)return null;try{var o=JSON.parse(localStorage.getItem('rv_preview')||'null');return o&&o.id&&Date.now()-o.at<12*3600e3?o:null}catch(e){return null}}
 function realTest(ev){return !!(ev&&ev.savedTest)}
