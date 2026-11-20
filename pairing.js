@@ -109,7 +109,7 @@
     function draw() {
       var sx = wrap.querySelector('.side'), sy = sx ? sx.scrollTop : 0, py = wrap.scrollTop;
       wrap.className = 'pair' + (sel ? ' sel' : '');
-      wrap.innerHTML = '<div class="hd"><b>組み合わせ表</b><button type="button" data-a="auto">未配置を自動で並べる</button><button type="button" data-a="add">＋ 組（行）を追加</button><button type="button" data-a="xls">Excelに出力</button>' +
+      wrap.innerHTML = '<div class="hd"><b>組み合わせ表</b><button type="button" data-a="auto">未配置を自動で並べる</button><button type="button" data-a="add">＋ 組（行）を追加</button><button type="button" data-a="xls">Excel（お客様・ゴルフ場用）</button><button type="button" data-a="xlsS">Excel（スタッフ用・色付き）</button>' +
         '<button type="button" class="sv' + (dirty ? ' dirty' : '') + '" data-a="save">' + (dirty ? '保存する（未保存）' : '保存済み') + '</button><button type="button" data-a="close">閉じる</button></div>' +
         '<div class="tip">パソコン：右の組、または表の名前を、入れたい行へドラッグ。スマホ：組をタップして選び、行の「ここに入れる」をタップ。★＝レクサスオーナー、色＝担当スタッフ。' + (dropped ? '（取り消された予約 ' + dropped + '件は、表から外して左に詰めました）' : '') + '</div>' +
         '<div class="bd"><div class="sheet"><div class="meta"><div class="t"><label>タイトル</label><input data-m="title" value="' + esc(meta.title) + '"></div><div><label>◆開催日</label><input data-m="date" value="' + esc(meta.date) + '"></div><div><label>◆開催コース</label><input data-m="course" value="' + esc(meta.course) + '"></div><div><label>℡（コース）</label><input data-m="tel" value="' + esc(meta.tel) + '" inputmode="tel"></div></div>' +
@@ -138,7 +138,15 @@
       });
       dirty = true; draw(); say(pool.length + '組を並べました。必要に応じて、動かして調整してください');
     }
-    async function xls() {
+    // 担当スタッフの略し方（例：坂口→「坂」）。同じ1文字の方がいるときは2文字（例：小園→「小園」、小川→「小川」）
+    function abbr() {
+      var names = {}; live.forEach(function (r) { staffOf(r).forEach(function (s) { names[s.name] = 1; }); });
+      var out = {}, list = Object.keys(names);
+      list.forEach(function (n) { var one = n.charAt(0), dup = list.filter(function (m) { return m !== n && m.charAt(0) === one; }).length; out[n] = dup ? n.slice(0, 2) : one; });
+      return out;
+    }
+    // staff=false：お客様・ゴルフ場用（名前だけ）。staff=true：スタッフ用（★オーナー、名前の後ろに担当（坂）、担当ごとの色、凡例）
+    async function xls(staff) {
       try {
         say('Excelを作っています…');
         var X = await loadExcel(), wb = new X.Workbook();
@@ -147,7 +155,7 @@
         ['OUT', 'IN'].forEach(function (course) {
           var list = rows.filter(function (x) { return (x.course || 'OUT') === course; });
           if (!list.length || (course === 'IN' && !list.some(function (x) { return x.items.length; }))) return;
-          var ws = wb.addWorksheet(course + 'スタート', { views: [{ showGridLines: false }] });
+          var ws = wb.addWorksheet(course + 'スタート' + (staff ? '（スタッフ用）' : ''), { views: [{ showGridLines: false }] }), AB = abbr();
           ws.columns = [{ width: 5.625 }, { width: 5.375 }, { width: 13.125 }, { width: 17.75 }, { width: 17.75 }, { width: 17.75 }, { width: 17.75 }];
           [21, 21, 16.5, 15, 21, 18, 18, 14.25, 14.25, 8.25, 7.5].forEach(function (h, i) { ws.getRow(i + 1).height = h; });
           ws.mergeCells('B1:G1'); var c1 = ws.getCell('B1'); c1.value = meta.title; c1.font = F(16, { bold: true, italic: true }); c1.alignment = { horizontal: 'center' };
@@ -169,15 +177,31 @@
             var b = ws.getCell('B' + r1); b.value = n + '組';
             var tc = ws.getCell('C' + r1), mm = t2m(x.time);
             if (!isNaN(mm)) { if (even && i > 0) tc.value = { formula: '$C$12+TIME(0,' + (i * iv) + ',0)', result: (m0 + i * iv) / 1440 }; else tc.value = mm / 1440; tc.numFmt = 'h:mm'; }
-            for (var j = 0; j < CAP; j++) { var nc = ws.getCell(String.fromCharCode(68 + j) + r1); nc.value = cs[j] ? fw(cs[j].p.name) : null; }
-            ['B', 'C', 'D', 'E', 'F', 'G'].forEach(function (L) { [r1, r2].forEach(function (rr) { var c = ws.getCell(L + rr); c.font = F(12); c.alignment = { horizontal: 'center', vertical: 'middle' }; c.border = BOX; }); });
+            ['B', 'C', 'D', 'E', 'F', 'G'].forEach(function (L) { [r1, r2].forEach(function (rr) { var c = ws.getCell(L + rr); c.font = F(12); c.alignment = { horizontal: 'center', vertical: 'middle', shrinkToFit: true }; c.border = BOX; }); });
+            for (var j = 0; j < CAP; j++) {
+              var nc = ws.getCell(String.fromCharCode(68 + j) + r1), cj = cs[j];
+              if (!cj) { nc.value = null; continue; }
+              if (!staff) { nc.value = fw(cj.p.name); continue; }
+              var sf = staffOf(cj.r)[0], cl = col(cj.r);
+              nc.value = (cj.p.own ? '★' : '') + (fw(cj.p.name) || '（未入力）') + (sf ? '(' + AB[sf.name] + ')' : '');
+              nc.font = F(12, { bold: cj.p.own, color: { argb: 'FF1D1D1B' } });
+              [r1, r2].forEach(function (rr) { ws.getCell(String.fromCharCode(68 + j) + rr).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + cl[0].slice(1).toUpperCase() } }; });
+            }
           });
           var last = 11 + list.length * 2;
+          if (staff) {   // 凡例：担当の色と略し方
+            var lr = last + 2; ws.getCell('B' + lr).value = '★＝レクサスオーナー　（　）＝担当スタッフ'; ws.getCell('B' + lr).font = F(10);
+            var seenK = {}, li = 0;
+            live.forEach(function (r) { var sf = staffOf(r)[0]; if (!sf || seenK[sf.key]) return; seenK[sf.key] = 1;
+              var rr = lr + 1 + Math.floor(li / 3), cc = 2 + (li % 3) * 2, c = ws.getCell(rr, cc); ws.mergeCells(rr, cc, rr, cc + 1);
+              c.value = '(' + AB[sf.name] + ') ' + sf.store + '：' + sf.name; c.font = F(10, { bold: true, color: { argb: 'FF' + colors[sf.key][1].slice(1).toUpperCase() } }); c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + colors[sf.key][0].slice(1).toUpperCase() } }; li++; });
+            last = lr + 1 + Math.ceil(li / 3);
+          }
           ws.pageSetup = { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 1, horizontalCentered: true, showGridLines: false, printArea: 'B1:G' + last,
             margins: { left: 0.25, right: 0.25, top: 0.2777777777777778, bottom: 0.2777777777777778, header: 0.1111111111111111, footer: 0.1111111111111111 } };
         });
-        // 店舗用：担当・オーナー一覧（配布する表には入れない）
-        var w2 = wb.addWorksheet('担当・オーナー一覧'), wr = where();
+        // 店舗用：担当・オーナー一覧（スタッフ用のファイルにだけ入れる）
+        if (staff) { var w2 = wb.addWorksheet('担当・オーナー一覧'), wr = where();
         w2.columns = [{ header: '組', width: 6 }, { header: 'スタート', width: 8 }, { header: 'コース', width: 7 }, { header: '担当', width: 16 }, { header: '代表者', width: 14 }, { header: '区分', width: 9 }, { header: '氏名', width: 16 }, { header: 'オーナー', width: 8 }, { header: '備考', width: 30 }];
         w2.getRow(1).font = { bold: true };
         live.slice().sort(function (a, b) { return (wr[a.id] == null ? 999 : wr[a.id]) - (wr[b.id] == null ? 999 : wr[b.id]); }).forEach(function (r) {
@@ -187,10 +211,10 @@
             row.getCell(4).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + c[0].slice(1).toUpperCase() } };
             if (p.own) { row.getCell(8).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF1C9' } }; row.getCell(7).font = { bold: true }; }
           });
-        });
+        }); }
         var buf = await wb.xlsx.writeBuffer(), blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), a = document.createElement('a');
-        a.href = URL.createObjectURL(blob); a.download = '組み合わせ表_' + String(ev.name || '').replace(/[\\/:*?"<>|]/g, '') + '.xlsx'; document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
-        say('Excelを出力しました');
+        a.href = URL.createObjectURL(blob); a.download = '組み合わせ表_' + (staff ? 'スタッフ用_' : '') + String(ev.name || '').replace(/[\\/:*?"<>|]/g, '') + '.xlsx'; document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+        say(staff ? 'スタッフ用のExcelを出力しました' : 'お客様・ゴルフ場用のExcelを出力しました');
       } catch (e) { say('Excelを出力できませんでした: ' + e.message); }
     }
     // ドラッグ（マウス）と、タップで選んで入れる（スマホ）
@@ -225,7 +249,7 @@
       if (t.dataset.put != null) { if (sel) moveTo(sel, t.dataset.put); return; }
       if (t.dataset.del != null) { var i = +t.dataset.del; if (rows[i].items.length && !confirm((i + 1) + '組の行を削除します。入っている組は「未配置」に戻ります。よろしいですか？')) return; rows.splice(i, 1); dirty = true; return draw(); }
       var a = t.dataset.a;
-      if (a === 'close') close(); else if (a === 'save') save(); else if (a === 'auto') auto(); else if (a === 'xls') xls();
+      if (a === 'close') close(); else if (a === 'save') save(); else if (a === 'auto') auto(); else if (a === 'xls') xls(false); else if (a === 'xlsS') xls(true);
       else if (a === 'add') { var last = rows[rows.length - 1], tm = last && !isNaN(t2m(last.time)) ? m2t(t2m(last.time) + iv) : ''; rows.push({ id: C.newId(), time: tm, course: last ? last.course : 'OUT', items: [] }); dirty = true; draw(); }
       else if (a === 'times') {
         var v0 = wrap.querySelector('#pt0').value, vi = +wrap.querySelector('#pti').value;
