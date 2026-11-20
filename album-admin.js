@@ -5,7 +5,7 @@
 (function (root) {
   'use strict';
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
-  var PDF_MAX = 5 * 1024 * 1024, PHOTO_MAX = 12;
+  var PDF_MAX = 5 * 1024 * 1024, PHOTO_MAX = 60;
   function url(aid) { return location.origin + location.pathname.replace(/[^/]*$/, '') + 'album.html?a=' + aid; }
   function fmtD(ms) { var d = new Date(ms); return (d.getMonth() + 1) + '月' + d.getDate() + '日'; }
   function readFile(f) { return new Promise(function (ok, ng) { var r = new FileReader(); r.onload = function () { ok(r.result); }; r.onerror = ng; r.readAsDataURL(f); }); }
