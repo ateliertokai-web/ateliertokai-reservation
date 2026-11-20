@@ -27,6 +27,7 @@
 <script src="slot-builder.js"></script>
 <script src="qr.js"></script>
 <script src="album-admin.js"></script>
+<script src="pairing.js"></script>
 <script src="texts.js"></script>
 <script>window.TXH=TXT.h;window.TXC=TXT.clean;try{delete window.T;delete window.TXT}catch(e){window.T=undefined}</script>
 <script src="texts-editor.js"></script>
@@ -193,7 +194,7 @@ function draw(){
     if(!confirm(r.name+' 様を確定にします。よろしいですか？'))return;
     try{var y=await C.promote(r.id);say(y.ok?'確定にしました':y.msg);await loadSlots();draw()}catch(er){say('失敗しました: '+er.message)}
   };
-  var tl='<button class="s" id="csv">CSVを書き出す（Excel用）</button><button class="s" id="rc">人数を数え直す</button>';
+  var tl=(ev.golf?'<button class="s" id="pair" style="border-color:var(--gold);font-weight:700">組み合わせ表（Excel出力）</button>':'')+'<button class="s" id="csv">CSVを書き出す（Excel用）</button><button class="s" id="rc">人数を数え直す</button>';
   if(ev.method==='抽選'&&!ev.drawn)tl+='<button class="s" id="dr">抽選を実行する</button>';
   if(ev.method==='抽選'&&ev.drawn)tl+='<span class="tag k">抽選済み</span>';
   q('tl').innerHTML=tl;
@@ -220,6 +221,7 @@ function draw(){
     }catch(er){say('失敗しました: '+er.message)}
   };
   q('csv').onclick=function(){csv(list)};
+  if(q('pair'))q('pair').onclick=function(){PAIR.open(C,ev,S.rs||[],S.gs||{},say)};
   q('rc').onclick=async function(){var b=this;b.disabled=true;try{await C.recount(S.evId);await loadSlots();say('人数を数え直しました');draw()}catch(er){b.disabled=false;say('失敗しました: '+er.message)}};
   if(q('dr'))q('dr').onclick=async function(){
     if(!confirm('「'+ev.name+'」の抽選を実行します。実行後は新しいお申し込みができなくなり、取り消せません。よろしいですか？'))return;
