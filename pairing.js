@@ -42,6 +42,9 @@
       '.pair .side h3{margin:0 0 6px;font-size:13px}.pair .side .back{display:none;width:100%;margin:0 0 6px;border:1px dashed #b8955a;background:#fffaf0;color:#8a5a00;border-radius:7px;padding:6px;font:inherit;font-size:12px;cursor:pointer}.pair.sel .side .back{display:block}' +
       '.pair .sg{margin:0 0 8px}.pair .sg .sh{font-size:12px;font-weight:700;border-radius:6px;padding:2px 8px;color:#fff;display:inline-block;margin:0 0 4px}.pair .sc{border:1px solid;border-left-width:5px;border-radius:7px;padding:3px 7px;margin:0 0 4px;font-size:12px;line-height:1.4;cursor:grab;user-select:none;-webkit-user-select:none;touch-action:manipulation}' +
       '.pair .sc.done{opacity:.55}.pair .sc.on{box-shadow:0 0 0 3px #111}.pair .sc .a{display:flex;gap:6px;align-items:baseline}.pair .sc .a b{font-size:12.5px}.pair .sc .a .w{margin-left:auto;font-size:11px;color:#6b665d}.pair .sc .o{color:#8a6d2f;font-size:11px}.pair .sc .nt{font-size:10.5px;color:#6b665d;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}' +
+      '.pair .ctab{display:flex;gap:6px;margin:4px 0 10px}.pair .ctab button{flex:1;padding:9px;border:1px solid #d9d2c1;background:#fff;border-radius:9px;font:inherit;font-weight:700;cursor:pointer}.pair .ctab button.on{background:#111;color:#e8c872;border-color:#111}' +
+      '.pair .cols{display:grid;grid-template-columns:minmax(0,1fr);gap:14px}.pair .ch{display:flex;gap:6px;align-items:baseline;margin:0 0 6px}.pair .ch b{font-size:15px}.pair.v-OUT .cs-IN,.pair.v-IN .cs-OUT{display:none}' +
+      '@media(min-width:1200px){.pair .ctab{display:none}.pair.v-OUT .cs-IN,.pair.v-IN .cs-OUT{display:block}.pair .cols{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.pair .bd{grid-template-columns:minmax(0,1fr) 250px}.pair table.pt{min-width:0}.pair .pt .no{width:40px;font-size:12px}.pair .pt .tm{width:64px}.pair .pt .tm input{width:60px;font-size:12.5px}.pair .pt td.nm{font-size:12.5px}.pair .pt .ex{width:22px}.pair .pt td.nm .g{display:none}.pair .pt th{font-size:10px;letter-spacing:-.03em}}' +
       '.pair .tip{font-size:12px;color:#6b665d;padding:6px 12px 0}.pair .ghost{position:fixed;z-index:9999;pointer-events:none;opacity:.9;background:#fff;border:2px solid #111;border-radius:8px;padding:4px 8px;font-size:13px;box-shadow:0 6px 18px rgba(0,0,0,.25)}';
     document.head.appendChild(s);
   }
@@ -61,18 +64,23 @@
     function col(r) { var s = staffOf(r)[0]; return s ? colors[s.key] : NONE; }
     var firstDate = live.map(function (r) { return r.date; }).filter(Boolean).sort()[0] || '';
     var meta = { title: 'レクサス鹿児島東開　' + (ev.name || ''), date: reiwa(firstDate), course: ev.place === 'ot' ? (ev.placeName || '') : '', tel: '' };
-    var rows = [], dirty = false, sel = '', dropped = 0, t0 = '07:12', iv = 7;
+    var rows = [], dirty = false, sel = '', dropped = 0, view = 'OUT', tm = { OUT: { t0: '07:12', iv: 7 }, IN: { t0: '07:12', iv: 7 } };   // tm：OUT・INそれぞれの最初の時刻と間隔
     try {
       var d = await ref.get();
       if (d.exists) {
-        var D0 = d.data(); if (D0.meta) meta = Object.assign(meta, D0.meta); if (D0.t0) t0 = D0.t0; if (D0.iv) iv = D0.iv;
+        var D0 = d.data(); if (D0.meta) meta = Object.assign(meta, D0.meta); if (D0.tm) tm = { OUT: Object.assign(tm.OUT, D0.tm.OUT || {}), IN: Object.assign(tm.IN, D0.tm.IN || {}) }; else if (D0.t0) { tm.OUT.t0 = D0.t0; tm.OUT.iv = D0.iv || 7; }
         rows = (D0.rows || []).map(function (x) { return { id: x.id || C.newId(), time: x.time || '', course: x.course || 'OUT', items: (x.items || []).filter(function (id) { if (byId[id]) return true; dropped++; return false; }) }; });
       }
     } catch (e) { say('組み合わせ表を読み込めませんでした: ' + (e.code === 'permission-denied' ? 'Firestoreのルールに「pairings」の設定がまだありません。最新のルールを公開してください' : e.message)); return; }
     var seen = {}; rows.forEach(function (x) { x.items = x.items.filter(function (id) { if (seen[id]) return false; seen[id] = 1; return true; }); });
-    if (!rows.length) { var tot = live.reduce(function (a, r) { return a + r.n; }, 0), nr = Math.max(5, Math.ceil(tot / CAP) + 1); for (var k = 0; k < nr; k++) rows.push({ id: C.newId(), time: m2t(t2m(t0) + k * iv), course: 'OUT', items: [] }); }
+    if (!rows.length) { var tot = live.reduce(function (a, r) { return a + r.n; }, 0), nr = Math.max(5, Math.ceil(tot / CAP) + 1); for (var k = 0; k < nr; k++) rows.push({ id: C.newId(), time: m2t(t2m(tm.OUT.t0) + k * tm.OUT.iv), course: 'OUT', items: [] }); }
     var wrap = document.createElement('div'); wrap.className = 'pair'; document.body.appendChild(wrap);
     function where() { var w = {}; rows.forEach(function (x, i) { x.items.forEach(function (id) { w[id] = i; }); }); return w; }
+    function crs(x) { return x.course === 'IN' ? 'IN' : 'OUT'; }
+    function numOf(i) { var c = crs(rows[i]), n = 0; for (var k = 0; k <= i; k++) if (crs(rows[k]) === c) n++; return n; }   // OUT・INそれぞれで、何組目か
+    function lab(i) { return crs(rows[i]) + ' ' + numOf(i) + '組'; }
+    function cnt(c) { return rows.filter(function (x) { return crs(x) === c; }).length; }
+    function newRow(c) { var mine = rows.filter(function (x) { return crs(x) === c; }), last = mine[mine.length - 1], t = last && !isNaN(t2m(last.time)) ? m2t(t2m(last.time) + tm[c].iv) : (mine.length ? '' : tm[c].t0); return { id: C.newId(), time: t, course: c, items: [] }; }
     function nOf(x) { return x.items.reduce(function (a, id) { return a + byId[id].n; }, 0); }
     function cells(x) { var out = []; x.items.forEach(function (id) { players(byId[id], gs).forEach(function (p) { out.push({ p: p, r: byId[id] }); }); }); return out; }
     function sideHTML() {
@@ -86,35 +94,39 @@
           return '<div class="sg"><span class="sh" style="background:' + c[1] + '">' + esc(k ? k.replace('鹿児島', '').replace(':', '：') : '担当なし') + '（' + list.length + '）</span>' +
             list.map(function (r) {
               var ps = players(r, gs), ow = ps.filter(function (p) { return p.own; });
-              return '<div class="sc' + (w[r.id] != null ? ' done' : '') + (sel === r.id ? ' on' : '') + '" data-r="' + r.id + '" style="border-color:' + c[1] + ';background:' + c[0] + '"><div class="a"><b>' + esc(r.name) + '</b><span>' + r.n + '名</span><span class="w">' + (w[r.id] != null ? (w[r.id] + 1) + '組' : '未配置') + '</span></div>' +
+              return '<div class="sc' + (w[r.id] != null ? ' done' : '') + (sel === r.id ? ' on' : '') + '" data-r="' + r.id + '" style="border-color:' + c[1] + ';background:' + c[0] + '"><div class="a"><b>' + esc(r.name) + '</b><span>' + r.n + '名</span><span class="w">' + (w[r.id] != null ? lab(w[r.id]) : '未配置') + '</span></div>' +
                 (ow.length ? '<div class="o">★' + ow.map(function (p) { return esc(p.name || '（未入力）'); }).join('・★') + '</div>' : '') + (r.note ? '<div class="nt">備考：' + esc(r.note) + '</div>' : '') + '</div>';
             }).join('') + '</div>';
         }).join('');
     }
-    function tableHTML() {
-      return '<table class="pt"><colgroup><col class="no"><col class="tm"><col><col><col><col><col class="ex"></colgroup>' +
-        '<tr><td colspan="6" class="h8">OUT／IN スタート　　ご参加者名（敬省略・順不同）</td><td class="ex"></td></tr><tr><th></th><th>スタート時間</th><th></th><th></th><th></th><th></th><th></th></tr>' +
+    function tableHTML(c) {
+      return '<div class="cs cs-' + c + '"><div class="ch"><b>' + c + 'スタート</b><span class="note">（' + cnt(c) + '組）</span></div>' +
+        '<div class="ar">最初<input type="time" data-t0="' + c + '" value="' + esc(tm[c].t0) + '">から<input type="number" data-iv="' + c + '" value="' + tm[c].iv + '" min="1" style="width:48px">分おき<button type="button" data-a="times" data-c="' + c + '">時刻を入れる</button></div>' +
+        '<div class="ar"><input type="number" data-upto="' + c + '" min="1" max="99" value="' + Math.max(cnt(c), 1) + '" style="width:52px">組目まで<button type="button" data-a="upto" data-c="' + c + '">まとめて作る</button><button type="button" data-a="add" data-c="' + c + '">＋ 1組追加</button></div>' +
+        '<table class="pt"><colgroup><col class="no"><col class="tm"><col><col><col><col><col class="ex"></colgroup>' +
+        '<tr><td colspan="6" class="h8">' + c + 'スタート　　ご参加者名（敬省略・順不同）</td><td class="ex"></td></tr><tr><th></th><th>スタート時間</th><th></th><th></th><th></th><th></th><th></th></tr>' +
         rows.map(function (x, i) {
+          if (crs(x) !== c) return '';
           var cs = cells(x), td = '';
           for (var j = 0; j < Math.max(CAP, cs.length); j++) {
-            var c = cs[j];
-            if (!c) { td += '<td class="nm em"></td>'; continue; }
-            var cc = col(c.r);
-            td += '<td class="nm' + (j >= CAP ? ' over' : '') + (sel === c.r.id ? ' on' : '') + '" data-r="' + c.r.id + '" style="background:' + cc[0] + ';box-shadow:inset 0 -3px 0 ' + cc[1] + '">' + (c.p.own ? '<span class="ow">★</span>' : '') + esc(fw(c.p.name) || '（未入力）') + (c.p.guest && c.p.name ? '<span class="g">お連れ様入力</span>' : '') + '</td>';
+            var cl = cs[j];
+            if (!cl) { td += '<td class="nm em"></td>'; continue; }
+            var cc = col(cl.r);
+            td += '<td class="nm' + (j >= CAP ? ' over' : '') + (sel === cl.r.id ? ' on' : '') + '" data-r="' + cl.r.id + '" style="background:' + cc[0] + ';box-shadow:inset 0 -3px 0 ' + cc[1] + '">' + (cl.p.own ? '<span class="ow">★</span>' : '') + esc(fw(cl.p.name) || '（未入力）') + (cl.p.guest && cl.p.name ? '<span class="g">お連れ様入力</span>' : '') + '</td>';
           }
-          return '<tr data-row="' + i + '"><td class="no">' + (i + 1) + '組<button type="button" class="put" data-put="' + i + '">ここに入れる</button></td><td class="tm"><input type="time" data-f="time" data-i="' + i + '" value="' + esc(x.time) + '"><br><select data-f="course" data-i="' + i + '"><option' + (x.course !== 'IN' ? ' selected' : '') + '>OUT</option><option' + (x.course === 'IN' ? ' selected' : '') + '>IN</option></select></td>' + td +
+          return '<tr data-row="' + i + '"><td class="no">' + numOf(i) + '組<button type="button" class="put" data-put="' + i + '">ここに入れる</button></td><td class="tm"><input type="time" data-f="time" data-i="' + i + '" value="' + esc(x.time) + '"></td>' + td +
             '<td class="ex">' + (nOf(x) > CAP ? '<span title="4名をこえています" style="color:#c0392b">!</span>' : '') + '<button type="button" data-del="' + i + '" title="この組（行）を削除">×</button></td></tr>';
-        }).join('') + '</table>';
+        }).join('') + '</table></div>';
     }
     function draw() {
       var sx = wrap.querySelector('.side'), sy = sx ? sx.scrollTop : 0, py = wrap.scrollTop;
-      wrap.className = 'pair' + (sel ? ' sel' : '');
-      wrap.innerHTML = '<div class="hd"><b>組み合わせ表</b><button type="button" data-a="auto">未配置を自動で並べる</button><button type="button" data-a="add">＋ 組（行）を追加</button><button type="button" data-a="xls">Excel（お客様・ゴルフ場用）</button><button type="button" data-a="xlsS">Excel（スタッフ用・色付き）</button>' +
+      wrap.className = 'pair v-' + view + (sel ? ' sel' : '');
+      wrap.innerHTML = '<div class="hd"><b>組み合わせ表</b><button type="button" data-a="auto">未配置を自動で並べる</button><button type="button" data-a="xls">Excel（お客様・ゴルフ場用）</button><button type="button" data-a="xlsS">Excel（スタッフ用・色付き）</button>' +
         '<button type="button" class="sv' + (dirty ? ' dirty' : '') + '" data-a="save">' + (dirty ? '保存する（未保存）' : '保存済み') + '</button><button type="button" data-a="close">閉じる</button></div>' +
         '<div class="tip">パソコン：右の組、または表の名前を、入れたい行へドラッグ。スマホ：組をタップして選び、行の「ここに入れる」をタップ。★＝レクサスオーナー、色＝担当スタッフ。' + (dropped ? '（取り消された予約 ' + dropped + '件は、表から外して左に詰めました）' : '') + '</div>' +
         '<div class="bd"><div class="sheet"><div class="meta"><div class="t"><label>タイトル</label><input data-m="title" value="' + esc(meta.title) + '"></div><div><label>◆開催日</label><input data-m="date" value="' + esc(meta.date) + '"></div><div><label>◆開催コース</label><input data-m="course" value="' + esc(meta.course) + '"></div><div><label>℡（コース）</label><input data-m="tel" value="' + esc(meta.tel) + '" inputmode="tel"></div></div>' +
-        '<div class="ar">スタート時間：最初<input type="time" id="pt0" value="' + esc(t0) + '">から<input type="number" id="pti" value="' + iv + '" min="1" style="width:52px">分おきに<button type="button" data-a="times">入れる</button></div>' + tableHTML() +
-        '<div class="ar" style="margin-top:8px"><button type="button" data-a="add">＋ 組（行）を追加</button></div></div><div class="side">' + sideHTML() + '</div></div>';
+        '<div class="ctab"><button type="button" data-v="OUT" class="' + (view === 'OUT' ? 'on' : '') + '">OUTスタート（' + cnt('OUT') + '組）</button><button type="button" data-v="IN" class="' + (view === 'IN' ? 'on' : '') + '">INスタート（' + cnt('IN') + '組）</button></div>' +
+        '<div class="cols">' + tableHTML('OUT') + tableHTML('IN') + '</div></div><div class="side">' + sideHTML() + '</div></div>';
       var sx2 = wrap.querySelector('.side'); if (sx2) sx2.scrollTop = sy; wrap.scrollTop = py;
     }
     function mark() { dirty = true; var b = wrap.querySelector('[data-a=save]'); if (b) { b.classList.add('dirty'); b.textContent = '保存する（未保存）'; } }
@@ -125,15 +137,15 @@
     }
     function close() { if (dirty && !confirm('組み合わせ表の変更が、まだ保存されていません。保存せずに閉じますか？')) return; wrap.remove(); document.removeEventListener('pointermove', pm); document.removeEventListener('pointerup', pu); }
     async function save() {
-      try { await ref.set({ eid: ev.id, meta: meta, t0: t0, iv: iv, rows: rows.map(function (x) { return { id: x.id, time: x.time, course: x.course, items: x.items }; }), updatedAt: firebase.firestore.FieldValue.serverTimestamp() }); dirty = false; say('組み合わせ表を保存しました'); draw(); }
+      try { await ref.set({ eid: ev.id, meta: meta, tm: tm, rows: rows.map(function (x) { return { id: x.id, time: x.time, course: x.course, items: x.items }; }), updatedAt: firebase.firestore.FieldValue.serverTimestamp() }); dirty = false; say('組み合わせ表を保存しました'); draw(); }
       catch (e) { say('保存できませんでした: ' + (e.code === 'permission-denied' ? 'Firestoreのルールに「pairings」の設定がまだありません' : e.message)); }
     }
     function auto() {
       var w = where(), pool = live.filter(function (r) { return w[r.id] == null; }).sort(function (a, b) { return b.n - a.n; });
       if (!pool.length) { say('未配置の組はありません'); return; }
       pool.forEach(function (r) {
-        var x = rows.filter(function (y) { return nOf(y) + r.n <= CAP; })[0];
-        if (!x) { var last = rows[rows.length - 1], tm = last && !isNaN(t2m(last.time)) ? m2t(t2m(last.time) + iv) : ''; x = { id: C.newId(), time: tm, course: 'OUT', items: [] }; rows.push(x); }
+        var x = rows.filter(function (y) { return crs(y) === 'OUT' && nOf(y) + r.n <= CAP; })[0] || rows.filter(function (y) { return crs(y) === 'IN' && nOf(y) + r.n <= CAP; })[0];
+        if (!x) { x = newRow(view); rows.push(x); }
         x.items.push(r.id);
       });
       dirty = true; draw(); say(pool.length + '組を並べました。必要に応じて、動かして調整してください');
@@ -169,9 +181,9 @@
           ['B', 'C', 'D', 'E', 'F', 'G'].forEach(function (L) { ws.mergeCells(L + '10:' + L + '11'); var c = ws.getCell(L + '10'); c.font = F(11); c.alignment = { horizontal: 'center', vertical: 'middle' }; c.fill = { type: 'pattern', pattern: 'lightGray' }; c.border = BOX; ws.getCell(L + '11').border = BOX; });
           ws.getCell('C10').value = 'スタート時間';
           // 時刻：最初の行の時刻＋間隔（お店の表と同じく、最初の時刻を変えると、全部の時刻が変わる式）。間隔がそろっていないときは、時刻をそのまま入れる
-          var m0 = t2m(list[0].time), even = !isNaN(m0) && list.every(function (x, i) { return t2m(x.time) === m0 + i * iv; });
+          var iv = tm[course].iv, m0 = t2m(list[0].time), even = !isNaN(m0) && list.every(function (x, i) { return t2m(x.time) === m0 + i * iv; });
           list.forEach(function (x, i) {
-            var r1 = 12 + i * 2, r2 = r1 + 1, n = rows.indexOf(x) + 1, cs = cells(x);
+            var r1 = 12 + i * 2, r2 = r1 + 1, n = i + 1, cs = cells(x);
             ws.getRow(r1).height = 14.25; ws.getRow(r2).height = 14.25;
             ['B', 'C', 'D', 'E', 'F', 'G'].forEach(function (L) { ws.mergeCells(L + r1 + ':' + L + r2); });
             var b = ws.getCell('B' + r1); b.value = n + '組';
@@ -207,7 +219,7 @@
         live.slice().sort(function (a, b) { return (wr[a.id] == null ? 999 : wr[a.id]) - (wr[b.id] == null ? 999 : wr[b.id]); }).forEach(function (r) {
           var i = wr[r.id], x = i != null ? rows[i] : null, c = col(r), st = staffOf(r).map(function (s) { return s.store + '：' + s.name; }).join('・');
           players(r, gs).forEach(function (p, k) {
-            var row = w2.addRow([x ? (i + 1) + '組' : '未配置', x ? x.time : '', x ? x.course : '', st, r.name, p.host ? '代表者' : p.guest ? 'お連れ様' : '参加者', fw(p.name) || '（未入力）', p.own ? '★' : '', k ? '' : (r.note || '')]);
+            var row = w2.addRow([x ? lab(i) : '未配置', x ? x.time : '', x ? x.course : '', st, r.name, p.host ? '代表者' : p.guest ? 'お連れ様' : '参加者', fw(p.name) || '（未入力）', p.own ? '★' : '', k ? '' : (r.note || '')]);
             row.getCell(4).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + c[0].slice(1).toUpperCase() } };
             if (p.own) { row.getCell(8).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF1C9' } }; row.getCell(7).font = { bold: true }; }
           });
@@ -247,21 +259,30 @@
     wrap.addEventListener('click', function (e) {
       var t = e.target.closest('button'); if (!t) return;
       if (t.dataset.put != null) { if (sel) moveTo(sel, t.dataset.put); return; }
-      if (t.dataset.del != null) { var i = +t.dataset.del; if (rows[i].items.length && !confirm((i + 1) + '組の行を削除します。入っている組は「未配置」に戻ります。よろしいですか？')) return; rows.splice(i, 1); dirty = true; return draw(); }
+      if (t.dataset.v) { view = t.dataset.v; return draw(); }
+      if (t.dataset.del != null) { var i = +t.dataset.del; if (rows[i].items.length && !confirm(lab(i) + 'の行を削除します。入っている組は「未配置」に戻ります。よろしいですか？')) return; rows.splice(i, 1); dirty = true; return draw(); }
       var a = t.dataset.a;
       if (a === 'close') close(); else if (a === 'save') save(); else if (a === 'auto') auto(); else if (a === 'xls') xls(false); else if (a === 'xlsS') xls(true);
-      else if (a === 'add') { var last = rows[rows.length - 1], tm = last && !isNaN(t2m(last.time)) ? m2t(t2m(last.time) + iv) : ''; rows.push({ id: C.newId(), time: tm, course: last ? last.course : 'OUT', items: [] }); dirty = true; draw(); }
+      else if (a === 'add') { rows.push(newRow(t.dataset.c || view)); dirty = true; draw(); }
+      else if (a === 'upto') {   // OUT・INそれぞれ、◯組目まで、まとめて作る（足りない分だけ足す）
+        var c = t.dataset.c, n = +wrap.querySelector('[data-upto=' + c + ']').value;
+        if (!(n >= 1 && n <= 99)) { alert('1〜99の数を入れてください'); return; }
+        if (n < cnt(c)) { alert(c + 'スタートは、すでに' + cnt(c) + '組あります。減らすときは、行の「×」で削除してください。'); return; }
+        while (cnt(c) < n) rows.push(newRow(c));
+        dirty = true; view = c; draw(); say(c + 'スタートを' + n + '組目まで作りました');
+      }
       else if (a === 'times') {
-        var v0 = wrap.querySelector('#pt0').value, vi = +wrap.querySelector('#pti').value;
+        var c2 = t.dataset.c, v0 = wrap.querySelector('[data-t0=' + c2 + ']').value, vi = +wrap.querySelector('[data-iv=' + c2 + ']').value;
         if (isNaN(t2m(v0)) || !(vi >= 1)) { alert('最初の時刻と間隔を入れてください'); return; }
-        t0 = v0; iv = vi; rows.forEach(function (x, i) { x.time = m2t(t2m(t0) + i * iv); }); dirty = true; draw();
+        tm[c2] = { t0: v0, iv: vi }; var k = 0; rows.forEach(function (x) { if (crs(x) === c2) x.time = m2t(t2m(v0) + (k++) * vi); }); dirty = true; draw();
       }
     });
     wrap.addEventListener('change', function (e) {
       var t = e.target;
       if (t.dataset.f && t.dataset.i != null) { rows[+t.dataset.i][t.dataset.f] = t.value; mark(); }
       else if (t.dataset.m) { meta[t.dataset.m] = t.value; mark(); }
-      else if (t.id === 'pt0' || t.id === 'pti') { t0 = wrap.querySelector('#pt0').value || t0; iv = +wrap.querySelector('#pti').value || iv; }
+      else if (t.dataset.t0) tm[t.dataset.t0].t0 = t.value || tm[t.dataset.t0].t0;
+      else if (t.dataset.iv) tm[t.dataset.iv].iv = +t.value || tm[t.dataset.iv].iv;
     });
     draw();
   }
