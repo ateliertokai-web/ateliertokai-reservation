@@ -11,7 +11,7 @@
       ['detail', '予約内容'], ['detailWait', '予約内容（キャンセル待ち）'], ['detailLot', '予約内容（抽選待ち）'], ['detailLost', '予約内容（落選）'], ['detailCancel', '予約内容（キャンセル済み）'], ['detailGolf', '予約内容（ゴルフ・お連れ様の入力）'], ['edit', '予約内容の変更']]],
     ['お連れ様の入力ページ', [['g:form', '入力画面'], ['g:saved', '入力済み'], ['g:canceled', '取り消し済み'], ['g:byowner', '代表者が取り消した場合'], ['g:group', '全員共通のURLを開いたとき'], ['g:full', '全員の入力が済んでいるとき'], ['g:invalid', '開けないURL']]]
   ];
-  var FILES = [['index.html', 'お客様画面'], ['core.js', 'エラー・お知らせ'], ['guest.html', 'お連れ様ページ']];
+  var FILES = [['index.html', 'お客様画面'], ['core.js', 'エラー・お知らせ'], ['push.js', 'お客様画面'], ['guest.html', 'お連れ様ページ']];
   var JA = /[぀-ヿ㐀-鿿]/;
   function unesc(s) { return s.replace(/\\(u[0-9a-fA-F]{4}|.)/g, function (m, c) { return c[0] === 'u' && c.length === 5 ? String.fromCharCode(parseInt(c.slice(1), 16)) : ({ n: '\n', r: '\r', t: '\t' }[c] || c); }); }
   var DEFS = null;

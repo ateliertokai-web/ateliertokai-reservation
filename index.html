@@ -33,6 +33,7 @@ a.innerHTML='<div class="card err">読み込みに時間がかかっています
 <script src="practice.js"></script>
 <script src="qr.js"></script>
 <script src="texts.js"></script>
+<script src="push.js"></script>
 <script src="edit-sample.js"></script>
 <script>
 (function(){
@@ -177,6 +178,7 @@ async function home(){
     app.innerHTML=h;
     app.querySelectorAll('.ev').forEach(function(b){b.onclick=function(){S.ev=evs[+b.dataset.i];pickSlot()}});
     q('lk').onclick=lookupView;
+    if(window.PUSH&&!PV&&!TXT.edit)PUSH.ask(app);   // アプリとして使っている方に「通知を受け取りますか？」
     // 説明書（ご予約の方法）へのボタン。管理画面の「お客様画面」で表示ONのときだけ出す
     C.cfg.doc('guide').get().then(function(s){var g=s.exists?s.data():null,box=q('gd');
       if(box&&g&&g.on)box.innerHTML='<a class="l" href="guide.html">'+esc((g.label&&g.label.trim())||T('ご予約の方法（使い方）'))+'</a>'}).catch(function(){});
@@ -413,7 +415,7 @@ async function submit(){
     }else{
       if(PV&&!realTest(S.ev)){r={ok:true,id:'PRACTICE0000',status:'confirmed'};return doneView(r,g.d,gn)}
       r=await C.book(S.slot.id,g.d);
-      if(r.ok){myAdd(r.id,g.d.mail);return doneView(r,g.d,gn)}
+      if(r.ok){myAdd(r.id,g.d.mail);if(window.PUSH)PUSH.sync();return doneView(r,g.d,gn)}
     }
     er.textContent=r.msg||T('処理できませんでした');
   }catch(e){er.textContent=e.code==='permission-denied'?T('お申し込みを受け付けられませんでした。受付開始前、または受付が終了している可能性があります。画面を更新して、もう一度お試しください。'):T('通信に失敗しました。電波の良い場所で、もう一度お試しください。（')+(e.code||e.message||'')+'）'}
@@ -704,6 +706,7 @@ if(TXT.edit&&window.EDITSAMPLE){
   firebase.initializeApp(FIREBASE_CONFIG);
   var FDB=firebase.firestore();try{FDB.settings({experimentalAutoDetectLongPolling:true,merge:true})}catch(e){}
   C=makeCore(firebase,FDB);
+  if(window.PUSH&&!PV)PUSH.init(FDB,function(){return myGet().map(function(x){return x.id})});
   var GM=/[?&]g=([A-HJ-NP-Z2-9]{12})(&|$)/.exec(location.search);
   if(GM){location.replace(location.pathname.replace(/[^/]*$/,'')+'guest.html'+location.search)}
   else syncTime().then(function(){return Promise.race([TXT.load(FDB),new Promise(function(r){setTimeout(r,1500)})])}).then(openFromLink);
