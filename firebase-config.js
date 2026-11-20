@@ -9,4 +9,4 @@ var FIREBASE_CONFIG = {
 };
 
 // 通知（プッシュ通知）の公開鍵（Firebase コンソール → プロジェクトの設定 → Cloud Messaging → ウェブプッシュ証明書）。空なら通知の機能は使わない
-var PUSH_VAPID = '';
+var PUSH_VAPID = 'BFfWhyZiKrvQw9bj0wmxGxguiZ96XlER3SVL5rZRpnoltvrfcoTukIGI3sE5mMs1czdSzCdqdkmdr2JhcbMW-2U';
