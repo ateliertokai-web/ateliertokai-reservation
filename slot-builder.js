@@ -9,7 +9,7 @@
   function t2m(t) { var a = String(t || '').split(':'); return +a[0] * 60 + +a[1]; }
   function m2t(m) { return pad(Math.floor(m / 60)) + ':' + pad(m % 60); }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
-  var LEN = [['one', 'まるごと1枠'], ['10', '10分ずつ'], ['15', '15分ずつ'], ['20', '20分ずつ'], ['30', '30分ずつ'], ['45', '45分ずつ'], ['60', '1時間ずつ'], ['90', '1時間30分ずつ'], ['120', '2時間ずつ'], ['180', '3時間ずつ']];
+  var LEN = [['one', 'まるごと1枠'], ['10', '10分ずつ'], ['15', '15分ずつ'], ['20', '20分ずつ'], ['30', '30分ずつ'], ['45', '45分ずつ'], ['60', '1時間ずつ'], ['90', '1時間30分ずつ'], ['120', '2時間ずつ'], ['180', '3時間ずつ'], ['c', '分数を指定…']];
   var PRE = {
     class: [{ s: '10:00', e: '12:00', cut: 'one' }, { s: '13:00', e: '17:00', cut: '120' }],
     golf: [{ s: '07:00', e: '09:00', cut: '10' }],
@@ -22,9 +22,9 @@
     '.sb .seg{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.sb .seg.two{grid-template-columns:1fr 1fr}.sb .seg label{margin:0;font-weight:400}.sb .seg input{position:absolute;opacity:0;pointer-events:none}' +
     '.sb .seg span{display:block;text-align:center;border:1px solid var(--line,#e2dccd);border-radius:10px;padding:9px 4px;background:#fff;cursor:pointer;font-size:13px;line-height:1.35}.sb .seg input:checked+span{background:#111;color:#e8c872;border-color:#111}.sb .seg span small{display:block;font-size:10.5px;white-space:nowrap;opacity:.85}' +
     '.sb .stp{display:flex;align-items:center;gap:4px}.sb .stp button{width:36px;height:36px;border:1px solid var(--line,#e2dccd);background:#fff;border-radius:9px;font-size:17px;cursor:pointer;color:inherit}.sb .stp input{width:60px;text-align:center}' +
-    '.sb .blk{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;gap:6px;align-items:center;padding:8px 0;border-bottom:1px dashed var(--line,#e2dccd)}.sb .blk .tm{display:flex;align-items:center;gap:4px;min-width:0}.sb .blk .tm input{flex:1;min-width:0}' +
-    '.sb .blk select{width:auto}.sb .blk .cnt{font-size:12px;color:#1f7a4d;background:#e9f5ee;border-radius:8px;padding:3px 7px;white-space:nowrap}.sb .blk .cnt.ng{color:#c0392b;background:#fdeceb}.sb .blk .del{border:0;background:none;color:#c0392b;font-size:20px;cursor:pointer;padding:0 4px}' +
-    '@media(max-width:560px){.sb .blk{grid-template-columns:minmax(0,1fr) auto auto}.sb .blk .tm{grid-column:1/-1}}' +
+    '.sb .blk{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto auto;gap:6px;align-items:center;padding:8px 0;border-bottom:1px dashed var(--line,#e2dccd)}.sb .blk .tm{display:flex;align-items:center;gap:4px;min-width:0}.sb .blk .tm input{flex:1;min-width:0}' +
+    '.sb .blk .mn{display:flex;align-items:center;gap:4px;white-space:nowrap;font-size:13px}.sb .blk .mn input{width:64px;text-align:center}.sb .blk select{width:auto}.sb .blk .cnt{font-size:12px;color:#1f7a4d;background:#e9f5ee;border-radius:8px;padding:3px 7px;white-space:nowrap}.sb .blk .cnt.ng{color:#c0392b;background:#fdeceb}.sb .blk .del{border:0;background:none;color:#c0392b;font-size:20px;cursor:pointer;padding:0 4px}' +
+    '@media(max-width:560px){.sb .blk{grid-template-columns:minmax(0,1fr) auto auto}.sb .blk .tm{grid-column:1/-1}.sb .blk .mn{grid-column:1/-1}}' +
     '.sb .ad{border:1px solid var(--line,#e2dccd);border-radius:11px;overflow:hidden;background:#fff}.sb .adr{display:grid;grid-template-columns:minmax(0,1fr) 28px;row-gap:4px;align-items:center;gap:8px;padding:8px 10px}.sb .adr+.adr{border-top:1px solid var(--line,#e2dccd)}' +
     '.sb .adr span{font-size:12px;font-weight:600;grid-column:1/-1;color:var(--ink2,#6b665d)}.sb .adr input{width:100%;min-width:0}.sb .adr .adc{border:0;background:none;color:var(--ink2,#6b665d);font-size:20px;line-height:1;padding:0;cursor:pointer}' +
     '.sb input[type=time]{min-width:0;max-width:100%}' +
@@ -76,12 +76,14 @@
       var a = Object.keys(days).sort();
       $('sbDs').innerHTML = a.length ? a.map(function (k) { var p = k.split('-'), dt = new Date(+p[0], +p[1] - 1, +p[2]); return '<button type="button" class="chip on" data-rm="' + k + '">' + (+p[1]) + '/' + (+p[2]) + '（' + WD[dt.getDay()] + '） ×</button>'; }).join('') : '<span class="note" style="margin:0">日にちを選んでください</span>';
     }
-    function cnt(b) { var s = t2m(b.s), e = t2m(b.e); if (!b.s || !b.e || !(e > s)) return 0; return b.cut === 'one' ? 1 : Math.floor((e - s) / (+b.cut || 60)); }
+    function lenOf(b) { return b.cut === 'c' ? (+b.min || 0) : (+b.cut || 60); }   // 1枠の長さ（分）。「分数を指定」は好きな分数
+    function cnt(b) { var s = t2m(b.s), e = t2m(b.e); if (!b.s || !b.e || !(e > s)) return 0; if (b.cut === 'one') return 1; var L = lenOf(b); return L >= 1 ? Math.floor((e - s) / L) : 0; }
     function blk() {
       $('sbBlocks').innerHTML = blocks.map(function (b, i) {
         var n = cnt(b);
         return '<div class="blk"><div class="tm"><input type="time" data-i="' + i + '" data-k="s" value="' + b.s + '">〜<input type="time" data-i="' + i + '" data-k="e" value="' + b.e + '"></div>' +
           '<select data-i="' + i + '" data-k="cut">' + LEN.map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === b.cut ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>' +
+          (b.cut === 'c' ? '<span class="mn"><input type="number" data-i="' + i + '" data-k="min" min="1" max="720" value="' + (b.min || '') + '" placeholder="12" inputmode="numeric">分ずつ</span>' : '') +
           '<span class="cnt' + (n ? '' : ' ng') + '">' + (n ? n + '枠' : '時間を確認') + '</span>' + (blocks.length > 1 ? '<button type="button" class="del" data-x="' + i + '" title="この時間帯を削除">×</button>' : '<span></span>') + '</div>';
       }).join('');
     }
@@ -91,7 +93,7 @@
       blocks.forEach(function (b) {
         var s = t2m(b.s), e = t2m(b.e); if (!b.s || !b.e || !(e > s)) return;
         var push = function (a, z) { var k = m2t(a) + '-' + m2t(z); if (!seen[k]) { seen[k] = 1; out.push({ a: m2t(a), b: m2t(z), k: k }); } };
-        if (b.cut === 'one') push(s, e); else { var L = +b.cut || 60; for (var c = s; c + L <= e; c += L) push(c, c + L); }
+        if (b.cut === 'one') push(s, e); else { var L = lenOf(b); if (!(L >= 1)) return; for (var c = s; c + L <= e; c += L) push(c, c + L); }
       });
       return out.sort(function (p, q) { return p.a < q.a ? -1 : p.a > q.a ? 1 : 0; });
     }
@@ -128,6 +130,7 @@
       var t = e.target;
       if (t.dataset && t.dataset.i != null) {
         var b = blocks[+t.dataset.i]; b[t.dataset.k] = t.value; skip = {};
+        if (t.dataset.k === 'cut' && (t.value === 'c') !== !!t.closest('.blk').querySelector('.mn')) { if (t.value === 'c' && !b.min) b.min = ''; blk(); var mi = box.querySelector('.blk:nth-child(' + (+t.dataset.i + 1) + ') .mn input'); if (mi) mi.focus(); draw(); return; }
         var row = t.closest('.blk'), c = row.querySelector('.cnt'), n = cnt(b); c.textContent = n ? n + '枠' : '時間を確認'; c.className = 'cnt' + (n ? '' : ' ng');
       }
       draw();
