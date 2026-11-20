@@ -144,6 +144,8 @@ function resView(){
   var u3=C.gmail.where('eid','==',S.evId).onSnapshot(function(sn){S.gm={};sn.docs.forEach(function(d){S.gm[d.id]=d.data().mail||''});if(S.rs)draw()},function(){});
   S.unsub=function(){u1();u2();u3()};
 }
+// 通知（プッシュ通知）の送信予約。GAS（sendPushes）が数分ごとに送る
+function pushQ(o){try{return firebase.firestore().collection('pushQueue').add(Object.assign({sent:false,createdAt:firebase.firestore.FieldValue.serverTimestamp()},o)).catch(function(){})}catch(e){return Promise.resolve()}}
 function kidsN(r){return (+r.k||0)+(+r.s||0)+(+r.m||0)}
 // 参加者名。ゴルフで「レクサスオーナー」にチェックがある方には（オーナー）を付ける
 function pTxt(r,html){var l=r.lexus||[];return (r.participants||[]).map(function(p,i){return p?(html?esc(p):p)+(l[i]?(html?'<b style="color:var(--gold-d)">（オーナー）</b>':'（オーナー）'):''):''}).filter(Boolean).join('、')}
@@ -192,7 +194,7 @@ function draw(){
     var b=e.target.closest('[data-pid]');if(!b)return;
     var r=S.rs.filter(function(x){return x.id===b.dataset.pid})[0];
     if(!confirm(r.name+' 様を確定にします。よろしいですか？'))return;
-    try{var y=await C.promote(r.id);say(y.ok?'確定にしました':y.msg);await loadSlots();draw()}catch(er){say('失敗しました: '+er.message)}
+    try{var y=await C.promote(r.id);if(y.ok)pushQ({type:'promote',rid:r.id,eid:r.eventId});say(y.ok?'確定にしました':y.msg);await loadSlots();draw()}catch(er){say('失敗しました: '+er.message)}
   };
   var tl=(ev.golf?'<button class="s" id="pair" style="border-color:var(--gold);font-weight:700">組み合わせ表（Excel出力）</button>':'')+'<button class="s" id="csv">CSVを書き出す（Excel用）</button><button class="s" id="rc">人数を数え直す</button>';
   if(ev.method==='抽選'&&!ev.drawn)tl+='<button class="s" id="dr">抽選を実行する</button>';
@@ -217,7 +219,7 @@ function draw(){
       if(a==='alb'){ALB.open(C,r,ev,Object.keys(r.inv||{}).map(function(k){return r.inv[k]}).filter(Boolean),say);return}
       if(a==='inv'){await C.res.doc(id).update({invited:b.checked,updatedAt:firebase.firestore.FieldValue.serverTimestamp()})}
       else if(a==='cx'){if(!confirm(r.name+' 様の予約を取り消します。よろしいですか？'))return;var x=await C.cancel(id,'',true);say(x.ok?'取り消しました'+(x.freed?'。枠に空きができました（キャンセル待ちの方は「繰り上げ」で確定できます）':''):x.msg);await loadSlots();draw()}
-      else if(a==='pro'){if(!confirm(r.name+' 様を確定にします。店舗からご連絡済みですか？'))return;var y=await C.promote(id);say(y.ok?'確定にしました':y.msg);await loadSlots();draw()}
+      else if(a==='pro'){if(!confirm(r.name+' 様を確定にします。店舗からご連絡済みですか？'))return;var y=await C.promote(id);if(y.ok)pushQ({type:'promote',rid:id,eid:r.eventId});say(y.ok?'確定にしました':y.msg);await loadSlots();draw()}
     }catch(er){say('失敗しました: '+er.message)}
   };
   q('csv').onclick=function(){csv(list)};
@@ -226,7 +228,7 @@ function draw(){
   if(q('dr'))q('dr').onclick=async function(){
     if(!confirm('「'+ev.name+'」の抽選を実行します。実行後は新しいお申し込みができなくなり、取り消せません。よろしいですか？'))return;
     this.disabled=true;
-    try{var r=await C.runLottery(S.evId);if(r.ok){say('抽選しました。当選 '+r.win+'組 / キャンセル待ち '+r.wait+'組 / 落選 '+r.lost+'組');await loadEvents();await loadSlots();resView()}else say(r.msg)}catch(er){say('失敗しました: '+er.message)}
+    try{var r=await C.runLottery(S.evId);if(r.ok){pushQ({type:'lottery',eid:S.evId});say('抽選しました。当選 '+r.win+'組 / キャンセル待ち '+r.wait+'組 / 落選 '+r.lost+'組');await loadEvents();await loadSlots();resView()}else say(r.msg)}catch(er){say('失敗しました: '+er.message)}
   };
 }
 function csv(list){
@@ -387,6 +389,26 @@ async function openEv(i,btn){
 
 
 /* ---------- お客様画面（説明書ボタンの表示・説明書の文章） ---------- */
+// アプリの通知で、お知らせを送る（通知を許可した方だけに届く）
+function newsCard(p){
+  var d=document.createElement('div');d.className='card';
+  d.innerHTML='<h2 style="margin-top:0">アプリの通知でお知らせを送る</h2><p class="note">予約ページをホーム画面に追加し、通知を許可したお客様のスマホに届きます。<span id="nwN"></span>キャンセル待ちの繰り上げ・抽選の結果は、自動で届きます。</p>'+
+    '<label>送る相手<select id="nwT"><option value="">通知を許可した全員</option>'+S.events.map(function(e){return '<option value="'+e.id+'">「'+esc(e.name)+'」を予約した方</option>'}).join('')+'</select></label>'+
+    '<label>見出し<input id="nwH" maxlength="40" placeholder="例：レクサス鹿児島東開からのお知らせ"></label><label>本文<textarea id="nwB" rows="3" maxlength="200" placeholder="例：明日のゴルフコンペは予定どおり開催します。"></textarea></label>'+
+    '<div class="tools"><button class="p" id="nwS" type="button" style="max-width:220px">お知らせを送る</button></div><p class="note">送信は数分以内に行われます（自動処理のGASが送ります）。</p>';
+  p.insertBefore(d,p.firstChild);
+  firebase.firestore().collection('pushSubs').get().then(function(s){q('nwN').textContent='いま通知を受け取っている端末：'+s.size+'台。'}).catch(function(){});
+  q('nwS').onclick=async function(){
+    var t=q('nwH').value.trim()||'レクサス鹿児島東開からのお知らせ',b=q('nwB').value.trim(),ev=q('nwT').value;
+    if(!b){say('本文を入力してください');return}
+    var who=ev?'「'+(S.events.filter(function(e){return e.id===ev})[0]||{}).name+'」を予約した方':'通知を許可した全員';
+    if(!confirm(who+'に、お知らせを送ります。よろしいですか？\n\n'+t+'\n'+b))return;
+    this.disabled=true;
+    try{await firebase.firestore().collection('pushQueue').add({type:'news',eid:ev,title:t.slice(0,40),body:b.slice(0,200),sent:false,createdAt:firebase.firestore.FieldValue.serverTimestamp()});q('nwB').value='';say('お知らせの送信を受け付けました（数分以内に届きます）')}
+    catch(e){say('送れませんでした: '+(e.code==='permission-denied'?'Firestoreのルールに「pushQueue」の設定がまだありません':e.message))}
+    this.disabled=false;
+  };
+}
 function csView(){
   var p=q('pane'),D=window.GUIDE_DEFAULT,M='①②③④⑤⑥⑦⑧⑨';
   p.innerHTML='<div class="loading sm" role="status"><span class="spin"></span>読み込み中…</div>';
@@ -420,7 +442,7 @@ function csView(){
     h+='<label>いちばん下の文<textarea id="gFoot" rows="2" maxlength="300">'+esc(val(g,'foot',D.foot))+'</textarea></label>'+
       '<p class="note">空欄にした欄は、初期の文章で表示されます。</p></div></details>'+
       '<div class="tools"><button class="p" id="gSave" style="max-width:260px">保存する</button><button class="s" id="gReset" type="button">文章を初期の内容に戻す</button></div>';
-    p.innerHTML=h;
+    p.innerHTML=h;newsCard(p);
     q('gReset').onclick=function(){if(!confirm('説明書の文章を、初期の内容に戻します（「保存する」を押すまで反映されません）。よろしいですか？'))return;var on=q('gOn').checked;draw({on:on});q('gOn').checked=on;p.querySelector('details').open=true};
     q('gSave').onclick=async function(){
       var b=this,o={on:q('gOn').checked,label:q('gLabel').value.trim(),title:q('gTitle').value.trim(),intro:q('gIntro').value.trim(),foot:q('gFoot').value.trim(),steps:[],updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
