@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>記念写真・成績表</title>
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#1f4a3d">
+<style>
+/* ゴルフの組ごとの記念写真・成績表。専用URLを知っている方（その組の方）だけが見られる。掲載期間が過ぎると見られない */
+:root{--bg:#e9efeb;--card:#fff;--ink:#1c2420;--ink2:#5b665f;--line:#d9e1dc;--accent:#1f4a3d;--accent2:#2f6b59;--gold:#b8955a;--err:#b42318}
+*{box-sizing:border-box}html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.75 -apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",Meiryo,sans-serif;-webkit-text-size-adjust:100%;
+  padding:max(20px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(32px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left))}
+#app{max-width:620px;margin:0 auto}
+.gh{display:flex;align-items:center;justify-content:center;gap:10px;color:var(--accent);font-weight:700;letter-spacing:.12em;margin:4px 0 16px}
+.gh img{width:40px;height:40px;border-radius:10px;box-shadow:0 1px 6px rgba(0,0,0,.18)}
+.gc{background:var(--card);border-radius:16px;box-shadow:0 8px 30px rgba(31,74,61,.14);overflow:hidden}
+.gc .band{height:6px;background:linear-gradient(90deg,var(--accent),var(--gold))}.gc .in{padding:22px 18px 24px}
+.eyebrow{margin:0;text-align:center;font-size:12px;font-weight:700;letter-spacing:.22em;color:var(--gold)}
+h1{margin:6px 0 4px;font-size:19px;text-align:center}.sub{text-align:center;color:var(--ink2);font-size:14px;margin:0 0 16px}
+h2{margin:18px 0 8px;font-size:15px;padding-bottom:6px;border-bottom:2px solid var(--accent)}
+.ph{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}.ph button{padding:0;border:0;background:#eef2ef;border-radius:10px;overflow:hidden;aspect-ratio:4/3;cursor:pointer;display:grid;place-items:center;color:var(--ink2);font-size:12px}
+.ph img{width:100%;height:100%;object-fit:cover;display:block}
+.pdf{display:flex;align-items:center;gap:10px;width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:#f7faf8;margin:0 0 8px;font:inherit;color:var(--ink);cursor:pointer;text-align:left}
+.pdf b{flex:1}.pdf span{font-size:13px;color:var(--accent);white-space:nowrap}
+.note{font-size:12.5px;color:var(--ink2);margin:10px 0 0;line-height:1.6}
+.tools{display:flex;gap:8px;flex-wrap:wrap}.tools button{flex:1;min-width:110px;padding:11px;border:1px solid #c5d0c9;border-radius:10px;background:#fff;color:var(--accent);font:inherit;cursor:pointer}
+.qr{text-align:center}.qr img{width:180px;height:180px;image-rendering:pixelated;border:1px solid #ddd;margin:10px auto 0;display:block}
+.box{padding:12px 14px;border-radius:10px;background:#fbf7ec;border:1px solid #eadfc2;font-size:14px}
+.sp{display:flex;flex-direction:column;align-items:center;gap:12px;padding:56px 0;color:var(--ink2);font-size:14px}
+.sp i{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+.vw{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px}
+.vw img{max-width:100%;max-height:80vh;border-radius:6px}.vw p{color:#ddd;font-size:13px;margin:10px 0}.vw button{border:1px solid #888;background:none;color:#fff;border-radius:10px;padding:10px 22px;font:inherit}
+</style>
+</head>
+<body>
+<div id="app"><div class="sp" role="status"><i></i>読み込み中…</div></div>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script>window.firebase||document.write('<script src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-app-compat.js"><\/script>')</script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>(window.firebase&&firebase.firestore)||document.write('<script src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-firestore-compat.js"><\/script>')</script>
+<script src="firebase-config.js"></script>
+<script src="core.js"></script>
+<script src="qr.js"></script>
+<script>
+(function(){
+'use strict';
+var app=document.getElementById('app'),C;
+var AM=/[?&]a=([A-HJ-NP-Z2-9]{12})(&|$)/.exec(location.search);
+var esc=function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})};
+var WD='日月火水木金土';
+function day(s){if(!s)return '';var p=s.split('-'),d=new Date(+p[0],+p[1]-1,+p[2]);return (+p[1])+'月'+(+p[2])+'日（'+WD[d.getDay()]+'）'}
+function page(inner){app.innerHTML='<div class="gh"><img src="apple-touch-icon.png" alt="" width="40" height="40"><span>レクサス鹿児島東開</span></div><main class="gc"><div class="band"></div><div class="in">'+inner+'</div></main>'}
+function msg(t,b){page('<h1>'+esc(t)+'</h1><p class="sub">'+esc(b)+'</p>')}
+function blobUrl(dataUrl){var m=/^data:([^;]+);base64,(.*)$/.exec(dataUrl);if(!m)return '';var bin=atob(m[2]),u=new Uint8Array(bin.length);for(var i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return URL.createObjectURL(new Blob([u],{type:m[1]}))}
+async function show(aid){
+  var A=null;
+  try{A=await C.getAlbum(aid)}catch(e){return msg('読み込めませんでした','電波の良い場所で、もう一度開いてください。')}
+  if(!A)return msg('このURLは無効です','URLをもう一度ご確認ください。');
+  if(A.expired||(A.expireAt&&A.expireAt.toMillis()<Date.now()))return msg('掲載期間が終了しました','この記念写真・成績表の掲載は終了しました。');
+  var files=A.files||[],ph=files.filter(function(f){return f.kind==='photo'}),pdf=files.filter(function(f){return f.kind==='pdf'}),exp=A.expireAt?A.expireAt.toMillis():0,url=location.origin+location.pathname+'?a='+aid;
+  var ed=new Date(exp),forever=ed.getFullYear()>=2100;
+  page('<p class="eyebrow">MEMORIES</p><h1>記念写真・成績表</h1><p class="sub">'+esc(A.ev)+'<br>'+esc(day(A.date))+'　'+esc(A.host)+' 様の組</p>'+
+    (pdf.length?'<h2>成績表</h2>'+pdf.map(function(f){return '<button class="pdf" data-p="'+f.id+'">📄 <b>'+esc(f.name)+'</b><span>開く</span></button>'}).join(''):'')+
+    (ph.length?'<h2>記念写真</h2><div class="ph">'+ph.map(function(f){return '<button data-i="'+f.id+'" aria-label="写真を大きく見る">読み込み中…</button>'}).join('')+'</div><p class="note">写真をタップすると大きく表示されます。長押しで保存できます。</p>':'')+
+    (!files.length?'<div class="box">まだ写真・成績表がありません。</div>':'')+
+    '<h2>同じ組の方に送る</h2><div class="tools"><button data-sh="line">LINEで送る</button><button data-sh="mail">メールで送る</button><button data-sh="copy">URLをコピー</button></div>'+
+    '<div class="qr" id="qr"></div><p class="note" style="text-align:center">QRコードを、その場で読み取ってもらうこともできます。</p>'+
+    (forever?'':'<p class="note" style="text-align:center">掲載は '+(ed.getMonth()+1)+'月'+ed.getDate()+'日 までです。必要な写真は、それまでに保存してください。</p>'));
+  try{document.getElementById('qr').innerHTML='<img alt="QRコード" src="'+QR.dataURL(url,6)+'">'}catch(e){}
+  var data={};
+  ph.forEach(function(f){C.albumData(f).then(function(d){if(!/^data:image\//.test(d))return;data[f.id]=d;var b=app.querySelector('[data-i="'+f.id+'"]');if(b)b.innerHTML='<img alt="記念写真" src="'+d.replace(/"/g,'')+'">'}).catch(function(){})});
+  app.onclick=async function(e){
+    var b=e.target.closest('button');if(!b)return;
+    if(b.dataset.i&&data[b.dataset.i]){var v=document.createElement('div');v.className='vw';v.innerHTML='<img alt="記念写真" src="'+data[b.dataset.i].replace(/"/g,'')+'"><p>長押しで保存できます</p><button>閉じる</button>';v.onclick=function(x){if(x.target.tagName!=='IMG')v.remove()};document.body.appendChild(v)}
+    else if(b.dataset.p){var f=pdf.filter(function(x){return x.id===b.dataset.p})[0],sp=b.querySelector('span'),w=window.open('','_blank');sp.textContent='読み込み中…';
+      try{var d=await C.albumData(f),u=blobUrl(d);if(!u)throw new Error('pdf');if(w)w.location.href=u;else location.href=u;sp.textContent='開く'}catch(x){if(w)w.close();sp.textContent='開けませんでした'}}
+    else if(b.dataset.sh){var E=encodeURIComponent,t='【記念写真・成績表】'+A.ev+'\n'+A.host+' 様の組の記念写真・成績表です。\n'+url+'\n\nレクサス鹿児島東開';
+      if(b.dataset.sh==='line')location.href='https://line.me/R/share?text='+E(t);
+      else if(b.dataset.sh==='mail')location.href='mailto:?subject='+E('【記念写真・成績表】'+A.ev)+'&body='+E(t);
+      else navigator.clipboard.writeText(url).then(function(){b.textContent='コピーしました'},function(){prompt('このURLをコピーしてください',url)})}
+  };
+}
+if(typeof firebase==='undefined'||typeof makeCore==='undefined')msg('読み込めませんでした','電波の良い場所で、もう一度開いてください。');
+else if(!AM)msg('このURLは無効です','URLをもう一度ご確認ください。');
+else{firebase.initializeApp(FIREBASE_CONFIG);var FDB=firebase.firestore();try{FDB.settings({experimentalAutoDetectLongPolling:true,merge:true})}catch(e){}C=makeCore(firebase,FDB);show(AM[1])}
+})();
+</script>
+</body>
+</html>

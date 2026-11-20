@@ -46,6 +46,7 @@ button:focus-visible{outline:2px solid var(--accent2);outline-offset:2px}
 .sp{display:flex;flex-direction:column;align-items:center;gap:12px;padding:56px 0;color:var(--ink2);font-size:14px}
 .sp i{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
+.alb{display:block;text-align:center;margin:0 0 16px;padding:12px;border-radius:10px;background:var(--accent);color:#fff;font-weight:700;text-decoration:none}
 .mem{list-style:none;padding:0;margin:6px 0}.mem li{padding:9px 12px;border:1px solid var(--line);border-radius:9px;margin:0 0 6px;font-size:14px;background:#fff}.mem .w{color:var(--ink2)}.mem .me{border-color:var(--accent)}
 .sample{margin:0 0 12px;text-align:center;font-size:12px;color:#8a5a00;background:#fff1d6;border-radius:8px;padding:4px 8px}
 @media (prefers-reduced-motion:reduce){.sp i{animation-duration:2.4s}}
@@ -119,6 +120,7 @@ TXT.add('お連れ様の入力ページ',{
  'gp.err.name':'お名前を入力してください','gp.err.mail':'メールアドレスを正しく入力してください',
  'gp.err.save':'保存できませんでした。もう一度お試しください。','gp.err.cancel':'取り消せませんでした。もう一度お試しください。',
  'gp.sample':'見本の表示です（保存されません）',
+ 'gp.album':'記念写真・成績表を見る',
  'gp.form.title.grp':'ご参加者様の情報',
  'gp.full.title':'ご入力は、すでに全員分が済んでいます','gp.full.body':'この組のお連れ様のご入力は、すべて完了しています。ご不明な点は、代表者の方にご確認ください。',
  'gp.mem.title':'この組のご参加者','gp.mem.host':'{name}（代表者）','gp.mem.person':'{name} 様','gp.mem.you':'（あなた）','gp.mem.wait':'お名前の入力待ち',
@@ -197,6 +199,7 @@ function show(g,state){
   else if(state==='canceled')viewCanceled(g);
   else viewForm(g);
   if(g.grp)loadMem(g.grp,g.id);
+  if(g.album&&!SM){var inn=app.querySelector('.in');if(inn)inn.insertAdjacentHTML('afterbegin','<a class="alb" href="album.html?a='+encodeURIComponent(g.album)+'">📷 '+esc(T('gp.album'))+'</a>')}   // 記念写真・成績表（その組の方だけ）
 }
 function viewFull(g){top();page('<h1>'+esc(T('gp.full.title'))+'</h1><p class="lead">'+esc(T('gp.full.body'))+'</p>');if(g&&g.grp)loadMem(g.grp,'')}
 // 同じ組のご参加者（お名前だけ）。その組のURLを持っている方だけが見られる

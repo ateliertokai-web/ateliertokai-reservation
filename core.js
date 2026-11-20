@@ -15,6 +15,7 @@ function makeCore(firebase, db, opts) {
   var FV = firebase.firestore.FieldValue;
   var events = db.collection('events'), slots = db.collection('slots'), res = db.collection('reservations'), apps = db.collection('applicants'), eimgs = db.collection('eventImages'), owners = db.collection('owners');
   var guests = db.collection('guests'), gmail = db.collection('guestMail'), groups = db.collection('guestGroups');
+  var albums = db.collection('albums'), afiles = db.collection('albumFiles');
 
   var fail = function (m) { return { ok: false, msg: m }; };
   var ok = function (x) { var o = { ok: true }; for (var k in (x || {})) o[k] = x[k]; return o; };
@@ -468,6 +469,61 @@ function makeCore(firebase, db, opts) {
     if (out.ok && mail) await gmail.doc(out.gid).set({ mail: mail, eid: gs.data().eid, updatedAt: FV.serverTimestamp() });
     return out;
   }
+
+  /* ---------- ゴルフ: 組ごとの記念写真・成績表（アルバム） ----------
+     albums/{id}：組の情報と、ファイルの一覧（中身は持たない）。albumFiles/{id}：ファイルの中身（文字にした画像・PDFを分割）。
+     どちらも掲載期限（expireAt）を過ぎると、管理者以外は読めない。作る・直す・消すのは管理者だけ */
+  var PART = 700000;
+  function idOk(id) { return /^[A-HJ-NP-Z2-9]{12}$/.test(id || ''); }
+  async function getAlbum(aid) {
+    if (!idOk(aid)) return null;
+    try { var s = await albums.doc(aid).get(); return s.exists ? Object.assign({ id: aid }, s.data()) : null; }
+    catch (e) { if (e && e.code === 'permission-denied') return { id: aid, expired: true }; throw e; }
+  }
+  async function albumData(f) {
+    var out = '';
+    for (var i = 0; i < (f.parts || []).length; i++) { var s = await afiles.doc(f.parts[i]).get(); out += s.exists ? (s.data().d || '') : ''; }
+    return out;
+  }
+  // 管理者：ファイル（data URL）を分けて保存し、アルバムの一覧に足す
+  async function albumAdd(aid, base, file, dataUrl) {
+    var exp = base.expireAt, parts = [];
+    for (var i = 0; i < dataUrl.length; i += PART) { var pid = newId(); await afiles.doc(pid).set({ aid: aid, i: parts.length, d: dataUrl.slice(i, i + PART), expireAt: exp }); parts.push(pid); }
+    var cur = await albums.doc(aid).get(), files = cur.exists ? (cur.data().files || []) : [];
+    files.push(Object.assign({ id: newId(), parts: parts }, file));
+    var doc = Object.assign({}, base, { files: files, updatedAt: FV.serverTimestamp() });
+    if (!cur.exists) doc.createdAt = FV.serverTimestamp();
+    await albums.doc(aid).set(doc, { merge: true });
+    return files;
+  }
+  async function albumRemoveFile(aid, fileId) {
+    var cur = await albums.doc(aid).get(); if (!cur.exists) return [];
+    var files = cur.data().files || [], f = files.filter(function (x) { return x.id === fileId; })[0];
+    if (f) for (var i = 0; i < f.parts.length; i++) await afiles.doc(f.parts[i]).delete();
+    files = files.filter(function (x) { return x.id !== fileId; });
+    await albums.doc(aid).update({ files: files, updatedAt: FV.serverTimestamp() });
+    return files;
+  }
+  async function albumSetExpire(aid, exp) {
+    var cur = await albums.doc(aid).get(); if (!cur.exists) return;
+    var ops = [function (b) { b.update(albums.doc(aid), { expireAt: exp, updatedAt: FV.serverTimestamp() }); }];
+    (cur.data().files || []).forEach(function (f) { f.parts.forEach(function (p) { ops.push(function (b) { b.update(afiles.doc(p), { expireAt: exp }); }); }); });
+    await chunked(ops);
+  }
+  async function albumDelete(aid) {
+    var cur = await albums.doc(aid).get(); if (!cur.exists) return;
+    var d = cur.data(), ops = [];
+    (d.files || []).forEach(function (f) { f.parts.forEach(function (p) { ops.push(function (b) { b.delete(afiles.doc(p)); }); }); });
+    (d.gids || []).forEach(function (g) { ops.push(function (b) { b.update(guests.doc(g), { album: FV.delete() }); }); });
+    ops.push(function (b) { b.delete(albums.doc(aid)); });
+    try { await chunked(ops); } catch (e) { for (var i = 0; i < ops.length; i++) { try { var bb = db.batch(); ops[i](bb); await bb.commit(); } catch (x) {} } }
+  }
+  // 掲載期限を過ぎたアルバムを、まとめて消す（管理画面を開いたときに実行）
+  async function albumCleanup() {
+    var s = await albums.where('expireAt', '<', new Date()).get(), n = 0;
+    for (var i = 0; i < s.docs.length; i++) { await albumDelete(s.docs[i].id); n++; }
+    return n;
+  }
   async function getGuest(gid) {
     if (!/^[A-HJ-NP-Z2-9]{12}$/.test(gid || '')) return null;
     var s = await guests.doc(gid).get();
@@ -514,7 +570,7 @@ function makeCore(firebase, db, opts) {
     await guests.doc(g.id).update({ name: String(name || '').trim().slice(0, 50), updatedAt: FV.serverTimestamp() });
   }
 
-  return { syncParticipants: syncParticipants, makeInvite: makeInvite, makeGroup: makeGroup, getGroup: getGroup, claimGuest: claimGuest, getGuest: getGuest, saveGuest: saveGuest, cancelGuest: cancelGuest, renameGuest: renameGuest, guests: guests, gmail: gmail, getDupTels: getDupTels, setDupTels: setDupTels,
+  return { syncParticipants: syncParticipants, makeInvite: makeInvite, makeGroup: makeGroup, getAlbum: getAlbum, albumData: albumData, albumAdd: albumAdd, albumRemoveFile: albumRemoveFile, albumSetExpire: albumSetExpire, albumDelete: albumDelete, albumCleanup: albumCleanup, albums: albums, afiles: afiles, getGroup: getGroup, claimGuest: claimGuest, getGuest: getGuest, saveGuest: saveGuest, cancelGuest: cancelGuest, renameGuest: renameGuest, guests: guests, gmail: gmail, getDupTels: getDupTels, setDupTels: setDupTels,
     book: book, lookup: lookup, cancel: cancel, change: change, promote: promote, runLottery: runLottery, recount: recount,
     findByOwner: findByOwner, normOwner: normOwner, owners: owners, scrubApplicants: scrubApplicants, migrateInvited: migrateInvited,
     createSlots: createSlots, makeTimes: makeTimes, deleteEvent: deleteEvent, newId: newId, normMail: normMail, isFixed: isFixed, ms: ms,
