@@ -48,7 +48,13 @@ var esc=function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){r
 var q=function(id){return document.getElementById(id)};
 var WD='日月火水木金土';
 function day(s){var p=s.split('-'),d=new Date(+p[0],+p[1]-1,+p[2]);return (+p[1])+'月'+(+p[2])+'日（'+WD[d.getDay()]+'）'}
-function rng(s){return s.start==='00:00'&&s.end==='24:00'?T('終日'):s.start+'〜'+s.end}
+function rng(s){return s.start==='00:00'&&s.end==='24:00'?T('終日')+meetTxt():s.start+'〜'+s.end}
+// 終日の枠：イベントに「集合・開始」「終了の目安」があれば、添える（例：終日（集合 9:00）)
+function meetTxt(){var e=S.ev||{},a=e.meetAt||'',z=e.untilAt||'';if(!a&&!z)return '';return '（'+(a?T('集合')+' '+a.replace(/^0/,''):'')+(a&&z?'・':'')+(z?z.replace(/^0/,'')+' '+T('終了予定'):'')+'）'}
+// 開催場所と、Googleマップを開くボタン
+function placeName(e){var p=e&&e.place;return p==='kt'?T('レクサス鹿児島東開'):p==='sd'?T('CPO川内'):p==='ot'?(e.placeName||''):''}
+function placeHTML(e){var n=placeName(e);if(!n)return '';var qy=(e.placeAddr||'').trim()||n;
+  return '<p class="place">📍 '+esc(n)+' <a href="https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(qy)+'" target="_blank" rel="noopener">'+T('Googleマップで開く')+'</a></p>'}
 function fmtCode(id){return id.replace(/(.{4})(?=.)/g,'$1-')}
 function dl(ev){return ev.deadlineMs?new Date(ev.deadlineMs).toLocaleString('ja-JP',{month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'}):''}
 function opts(a,b,sel){var o='';for(var i=a;i<=b;i++)o+='<option'+(i===sel?' selected':'')+'>'+i+'</option>';return o}
@@ -224,7 +230,7 @@ async function pickSlot(){
     var snap=await tmo(C.slots.where('eventId','==',S.ev.id).get());
     S.slots=snap.docs.map(function(d){return Object.assign({id:d.id},d.data())}).sort(function(a,b){return (a.date+a.start)<(b.date+b.start)?-1:1});
   }catch(e){app.innerHTML=('<div class="card err">'+T('読み込めませんでした。電波の良い場所で、もう一度お試しください。')+'<br><button class="s" id="rt" style="margin-top:10px">'+T('もう一度読み込む')+'</button></div>');var rt=q('rt');if(rt)rt.onclick=pickSlot;return}
-  var ev=S.ev,h=('<button class="l" id="bk">'+T('← イベント一覧へ')+'</button><h2>')+esc(ev.name)+'<small>'+(ev.method==='抽選'?(T('抽選のお申し込みです（締切')+' ')+dl(ev)+'）':T('先着順のお申し込みです'))+'</small></h2>';
+  var ev=S.ev,h=('<button class="l" id="bk">'+T('← イベント一覧へ')+'</button><h2>')+esc(ev.name)+'<small>'+(ev.method==='抽選'?(T('抽選のお申し込みです（締切')+' ')+dl(ev)+'）':T('先着順のお申し込みです'))+'</small></h2>'+placeHTML(ev);
   if(PV&&realTest(ev))h+='<div class="box" style="border-color:#c0392b"><b>準備中のイベントです。</b>ここでの予約・変更・キャンセルは<b>本当に保存</b>されます（お客様には見えません）。試し終わったら、管理画面でこのイベントを削除するか、予約を取り消してください。</div>';
   if(ev.msg)h+='<div class="box">'+esc(ev.msg).replace(/\n/g,'<br>')+'</div>';
   if(ev.imgN>0){h+=(ev.thumb?'<img class="gthumb" id="gt" src="'+esc(ev.thumb)+'" alt="">':'')+('<div id="gal"><button class="s" id="gb">'+T('写真・パンフレットを見る（'))+ev.imgN+(T('枚）')+'</button></div>')}
@@ -257,7 +263,7 @@ function formView(){
   var ev=S.ev,s=S.slot,r=S.rec||{},edit=S.mode==='edit',car=r.car||{},max=s.maxPer;
   var stores=r.stores||[];
   var h=(edit?('<button class="l" id="bk">'+T('← 戻る')+'</button>'):('<button class="l" id="bk">'+T('← 日時を選び直す')+'</button>'))+
-   '<h2>'+esc(ev.name)+'<small>'+day(s.date)+' '+rng(s)+'</small></h2>';
+   '<h2>'+esc(ev.name)+'<small>'+day(s.date)+' '+rng(s)+'</small></h2>'+placeHTML(ev);
   if(ev.msg)h+='<div class="box">'+esc(ev.msg).replace(/\n/g,'<br>')+'</div>';
   if(!edit&&ev.method==='抽選')h+=('<p class="box">'+T('抽選のお申し込みです。'))+dl(ev)+(T('に締め切ります。結果は「ご予約の確認・変更」で、予約番号とメールアドレスを入力してご確認ください。')+'</p>');
   if(!edit&&ev.method!=='抽選'&&((s.capG&&(s.booked||0)>=s.capG)||(s.capP&&(s.people||0)>=s.capP)))h+=('<p class="box">'+T('この枠は満席です。キャンセル待ちとして受け付けます。空きが出た場合は、店舗からご連絡します。')+'</p>');
@@ -418,7 +424,7 @@ function doneView(r,d,gn){
   top();
   var s=S.slot,ev=S.ev;
   var msg=r.status==='confirmed'?T('ご予約が完了しました。'):r.status==='wait'?T('キャンセル待ちとして受け付けました（')+r.waitNo+T('番目）。空きが出た場合は、店舗からご連絡します。'):T('抽選のお申し込みを受け付けました。');
-  app.innerHTML='<h2>'+msg+'</h2><div class="card"><b>'+esc(ev.name)+'</b><br>'+day(s.date)+' '+rng(s)+'<br>'+esc(d.name)+(' '+T('様')+'　')+(d.a+d.k+d.s+d.m)+(T('名')+'</div>')+
+  app.innerHTML='<h2>'+msg+'</h2><div class="card"><b>'+esc(ev.name)+'</b><br>'+day(s.date)+' '+rng(s)+'<br>'+esc(d.name)+(' '+T('様')+'　')+(d.a+d.k+d.s+d.m)+(T('名')+'</div>')+placeHTML(ev)+
    ('<p class="note" style="margin:14px 0 0">'+T('予約番号（変更・キャンセル'))+(ev.method==='抽選'?T('・抽選結果の確認'):'')+(T('に必要です）')+'</p><div class="code">')+fmtCode(r.id)+'</div>'+
    ('<div class="box">'+T('この予約番号は、この端末のトップ画面「あなたの予約」にも表示されます。別の端末で確認する場合に備えて、スクリーンショットを保存するか、予約番号をメモしてください。予約確認のメールは送信されません。')+'</div>')+
    keepHTML({mail:d.mail})+(PV&&realTest(ev)?'<button class="p" id="tr" style="margin-top:14px">この予約を開いて、変更・キャンセルを試す</button>':'')+
@@ -515,7 +521,7 @@ function detailView(){
   top();
   var r=S.rec,can=r.status!=='cancel'&&r.status!=='lost';
   var h=('<button class="l" id="bk">'+T('← トップへ')+'</button><h2>'+T('ご予約内容')+'</h2>')+(S.msg?'<div class="box">'+esc(S.msg)+'</div>':'')+
-   '<div class="card"><div>'+stBadge(r)+'</div><p style="margin:8px 0 0"><b>'+esc(r.eventName)+'</b><br>'+day(r.date)+' '+rng(r)+'<br>'+esc(r.name)+(' '+T('様')+'　')+r.n+(T('名')+'<br><span class="note">'+T('予約番号')+' ')+fmtCode(r.id)+'</span></p></div>';
+   '<div class="card"><div>'+stBadge(r)+'</div><p style="margin:8px 0 0"><b>'+esc(r.eventName)+'</b><br>'+day(r.date)+' '+rng(r)+'<br>'+esc(r.name)+(' '+T('様')+'　')+r.n+(T('名')+'<br><span class="note">'+T('予約番号')+' ')+fmtCode(r.id)+'</span></p></div>'+placeHTML(S.ev);
   if(r.status==='wait')h+=('<div class="box">'+T('キャンセル待ちです。空きが出た場合は、店舗からご連絡します。')+'</div>');
   if(r.status==='lottery')h+=('<div class="box">'+T('抽選結果は、締切後にこの画面で確認できます。')+'</div>');
   if(r.status==='lost')h+=('<div class="box">'+T('今回は抽選の結果、ご案内できませんでした。')+'</div>');

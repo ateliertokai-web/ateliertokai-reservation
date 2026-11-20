@@ -336,6 +336,12 @@ function makeCore(firebase, db, opts) {
   // 時間枠の作成。minutes ごとに区切り、休憩時間は除く。allday なら終日1枠
   function makeTimes(o) {
     if (o.allday) return [['00:00', '24:00']];
+    // 管理画面の時間割ビルダー：つくる枠の時刻を、そのまま受け取る（[['10:00','12:00'], ...]）
+    if (o.times && o.times.length) {
+      var ok = o.times.filter(function (t) { return t && /^\d\d:\d\d$/.test(t[0]) && /^\d\d:\d\d$/.test(t[1]) && t[0] < t[1]; });
+      var u = {}; ok = ok.filter(function (t) { var k = t[0] + '-' + t[1]; if (u[k]) return false; u[k] = 1; return true; });
+      return ok.sort(function (p, q) { return p[0] < q[0] ? -1 : p[0] > q[0] ? 1 : 0; });
+    }
     var toM = function (t) { var p = t.split(':'); return +p[0] * 60 + +p[1]; };
     var fmt = function (m) { return ('0' + Math.floor(m / 60)).slice(-2) + ':' + ('0' + (m % 60)).slice(-2); };
     var bs = o.bstart ? toM(o.bstart) : null, be = o.bend ? toM(o.bend) : null;
