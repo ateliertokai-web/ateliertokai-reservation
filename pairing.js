@@ -10,13 +10,17 @@
     ['#f9fbe7', '#9e9d24'], ['#fbe9e7', '#e64a19'], ['#eceff1', '#546e7a'], ['#f3e5f5', '#8e24aa'], ['#e0f2f1', '#00897b'], ['#fffde7', '#f9a825']];
   var NONE = ['#f7f6f2', '#9b958a'], CAP = 4, EXCEL = 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js', FONT = 'レクサスロダン Pro L';
   var WD = '日月火水木金土';
-  function staffOf(r) { var st = r.staff || {}; return (r.stores || Object.keys(st)).filter(function (k) { return st[k]; }).map(function (k) { return { store: k.replace('鹿児島', ''), name: st[k], key: k + ':' + st[k] }; }); }
+  function staffOf(r, ed) { var st = Object.assign({}, r.staff || {}, (ed && ed.s) || {}); return (r.stores || Object.keys(st)).filter(function (k) { return st[k]; }).map(function (k) { return { store: k.replace('鹿児島', ''), name: st[k], key: k + ':' + st[k] }; }); }
   function fw(n) { return String(n || '').trim().replace(/\s+/g, '　'); }   // 氏名の間は全角スペース（表の見た目をそろえる）
-  function players(r, gs) {
+  // 参加者1（代表者）は、自動でオーナー。ed（組み合わせ表での手直し）があれば、名前・オーナーを上書き
+  function players(r, gs, ed) {
     var out = [], inv = r.inv || {}, ps = r.participants || [], lx = r.lexus || [];
     for (var i = 0; i < r.n; i++) {
       var g = inv[i + 1] ? gs[inv[i + 1]] : null, gok = g && !g.cx;
-      out.push({ name: (gok && g.name) || ps[i] || (i === 0 ? r.name : ''), own: !!lx[i] || !!(gok && g.own), guest: !!g, host: i === 0 });
+      var p = { name: (gok && g.name) || ps[i] || (i === 0 ? r.name : ''), own: i === 0 || !!lx[i] || !!(gok && g.own), guest: !!g, host: i === 0, edited: false };
+      if (ed && ed.n && ed.n[i] != null) { p.name = ed.n[i]; p.edited = true; }
+      if (ed && ed.o && ed.o[i] != null) { p.own = !!ed.o[i]; p.edited = true; }
+      out.push(p);
     }
     return out;
   }
@@ -45,6 +49,8 @@
       '.pair .ctab{display:flex;gap:6px;margin:4px 0 10px}.pair .ctab button{flex:1;padding:9px;border:1px solid #d9d2c1;background:#fff;border-radius:9px;font:inherit;font-weight:700;cursor:pointer}.pair .ctab button.on{background:#111;color:#e8c872;border-color:#111}' +
       '.pair .cols{display:grid;grid-template-columns:minmax(0,1fr);gap:14px}.pair .ch{display:flex;gap:6px;align-items:baseline;margin:0 0 6px}.pair .ch b{font-size:15px}.pair.v-OUT .cs-IN,.pair.v-IN .cs-OUT{display:none}' +
       '@media(min-width:1200px){.pair .ctab{display:none}.pair.v-OUT .cs-IN,.pair.v-IN .cs-OUT{display:block}.pair .cols{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.pair .bd{grid-template-columns:minmax(0,1fr) 250px}.pair table.pt{min-width:0}.pair .pt .no{width:40px;font-size:12px}.pair .pt .tm{width:64px}.pair .pt .tm input{width:60px;font-size:12.5px}.pair .pt td.nm{font-size:12.5px}.pair .pt .ex{width:22px}.pair .pt td.nm .g{display:none}.pair .pt th{font-size:10px;letter-spacing:-.03em}}' +
+      '.pair .pt td.nm .ed{position:absolute;right:1px;top:0;border:0;background:none;color:#8a8478;font-size:12px;cursor:pointer;padding:1px 3px;opacity:.55}.pair .pt td.nm:hover .ed{opacity:1}.pair .pt td.nm.edt{outline:1px dashed #8a5a00;outline-offset:-2px}.pair .sc .ed2{margin-left:auto;font-size:13px;border:0;background:none;cursor:pointer}.pair .sc .a .w{margin-left:0}' +
+      '.edm{position:fixed;inset:0;z-index:9500;background:rgba(0,0,0,.45);display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:14px}.edm .in{background:#fff;border-radius:12px;max-width:460px;width:100%;padding:14px}.edm h3{margin:0 0 4px;font-size:15px}.edm .er{display:flex;gap:8px;align-items:center;margin:6px 0}.edm .en{min-width:5.2em;font-size:12px;color:#6b665d}.edm .er input[type=text],.edm .er select{flex:1;min-width:0;padding:7px;border:1px solid #d9d2c1;border-radius:7px;font:inherit}.edm .eo{display:flex;gap:4px;align-items:center;font-size:13px;white-space:nowrap}.edm .tools{display:flex;gap:8px;flex-wrap:wrap}.edm .s{padding:8px 14px;border:1px solid #d9d2c1;background:#fff;border-radius:8px;font:inherit;cursor:pointer}.edm .sv{background:#111;color:#e8c872;border-color:#111}' +
       '.pair .tip{font-size:12px;color:#6b665d;padding:6px 12px 0}.pair .ghost{position:fixed;z-index:9999;pointer-events:none;opacity:.9;background:#fff;border:2px solid #111;border-radius:8px;padding:4px 8px;font-size:13px;box-shadow:0 6px 18px rgba(0,0,0,.25)}';
     document.head.appendChild(s);
   }
@@ -58,20 +64,27 @@
     var ref = firebase.firestore().collection('pairings').doc(ev.id);
     var live = rs.filter(function (r) { return r.status === 'confirmed' || r.status === 'won'; });
     var byId = {}; live.forEach(function (r) { byId[r.id] = r; });
-    var colors = {}, ci = 0, keys = [];
-    live.forEach(function (r) { staffOf(r).forEach(function (s) { if (keys.indexOf(s.key) < 0) keys.push(s.key); }); });
-    keys.sort().forEach(function (k) { colors[k] = PAL[ci++ % PAL.length]; });
-    function col(r) { var s = staffOf(r)[0]; return s ? colors[s.key] : NONE; }
+    var edits = {}, colors = {}, keys = [];   // edits：組み合わせ表での手直し（予約そのものは変えない）{予約番号: {n:{番号:名前}, o:{番号:オーナー}, s:{店舗:担当}}}
+    function pls(r) { return players(r, gs, edits[r.id]); }
+    function stf(r) { return staffOf(r, edits[r.id]); }
+    function buildColors() {
+      var ci = 0, ks = [], old = colors; keys = []; colors = {};
+      live.forEach(function (r) { stf(r).forEach(function (s) { if (ks.indexOf(s.key) < 0) ks.push(s.key); }); });
+      keys = ks.sort(); keys.forEach(function (k) { colors[k] = PAL[ci++ % PAL.length]; });
+    }
+    function col(r) { var s = stf(r)[0]; return s ? colors[s.key] : NONE; }
     var firstDate = live.map(function (r) { return r.date; }).filter(Boolean).sort()[0] || '';
     var meta = { title: 'レクサス鹿児島東開　' + (ev.name || ''), date: reiwa(firstDate), course: ev.place === 'ot' ? (ev.placeName || '') : '', tel: '' };
     var rows = [], dirty = false, sel = '', dropped = 0, view = 'OUT', tm = { OUT: { t0: '07:12', iv: 7 }, IN: { t0: '07:12', iv: 7 } };   // tm：OUT・INそれぞれの最初の時刻と間隔
     try {
       var d = await ref.get();
       if (d.exists) {
-        var D0 = d.data(); if (D0.meta) meta = Object.assign(meta, D0.meta); if (D0.tm) tm = { OUT: Object.assign(tm.OUT, D0.tm.OUT || {}), IN: Object.assign(tm.IN, D0.tm.IN || {}) }; else if (D0.t0) { tm.OUT.t0 = D0.t0; tm.OUT.iv = D0.iv || 7; }
+        var D0 = d.data(); if (D0.meta) meta = Object.assign(meta, D0.meta); if (D0.edits && typeof D0.edits === 'object') edits = D0.edits;
+        if (D0.tm) tm = { OUT: Object.assign(tm.OUT, D0.tm.OUT || {}), IN: Object.assign(tm.IN, D0.tm.IN || {}) }; else if (D0.t0) { tm.OUT.t0 = D0.t0; tm.OUT.iv = D0.iv || 7; }
         rows = (D0.rows || []).map(function (x) { return { id: x.id || C.newId(), time: x.time || '', course: x.course || 'OUT', items: (x.items || []).filter(function (id) { if (byId[id]) return true; dropped++; return false; }) }; });
       }
     } catch (e) { say('組み合わせ表を読み込めませんでした: ' + (e.code === 'permission-denied' ? 'Firestoreのルールに「pairings」の設定がまだありません。最新のルールを公開してください' : e.message)); return; }
+    buildColors();
     var seen = {}; rows.forEach(function (x) { x.items = x.items.filter(function (id) { if (seen[id]) return false; seen[id] = 1; return true; }); });
     if (!rows.length) { var tot = live.reduce(function (a, r) { return a + r.n; }, 0), nr = Math.max(5, Math.ceil(tot / CAP) + 1); for (var k = 0; k < nr; k++) rows.push({ id: C.newId(), time: m2t(t2m(tm.OUT.t0) + k * tm.OUT.iv), course: 'OUT', items: [] }); }
     var wrap = document.createElement('div'); wrap.className = 'pair'; document.body.appendChild(wrap);
@@ -82,10 +95,10 @@
     function cnt(c) { return rows.filter(function (x) { return crs(x) === c; }).length; }
     function newRow(c) { var mine = rows.filter(function (x) { return crs(x) === c; }), last = mine[mine.length - 1], t = last && !isNaN(t2m(last.time)) ? m2t(t2m(last.time) + tm[c].iv) : (mine.length ? '' : tm[c].t0); return { id: C.newId(), time: t, course: c, items: [] }; }
     function nOf(x) { return x.items.reduce(function (a, id) { return a + byId[id].n; }, 0); }
-    function cells(x) { var out = []; x.items.forEach(function (id) { players(byId[id], gs).forEach(function (p) { out.push({ p: p, r: byId[id] }); }); }); return out; }
+    function cells(x) { var out = []; x.items.forEach(function (id) { pls(byId[id]).forEach(function (p) { out.push({ p: p, r: byId[id] }); }); }); return out; }
     function sideHTML() {
       var w = where(), groups = {}, order = keys.slice();
-      live.forEach(function (r) { var s = staffOf(r)[0], k = s ? s.key : ''; (groups[k] = groups[k] || []).push(r); });
+      live.forEach(function (r) { var s = stf(r)[0], k = s ? s.key : ''; (groups[k] = groups[k] || []).push(r); });
       if (groups['']) order.push('');
       var left = live.filter(function (r) { return w[r.id] == null; }).length;
       return '<h3>担当者ごとの組・オーナー（未配置 ' + left + ' / ' + live.length + '組）</h3><button type="button" class="back" data-put="pool">選んだ組を、表から外す</button>' +
@@ -93,8 +106,8 @@
           var c = k ? colors[k] : NONE, list = (groups[k] || []).sort(function (a, b) { return (w[a.id] == null ? -1 : w[a.id]) - (w[b.id] == null ? -1 : w[b.id]); });
           return '<div class="sg"><span class="sh" style="background:' + c[1] + '">' + esc(k ? k.replace('鹿児島', '').replace(':', '：') : '担当なし') + '（' + list.length + '）</span>' +
             list.map(function (r) {
-              var ps = players(r, gs), ow = ps.filter(function (p) { return p.own; });
-              return '<div class="sc' + (w[r.id] != null ? ' done' : '') + (sel === r.id ? ' on' : '') + '" data-r="' + r.id + '" style="border-color:' + c[1] + ';background:' + c[0] + '"><div class="a"><b>' + esc(r.name) + '</b><span>' + r.n + '名</span><span class="w">' + (w[r.id] != null ? lab(w[r.id]) : '未配置') + '</span></div>' +
+              var ps = pls(r), ow = ps.filter(function (p) { return p.own; });
+              return '<div class="sc' + (w[r.id] != null ? ' done' : '') + (sel === r.id ? ' on' : '') + '" data-r="' + r.id + '" style="border-color:' + c[1] + ';background:' + c[0] + '"><div class="a"><b>' + esc(r.name) + '</b><span>' + r.n + '名</span><button type="button" class="ed ed2" data-edit="' + r.id + '" title="名前・担当・オーナーを手直し">✎</button><span class="w">' + (w[r.id] != null ? lab(w[r.id]) : '未配置') + '</span></div>' +
                 (ow.length ? '<div class="o">★' + ow.map(function (p) { return esc(p.name || '（未入力）'); }).join('・★') + '</div>' : '') + (r.note ? '<div class="nt">備考：' + esc(r.note) + '</div>' : '') + '</div>';
             }).join('') + '</div>';
         }).join('');
@@ -112,7 +125,7 @@
             var cl = cs[j];
             if (!cl) { td += '<td class="nm em"></td>'; continue; }
             var cc = col(cl.r);
-            td += '<td class="nm' + (j >= CAP ? ' over' : '') + (sel === cl.r.id ? ' on' : '') + '" data-r="' + cl.r.id + '" style="background:' + cc[0] + ';box-shadow:inset 0 -3px 0 ' + cc[1] + '">' + (cl.p.own ? '<span class="ow">★</span>' : '') + esc(fw(cl.p.name) || '（未入力）') + (cl.p.guest && cl.p.name ? '<span class="g">お連れ様入力</span>' : '') + '</td>';
+            td += '<td class="nm' + (j >= CAP ? ' over' : '') + (sel === cl.r.id ? ' on' : '') + (cl.p.edited ? ' edt' : '') + '" data-r="' + cl.r.id + '" style="background:' + cc[0] + ';box-shadow:inset 0 -3px 0 ' + cc[1] + '"><button type="button" class="ed" data-edit="' + cl.r.id + '" title="名前・担当・オーナーを手直し">✎</button>' + (cl.p.own ? '<span class="ow">★</span>' : '') + esc(fw(cl.p.name) || '（未入力）') + (cl.p.guest && cl.p.name ? '<span class="g">お連れ様入力</span>' : '') + '</td>';
           }
           return '<tr data-row="' + i + '"><td class="no">' + numOf(i) + '組<button type="button" class="put" data-put="' + i + '">ここに入れる</button></td><td class="tm"><input type="time" data-f="time" data-i="' + i + '" value="' + esc(x.time) + '"></td>' + td +
             '<td class="ex">' + (nOf(x) > CAP ? '<span title="4名をこえています" style="color:#c0392b">!</span>' : '') + '<button type="button" data-del="' + i + '" title="この組（行）を削除">×</button></td></tr>';
@@ -130,14 +143,56 @@
       var sx2 = wrap.querySelector('.side'); if (sx2) sx2.scrollTop = sy; wrap.scrollTop = py;
     }
     function mark() { dirty = true; var b = wrap.querySelector('[data-a=save]'); if (b) { b.classList.add('dirty'); b.textContent = '保存する（未保存）'; } }
+    // 組（予約）を行へ移す。1行は4名まで：こえるときは入れられず、「入れ替えますか？」で、移動元と移動先を入れ替える
     function moveTo(rid, z) {
+      var r = byId[rid], src = rows.filter(function (x) { return x.items.indexOf(rid) >= 0; })[0];
+      if (z !== 'pool' && rows[+z]) {
+        var tgt = rows[+z];
+        if (tgt === src) { sel = ''; return draw(); }
+        if (tgt.items.length && nOf(tgt) + r.n > CAP) {
+          var cand = tgt.items.filter(function (id) { var o = byId[id]; return nOf(tgt) - o.n + r.n <= CAP && (!src || nOf(src) - r.n + o.n <= CAP); })[0];
+          if (!cand) { alert(lab(+z) + 'は、すでに' + nOf(tgt) + '名のため、' + r.name + ' 様の組（' + r.n + '名）は入れられません。入れ替えできる組もありません。人数の合う行を選んでください。'); return; }
+          var o = byId[cand];
+          if (!confirm(lab(+z) + 'は、すでに' + nOf(tgt) + '名のため、' + r.name + ' 様の組（' + r.n + '名）は入れられません。\n\n' + o.name + ' 様の組（' + o.n + '名）と入れ替えますか？\n（' + r.name + ' 様 ⇔ ' + o.name + ' 様）')) return;
+          tgt.items = tgt.items.filter(function (id) { return id !== cand; });
+          if (src) src.items = src.items.map(function (id) { return id === rid ? cand : id; });
+          tgt.items.push(rid); sel = ''; dirty = true; return draw();
+        }
+      }
       rows.forEach(function (x) { x.items = x.items.filter(function (id) { return id !== rid; }); });   // 元の行からは外す（左に詰まる）
       if (z !== 'pool' && rows[+z]) rows[+z].items.push(rid);
       sel = ''; dirty = true; draw();
     }
+    // 名前・担当・オーナーの手直し（組み合わせ表の中だけ。予約そのものは変わらない）
+    function editor(rid) {
+      var r = byId[rid], ps = players(r, gs, null), cur = pls(r), ed = edits[rid] || {}, stores = (r.stores && r.stores.length ? r.stores : Object.keys(r.staff || {})), ST = (root.RV && root.RV.STORES) || {};
+      var m = document.createElement('div'); m.className = 'edm';
+      m.innerHTML = '<div class="in"><h3>' + esc(r.name) + ' 様の組（' + r.n + '名）を手直し</h3><p class="note">組み合わせ表の中だけの手直しです（予約の内容は変わりません）。「未入力」の名前も、ここで入れられます。</p>' +
+        cur.map(function (p, i) { return '<div class="er"><span class="en">' + (i + 1) + (p.host ? '（代表者）' : p.guest ? '（お連れ様）' : '') + '</span><input type="text" data-en="' + i + '" maxlength="40" value="' + esc(p.name) + '" placeholder="お名前"><label class="eo"><input type="checkbox" data-eo="' + i + '"' + (p.own ? ' checked' : '') + '>★オーナー</label></div>'; }).join('') +
+        '<div class="er"><b>担当スタッフ</b></div>' + (stores.length ? stores.map(function (k) {
+          var now = ((r.staff || {})[k] || ''), val = (ed.s && ed.s[k] != null) ? ed.s[k] : now, opts = (ST[k] || []).slice(); if (val && opts.indexOf(val) < 0) opts.unshift(val);
+          return '<div class="er"><span class="en">' + esc(k.replace('鹿児島', '')) + '</span><select data-es="' + esc(k) + '"><option value="">（担当なし）</option>' + opts.map(function (n) { return '<option' + (n === val ? ' selected' : '') + '>' + esc(n) + '</option>'; }).join('') + '</select></div>';
+        }).join('') : '<p class="note">この予約には、利用店舗が入っていません。</p>') +
+        '<div class="tools" style="margin-top:12px"><button type="button" class="s sv" data-e="ok">適用する</button><button type="button" class="s" data-e="rs">元に戻す</button><button type="button" class="s" data-e="cl">閉じる</button></div></div>';
+      wrap.appendChild(m);
+      m.addEventListener('click', function (e) {
+        var b = e.target.closest('[data-e]'); if (e.target === m) return m.remove(); if (!b) return;
+        if (b.dataset.e === 'cl') return m.remove();
+        if (b.dataset.e === 'rs') { delete edits[rid]; buildColors(); dirty = true; m.remove(); return draw(); }
+        var o = { n: {}, o: {}, s: {} };
+        ps.forEach(function (p, i) {
+          var nm = m.querySelector('[data-en="' + i + '"]').value.trim(), ow = m.querySelector('[data-eo="' + i + '"]').checked;
+          if (nm !== p.name) o.n[i] = nm; if (ow !== p.own) o.o[i] = ow;
+        });
+        m.querySelectorAll('[data-es]').forEach(function (sl) { var k = sl.dataset.es, orig = (r.staff || {})[k] || ''; if (sl.value !== orig) o.s[k] = sl.value; });
+        ['n', 'o', 's'].forEach(function (k) { if (!Object.keys(o[k]).length) delete o[k]; });
+        if (Object.keys(o).length) edits[rid] = o; else delete edits[rid];
+        buildColors(); dirty = true; m.remove(); draw();
+      });
+    }
     function close() { if (dirty && !confirm('組み合わせ表の変更が、まだ保存されていません。保存せずに閉じますか？')) return; wrap.remove(); document.removeEventListener('pointermove', pm); document.removeEventListener('pointerup', pu); }
     async function save() {
-      try { await ref.set({ eid: ev.id, meta: meta, tm: tm, rows: rows.map(function (x) { return { id: x.id, time: x.time, course: x.course, items: x.items }; }), updatedAt: firebase.firestore.FieldValue.serverTimestamp() }); dirty = false; say('組み合わせ表を保存しました'); draw(); }
+      try { await ref.set({ eid: ev.id, meta: meta, tm: tm, edits: edits, rows: rows.map(function (x) { return { id: x.id, time: x.time, course: x.course, items: x.items }; }), updatedAt: firebase.firestore.FieldValue.serverTimestamp() }); dirty = false; say('組み合わせ表を保存しました'); draw(); }
       catch (e) { say('保存できませんでした: ' + (e.code === 'permission-denied' ? 'Firestoreのルールに「pairings」の設定がまだありません' : e.message)); }
     }
     function auto() {
@@ -152,7 +207,7 @@
     }
     // 担当スタッフの略し方（例：坂口→「坂」）。同じ1文字の方がいるときは2文字（例：小園→「小園」、小川→「小川」）
     function abbr() {
-      var names = {}; live.forEach(function (r) { staffOf(r).forEach(function (s) { names[s.name] = 1; }); });
+      var names = {}; live.forEach(function (r) { stf(r).forEach(function (s) { names[s.name] = 1; }); });
       var out = {}, list = Object.keys(names);
       list.forEach(function (n) { var one = n.charAt(0), dup = list.filter(function (m) { return m !== n && m.charAt(0) === one; }).length; out[n] = dup ? n.slice(0, 2) : one; });
       return out;
@@ -194,7 +249,7 @@
               var nc = ws.getCell(String.fromCharCode(68 + j) + r1), cj = cs[j];
               if (!cj) { nc.value = null; continue; }
               if (!staff) { nc.value = fw(cj.p.name); continue; }
-              var sf = staffOf(cj.r)[0], cl = col(cj.r);
+              var sf = stf(cj.r)[0], cl = col(cj.r);
               nc.value = (cj.p.own ? '★' : '') + (fw(cj.p.name) || '（未入力）') + (sf ? '(' + AB[sf.name] + ')' : '');
               nc.font = F(12, { bold: cj.p.own, color: { argb: 'FF1D1D1B' } });
               [r1, r2].forEach(function (rr) { ws.getCell(String.fromCharCode(68 + j) + rr).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + cl[0].slice(1).toUpperCase() } }; });
@@ -204,7 +259,7 @@
           if (staff) {   // 凡例：担当の色と略し方
             var lr = last + 2; ws.getCell('B' + lr).value = '★＝レクサスオーナー　（　）＝担当スタッフ'; ws.getCell('B' + lr).font = F(10);
             var seenK = {}, li = 0;
-            live.forEach(function (r) { var sf = staffOf(r)[0]; if (!sf || seenK[sf.key]) return; seenK[sf.key] = 1;
+            live.forEach(function (r) { var sf = stf(r)[0]; if (!sf || seenK[sf.key]) return; seenK[sf.key] = 1;
               var rr = lr + 1 + Math.floor(li / 3), cc = 2 + (li % 3) * 2, c = ws.getCell(rr, cc); ws.mergeCells(rr, cc, rr, cc + 1);
               c.value = '(' + AB[sf.name] + ') ' + sf.store + '：' + sf.name; c.font = F(10, { bold: true, color: { argb: 'FF' + colors[sf.key][1].slice(1).toUpperCase() } }); c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + colors[sf.key][0].slice(1).toUpperCase() } }; li++; });
             last = lr + 1 + Math.ceil(li / 3);
@@ -217,8 +272,8 @@
         w2.columns = [{ header: '組', width: 6 }, { header: 'スタート', width: 8 }, { header: 'コース', width: 7 }, { header: '担当', width: 16 }, { header: '代表者', width: 14 }, { header: '区分', width: 9 }, { header: '氏名', width: 16 }, { header: 'オーナー', width: 8 }, { header: '備考', width: 30 }];
         w2.getRow(1).font = { bold: true };
         live.slice().sort(function (a, b) { return (wr[a.id] == null ? 999 : wr[a.id]) - (wr[b.id] == null ? 999 : wr[b.id]); }).forEach(function (r) {
-          var i = wr[r.id], x = i != null ? rows[i] : null, c = col(r), st = staffOf(r).map(function (s) { return s.store + '：' + s.name; }).join('・');
-          players(r, gs).forEach(function (p, k) {
+          var i = wr[r.id], x = i != null ? rows[i] : null, c = col(r), st = stf(r).map(function (s) { return s.store + '：' + s.name; }).join('・');
+          pls(r).forEach(function (p, k) {
             var row = w2.addRow([x ? lab(i) : '未配置', x ? x.time : '', x ? x.course : '', st, r.name, p.host ? '代表者' : p.guest ? 'お連れ様' : '参加者', fw(p.name) || '（未入力）', p.own ? '★' : '', k ? '' : (r.note || '')]);
             row.getCell(4).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + c[0].slice(1).toUpperCase() } };
             if (p.own) { row.getCell(8).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF1C9' } }; row.getCell(7).font = { bold: true }; }
@@ -259,6 +314,7 @@
     wrap.addEventListener('click', function (e) {
       var t = e.target.closest('button'); if (!t) return;
       if (t.dataset.put != null) { if (sel) moveTo(sel, t.dataset.put); return; }
+      if (t.dataset.edit) { return editor(t.dataset.edit); }
       if (t.dataset.v) { view = t.dataset.v; return draw(); }
       if (t.dataset.del != null) { var i = +t.dataset.del; if (rows[i].items.length && !confirm(lab(i) + 'の行を削除します。入っている組は「未配置」に戻ります。よろしいですか？')) return; rows.splice(i, 1); dirty = true; return draw(); }
       var a = t.dataset.a;
