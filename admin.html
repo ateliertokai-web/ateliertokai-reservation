@@ -24,6 +24,7 @@
 <script src="firebase-config.js"></script>
 <script src="core.js"></script>
 <script src="guide-text.js"></script>
+<script src="slot-builder.js"></script>
 <script src="texts.js"></script>
 <script>window.TXH=TXT.h;window.TXC=TXT.clean;try{delete window.T;delete window.TXT}catch(e){window.T=undefined}</script>
 <script src="texts-editor.js"></script>
@@ -281,7 +282,16 @@ function optHTML(p,e){
    '<div><label>お客様画面への表示<select id="'+p+'vs"><option value="open"'+(e.visible!==false?' selected':'')+'>公開する（お客様画面に表示）</option><option value="prep"'+(e.visible===false&&e.test?' selected':'')+'>準備中（お客様画面に表示しない）</option><option value="closed"'+(e.visible===false&&!e.test?' selected':'')+'>受付終了（お客様画面に表示せず、予約もできない）</option></select>'+
    '<small class="help"><b>準備中</b>：お客様には見えません。「お客様画面で確認（練習）」で、予約・変更・キャンセルまで<b>本当に</b>試せます（試した予約は本当に保存されます）。<br><b>受付終了</b>：お客様には見えず、予約もできません。練習画面でも保存されません。</small></label>'+chk(p+'w',e.wait!==false,'満席時にキャンセル待ちを受け付ける')+chk(p+'l',!!e.lap,'未就学児の注意文を表示','カスタマイズイベントなどで、定員を超えて未就学児を連れてきたいご要望がありそうなときに使います。4名席のみの場合は「保護者の膝の上で」などの案内を、下の「未就学児の注意文」に入力してください。')+chk(p+'n',!!e.names,'参加者名の入力欄を表示','ゴルフやホテル宿泊など、お連れ様のお名前が必要なイベントで入力欄を出せます。未入力でも予約でき、あとからお客様が編集できます。')+chk(p+'gf',!!e.golf,'ゴルフ（お子様の選択なし・参加者名を自動で表示）','未就学児は参加できないため、2名以上でもお子様の選択肢が出ません。参加者1には申込者のお名前が自動で入ります。')+chk(p+'mo',!!e.mailOpt,'メールアドレスを任意にする（空欄でも予約できます）','必須のほうがセキュリティは高くなります（任意だと予約番号だけで変更できるため、やや低め）。個人情報をなるべく預からない観点では、任意がおすすめです。')+chk(p+'o',!!e.order,'ご注文中・新規のお客様チェック欄を表示','登録ナンバーで、お名前が違う場合（オーナーのご家族など）も判別できるようにしています。この欄を出すと、ご注文中で納車待ちのお客様も、ナンバーの入力を飛ばして参加できます。')+chk(p+'t',!!e.note,'お客様ページに備考欄を作成','お客様がご要望を入力できる備考欄を、お客様画面に出します（例：ゴルフ 9時ごろ希望）。')+'</div>'+
    '<label>お客様画面に出すメッセージ（空欄なら非表示）<small class="help" style="font-weight:400">店舗からお客様へのご連絡や、補足のご案内に使えます。</small><textarea id="'+p+'s" rows="2">'+esc(e.msg)+'</textarea></label>'+
-   '<label>未就学児の注意文（空欄なら標準の文）<textarea id="'+p+'p" rows="2">'+esc(e.lapText)+'</textarea></label>'+imgHTML(p);
+   '<label>未就学児の注意文（空欄なら標準の文）<textarea id="'+p+'p" rows="2">'+esc(e.lapText)+'</textarea></label>'+placeHTML(p,e)+imgHTML(p);
+}
+function placeHTML(p,e){
+  var pl=e.place||'';
+  return '<fieldset><legend>開催場所（お客様画面に、場所とGoogleマップのボタンを出します）</legend>'+
+   '<label>場所<select id="'+p+'pl"><option value=""'+(!pl?' selected':'')+'>表示しない</option><option value="kt"'+(pl==='kt'?' selected':'')+'>レクサス鹿児島東開</option><option value="sd"'+(pl==='sd'?' selected':'')+'>CPO川内</option><option value="ot"'+(pl==='ot'?' selected':'')+'>店舗以外（入力する）</option></select></label>'+
+   '<div id="'+p+'plo"'+(pl==='ot'?'':' hidden')+'><label>場所の名前<input id="'+p+'pln" maxlength="60" value="'+esc(e.placeName)+'" placeholder="例：霧島キャンプ場"></label></div>'+
+   '<label>住所（地図を開くときに使います。空欄なら場所の名前で探します）<input id="'+p+'pla" maxlength="120" value="'+esc(e.placeAddr)+'" placeholder="例：鹿児島県霧島市牧園町…"></label>'+
+   (p==='nw'?'':'<div class="row"><label>終日の枠の「集合・開始」（任意）<input type="time" id="'+p+'mt" value="'+esc(e.meetAt)+'"></label><label>終日の枠の「終了の目安」（任意）<input type="time" id="'+p+'ut" value="'+esc(e.untilAt)+'"></label></div>')+
+   '</fieldset>';
 }
 function readOpt(p,name){
   var m=q(p+'m').value,dv=q(p+'d').value;
@@ -289,49 +299,38 @@ function readOpt(p,name){
     group:q(p+'g').value.trim(),msg:q(p+'s').value.trim(),lapText:q(p+'p').value.trim()};
   o.deadlineMs=(m==='抽選'&&dv)?new Date(dv).getTime():0;
   var av=q(p+'a').value;o.openAtMs=av?new Date(av).getTime():0;
+  if(q(p+'pl')){o.place=q(p+'pl').value;o.placeName=o.place==='ot'?q(p+'pln').value.trim():'';o.placeAddr=o.place?q(p+'pla').value.trim():''}
+  if(q(p+'mt')){o.meetAt=q(p+'mt').value;o.untilAt=q(p+'ut').value}
   return o;
 }
-function rgRow(s,e,m){return '<div class="row rg"><label>開始<input type="time" class="rs" value="'+(s||'')+'"></label><label>終了<input type="time" class="re" value="'+(e||'')+'"></label><label>1枠の長さ(分)<input type="number" class="rm" value="'+(m||60)+'" min="5" style="width:80px"></label><button type="button" class="s d rx">削除</button></div>'}
 function evView(){
   var p=q('pane');
   var h='<details><summary>代理予約用：重複を許可する電話番号</summary><div class="card"><p class="note">ここに登録した電話番号は、同じイベントに何回でも予約できます（店舗スタッフの代理予約用）。1行に1件、入力してください。</p><textarea id="dupt" rows="4" placeholder="例：099-000-0000"></textarea><div class="tools"><button type="button" class="s" id="dups">保存</button></div></div></details>'+
    '<details open><summary>枠を作成する</summary><form id="cf" class="card">'+
-   '<div class="row"><label>イベント名<input id="cn" list="cnl" required placeholder="例：サッカー観戦"></label><datalist id="cnl">'+S.events.map(function(e){return '<option value="'+esc(e.name)+'">'}).join('')+'</datalist></div>'+
-   '<div id="dates"><div class="row dr"><label>日付<input type="date" class="dt" required></label></div></div><button type="button" class="s" id="ad">＋ 日付を追加</button>'+
-   '<div style="margin-top:12px"><b style="font-size:14px">時間帯（飛び飛びに複数作れます）</b><div id="rngs">'+rgRow('10:00','17:00',60)+'</div><div class="tools"><button type="button" class="s" id="ar">＋ 時間帯を追加</button><label class="chk" style="margin:0"><input type="checkbox" id="cad">終日（1枠）</label></div><p class="note" style="margin:0">例：10:00〜11:30（90分）と 14:00〜15:30（90分）。「1枠の長さ」で時間帯を区切って、枠を作ります。</p></div>'+
-   '<div class="row"><label>休憩 開始<input type="time" id="cbs"></label><label>休憩 終了<input type="time" id="cbe"></label><button type="button" class="s" id="cbc">休憩をクリア</button></div>'+
-   '<div class="row"><label>定員（組・0で人数管理）<input type="number" id="cg" value="25" min="0" style="width:80px"></label><label>定員（人数・0で無制限）<input type="number" id="cp" value="0" min="0" style="width:80px"></label><label>1組の上限人数<input type="number" id="cx" value="10" min="1" style="width:80px"></label></div>'+
+   '<div class="sb"><div class="stepn"><b class="n">1</b><b>イベント</b></div></div><div class="row"><label>イベント名<input id="cn" list="cnl" required placeholder="例：サッカー観戦"></label><datalist id="cnl">'+S.events.map(function(e){return '<option value="'+esc(e.name)+'">'}).join('')+'</datalist></div>'+
+   '<div id="sbox"></div>'+
    '<p class="note">※ 既存のイベント名を入力した場合は、そのイベントに枠を追加します（方式などの設定は変わりません）。新しいイベント名の場合は、下の設定で作成します。</p>'+
    '<div id="newopt">'+optHTML('nw',{})+'</div><div class="err" id="cer"></div><button class="p" type="submit" style="max-width:260px">枠を作成</button></form></details>'+
    '<h2 style="font-size:16px">作成済みのイベント</h2>';
   if(!S.events.length)h+='<div class="card note">イベントはまだありません。</div>';
   S.events.forEach(function(e,i){h+='<div class="card" id="ev'+i+'"><div class="tools" style="justify-content:space-between;margin:0"><b>'+esc(e.name)+'</b><span>'+(e.method==='抽選'?'<span class="tag k">抽選'+(e.drawn?'・抽選済':'')+'</span>':'<span class="tag">先着</span>')+(e.test?'<span class="tag w">準備中</span>':e.visible===false?'<span class="tag w">受付終了</span>':'')+'</span></div><button class="s" data-open="'+i+'">設定・枠を開く</button><div id="ed'+i+'"></div></div>'});
   p.innerHTML=h;
-  var addDate=function(){var d=document.createElement('div');d.className='row dr';d.innerHTML='<label>日付<input type="date" class="dt"></label>';q('dates').appendChild(d)};
-  q('ad').onclick=addDate;
-  q('cbc').onclick=function(){q('cbs').value='';q('cbe').value=''};
-  var rgWire=function(){app.querySelectorAll('.rx').forEach(function(b){b.onclick=function(){if(app.querySelectorAll('.rg').length>1)b.closest('.rg').remove()}})};
-  rgWire();
-  q('ar').onclick=function(){var rows=app.querySelectorAll('.rg'),m=rows[0]?rows[0].querySelector('.rm').value:60,d=document.createElement('div');d.innerHTML=rgRow('','',m);q('rngs').appendChild(d.firstChild);rgWire()};
-  q('cad').onchange=function(){var on=q('cad').checked;['cbs','cbe','cbc','ar'].forEach(function(i){q(i).disabled=on});app.querySelectorAll('.rs,.re,.rm,.rx').forEach(function(x){x.disabled=on})};
+  var SBX=SB.builder(q('sbox'));
   wireImgs('nw',[]);
+  p.addEventListener('change',function(ev){var t=ev.target;if(t.id&&/pl$/.test(t.id)){var o=q(t.id+'o');if(o)o.hidden=t.value!=='ot'}});
   C.getDupTels().then(function(t){var d=q('dupt');if(d)d.value=t.join('\n')}).catch(function(){});
   q('dups').onclick=async function(){try{var t=await C.setDupTels(q('dupt').value.split(/[\n,、]/));q('dupt').value=t.join('\n');say('電話番号を保存しました（'+t.length+'件）')}catch(x){say('失敗しました: '+x.message)}};
-  var cxMan=false;q('cx').oninput=function(){cxMan=true};var syncCx=function(){var g=+q('cg').value,p=+q('cp').value;if(!cxMan&&!g&&p>0)q('cx').value=p};q('cg').oninput=syncCx;q('cp').oninput=syncCx;syncCx();
   q('cn').oninput=function(){var ex=S.events.some(function(e){return e.name===q('cn').value.trim()});q('newopt').hidden=ex};
   q('cf').onsubmit=async function(e){
     e.preventDefault();q('cer').textContent='';
-    var name=q('cn').value.trim(),dates=[].map.call(app.querySelectorAll('.dt'),function(i){return i.value}).filter(function(v,i,a){return v&&a.indexOf(v)===i});
-    if(!name||!dates.length){q('cer').textContent='イベント名と日付を入力してください';return}
+    var name=q('cn').value.trim(),R=SBX.read();
+    if(!name){q('cer').textContent='イベント名を入力してください';return}
+    if(R.err){q('cer').textContent=R.err;return}
+    var dates=R.dates,o=R.o;
     var ex=S.events.filter(function(x){return x.name===name})[0];
-    var ranges=[].map.call(app.querySelectorAll('.rg'),function(r){return {start:r.querySelector('.rs').value,end:r.querySelector('.re').value,minutes:r.querySelector('.rm').value}}).filter(function(r){return r.start||r.end});
-    if(!q('cad').checked){
-      if(!ranges.length){q('cer').textContent='時間帯を入力してください';return}
-      for(var ri=0;ri<ranges.length;ri++){var rr=ranges[ri];if(!rr.start||!rr.end||rr.end<=rr.start||!(+rr.minutes>=5)){q('cer').textContent='時間帯'+(ri+1)+'の、開始・終了・1枠の長さを確認してください（終了は開始より後に）';return}}
-    }
-    var o={allday:q('cad').checked,ranges:ranges,start:ranges[0]&&ranges[0].start,end:ranges[0]&&ranges[0].end,minutes:ranges[0]&&ranges[0].minutes,bstart:q('cbs').value,bend:q('cbe').value,capG:q('cg').value,capP:q('cp').value,maxPer:q('cx').value};
     var evId=ex?ex.id:C.newId(),ev=ex?{}:Object.assign(readOpt('nw',name),{drawn:false});
     if(ex)ev={name:name};
+    if(R.allday){ev.meetAt=R.meet;ev.untilAt=R.until}   // 終日の集合・終了の目安は、イベントの設定として保存
     if(!ex&&ev.method==='抽選'&&!ev.deadlineMs){q('cer').textContent='抽選の締切を入力してください';return}
     var sb=q('cf').querySelector('button[type=submit]');sb.disabled=true;
     try{var r=await C.createSlots(evId,ev,dates,o);if(r.ok){if(!ex){try{await saveImages(evId,'nw')}catch(ix){S.msg='枠は作成しましたが、写真の保存に失敗しました: '+ix.message;S.evId=evId;go();return}}S.msg=r.count+'件の枠を作成しました';S.evId=evId;go()}else{q('cer').textContent=r.msg;sb.disabled=false}}catch(x){q('cer').textContent='失敗しました: '+x.message;sb.disabled=false}
@@ -347,13 +346,18 @@ async function openEv(i,btn){
   if(btn){btn.disabled=false;btn.textContent='閉じる'}
   var sl=sn.docs.map(function(d){return Object.assign({id:d.id},d.data())}).sort(function(a,b){return (a.date+a.start)<(b.date+b.start)?-1:1});
   box.innerHTML='<div style="margin-top:10px">'+optHTML('e'+i,e)+'<div class="tools"><button class="s" data-a="save">設定を保存</button><button class="s" data-a="pv">保存前の設定でお客様画面を確認</button><button class="s d" data-a="del">イベントを削除</button></div></div>'+
-   '<details open><summary>枠 '+sl.length+'件</summary><div class="scroll"><table><tr><th>日時</th><th>定員(組・0で人数管理)</th><th>定員(人数)</th><th>1組上限</th><th>現在</th><th></th></tr>'+sl.map(function(s){
-     return '<tr data-s="'+s.id+'"><td>'+md(s.date)+' '+rng(s)+'</td><td><input type="number" data-k="g" value="'+s.capG+'"></td><td><input type="number" data-k="p" value="'+(s.capP||0)+'"></td><td><input type="number" data-k="x" value="'+s.maxPer+'"></td><td>'+(s.booked||0)+'組・'+(s.people||0)+'名</td><td><button class="s" data-a="ss">保存</button> <button class="s d" data-a="sd">削除</button></td></tr>';
-   }).join('')+'</table></div></details>';
+   '<details open><summary>枠 '+sl.length+'件</summary><div id="sx'+i+'"></div></details>';
   try{var ei=await C.eimgs.doc(e.id).get();wireImgs('e'+i,ei.exists?ei.data().imgs:[])}catch(x){wireImgs('e'+i,[])}
-  box.oninput=function(ev){var t=ev.target,tr=t.closest&&t.closest('tr[data-s]');if(!tr||!t.dataset.k)return;
-    if(t.dataset.k==='x'){tr.dataset.xm='1';return}
-    if(tr.dataset.xm)return;var gv=+tr.querySelector('[data-k=g]').value,pv=+tr.querySelector('[data-k=p]').value;if(!gv&&pv>0)tr.querySelector('[data-k=x]').value=pv};
+  box.addEventListener('change',function(ev){var t=ev.target;if(t.id&&/pl$/.test(t.id)){var o=q(t.id+'o');if(o)o.hidden=t.value!=='ot'}});
+  SB.editor(q('sx'+i),sl,{label:function(s){return md(s.date)+'　'+rng(s)},
+    save:async function(ch){try{var b=firebase.firestore().batch();Object.keys(ch).forEach(function(id){b.update(C.slots.doc(id),ch[id])});await b.commit();say(Object.keys(ch).length+'枠の変更を保存しました')}catch(x){say('保存できませんでした: '+x.message);throw x}},
+    remove:async function(ids){
+      var busy=[],ok=[];
+      for(var k=0;k<ids.length;k++){var left=(await C.res.where('slotId','==',ids[k]).get()).docs.filter(function(d){var st=d.data().status;return st!=='cancel'&&st!=='lost'}).length;if(left)busy.push(ids[k]);else ok.push(ids[k])}
+      if(busy.length&&!ok.length){alert('選んだ枠には、まだ予約（確定・キャンセル待ち・抽選待ち）があります。先に「予約一覧」で取り消してから、削除してください。');return []}
+      if(!confirm((busy.length?'予約が残っている '+busy.length+'枠は削除できません。残りの ':'')+ok.length+'枠を削除します。よろしいですか？'))return [];
+      try{for(var j=0;j<ok.length;j++)await C.slots.doc(ok[j]).delete();say(ok.length+'枠を削除しました');return ok}catch(x){say('削除できませんでした: '+x.message);throw x}
+    }});
   box.onclick=async function(ev){
     var b=ev.target.closest('[data-a]');if(!b)return;var a=b.dataset.a;
     if(a==='pv'){
@@ -370,16 +374,6 @@ async function openEv(i,btn){
       }else if(a==='del'){
         if(!confirm('「'+e.name+'」と、その枠をすべて削除します。予約データは残りますが、お客様画面からは見えなくなります。よろしいですか？'))return;
         await C.deleteEvent(e.id);say('削除しました');await go()
-      }else if(a==='ss'){
-        var tr=b.closest('tr'),g=function(k){return +tr.querySelector('[data-k='+k+']').value};
-        var mx=g('x');if(!(mx>=1)||g('g')<0||g('p')<0){say('定員・上限人数を正しく入力してください（1組上限は1以上）');return}
-        await C.slots.doc(tr.dataset.s).update({capG:g('g'),capP:g('p'),maxPer:mx});tr.querySelector('[data-k=x]').value=mx;say('枠を保存しました')
-      }else if(a==='sd'){
-        var tr2=b.closest('tr');
-        var left=(await C.res.where('slotId','==',tr2.dataset.s).get()).docs.filter(function(d){var st=d.data().status;return st!=='cancel'&&st!=='lost'}).length;
-        if(left){alert('この枠には、まだ '+left+'件の予約（確定・キャンセル待ち・抽選待ち）があります。先に「予約一覧」で取り消してから、削除してください。');return}
-        if(!confirm('この枠を削除します。よろしいですか？'))return;
-        await C.slots.doc(tr2.dataset.s).delete();tr2.remove();say('枠を削除しました')
       }
     }catch(x){say('失敗しました: '+x.message)}
   };
