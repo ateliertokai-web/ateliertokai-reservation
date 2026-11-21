@@ -46,11 +46,12 @@
     };
   }
   // ホーム画面を表示したときに呼ぶ：条件がそろえば「通知を受け取りますか？」を出す
-  function ask(box) {
-    if (!ok() || !standalone() || Notification.permission !== 'default') return;
-    if (!reg) { if (READY) READY.then(function () { if (reg && box.isConnected) ask(box); }); return; }
+  // force：確認画面（準備中のイベントのテスト）では、アプリとして開いていなくても、「今はしない」の後でも出す
+  function ask(box, force) {
+    if (!ok() || (!force && !standalone()) || Notification.permission !== 'default') return;
+    if (!reg) { if (READY) READY.then(function () { if (reg && box.isConnected) ask(box, force); }); return; }
     var t = 0; try { t = +localStorage.getItem(ASK) || 0; } catch (e) {}
-    if (Date.now() - t < 30 * 864e5) return;   // 「今はしない」から30日は出さない
+    if (!force && Date.now() - t < 30 * 864e5) return;   // 「今はしない」から30日は出さない
     card(box);
   }
   function init(fdb, getRids) { READY = init2(fdb, getRids); return READY; }

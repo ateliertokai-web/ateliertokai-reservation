@@ -83,7 +83,15 @@ function fixModel(v){return v.replace(/[ａ-ｚＡ-Ｚ０-９]/g,function(c){ret
 var MYKEY='yoyaku_my_v1';
 function myGet(){if(TXT.edit)return [{id:'ABCDEFGHJKLM',mail:'sample@example.com'}];try{var a=JSON.parse(localStorage.getItem(MYKEY)||'[]');return Array.isArray(a)?a:[]}catch(e){return[]}}
 function mySet(a){if(TXT.edit)return;try{localStorage.setItem(MYKEY,JSON.stringify(a.slice(0,20)))}catch(e){}}
-function myAdd(id,mail){if(PV)return;var a=myGet().filter(function(x){return x.id!==id});a.unshift({id:id,mail:mail});mySet(a)}
+// 確認画面（練習）で、準備中のイベントを予約したときは、通知のテスト用に、予約番号だけ覚える（「あなたの予約」には出さない）
+var TESTK='rv_push_test_rids_v1';
+function testGet(){try{var a=JSON.parse(localStorage.getItem(TESTK)||'[]');return Array.isArray(a)?a:[]}catch(e){return[]}}
+function testAdd(id){try{var a=testGet().filter(function(x){return x!==id});a.unshift(id);localStorage.setItem(TESTK,JSON.stringify(a.slice(0,10)))}catch(e){}}
+function myAdd(id,mail){
+  if(PV){if(S.ev&&realTest(S.ev)){testAdd(id);if(window.PUSH)PUSH.sync()}return}
+  var a=myGet().filter(function(x){return x.id!==id});a.unshift({id:id,mail:mail});mySet(a);
+  if(window.PUSH)PUSH.sync();   // 別の端末で予約を確認した・メールの控えのリンクから開いたときも、この端末の通知の宛先に加える
+}
 function myDel(id){mySet(myGet().filter(function(x){return x.id!==id}))}
 try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){} // ブラウザに、保存した記録を消さないよう頼む
 
@@ -415,7 +423,7 @@ async function submit(){
     }else{
       if(PV&&!realTest(S.ev)){r={ok:true,id:'PRACTICE0000',status:'confirmed'};return doneView(r,g.d,gn)}
       r=await C.book(S.slot.id,g.d);
-      if(r.ok){myAdd(r.id,g.d.mail);if(window.PUSH)PUSH.sync();return doneView(r,g.d,gn)}
+      if(r.ok){myAdd(r.id,g.d.mail);return doneView(r,g.d,gn)}
     }
     er.textContent=r.msg||T('処理できませんでした');
   }catch(e){er.textContent=e.code==='permission-denied'?T('お申し込みを受け付けられませんでした。受付開始前、または受付が終了している可能性があります。画面を更新して、もう一度お試しください。'):T('通信に失敗しました。電波の良い場所で、もう一度お試しください。（')+(e.code||e.message||'')+'）'}
@@ -433,6 +441,7 @@ function doneView(r,d,gn){
    keepHTML({mail:d.mail})+(PV&&realTest(ev)?'<button class="p" id="tr" style="margin-top:14px">この予約を開いて、変更・キャンセルを試す</button>':'')+
    (PV&&!realTest(ev)&&ev.golf&&(d.a+d.k+d.s+d.m)>=2?'<button class="p" id="tg" style="margin-top:14px">お連れ様の入力を練習する</button>':'')+(gn&&gn.length?'<div id="dgs"></div>':'')+('<button class="p" id="hm" style="margin-top:14px">'+T('トップへ戻る')+'</button>');
   q('hm').onclick=home;
+  if(PV&&realTest(ev)&&window.PUSH)PUSH.ask(app,true);   // 準備中のイベントのテスト：通知の確認もここで試せる
   if(gn&&gn.length)doneGuests(r,d,gn);
   // 練習画面（ゴルフ・テスト用ではないイベント）：保存されない見本の予約で、予約の確認画面（お連れ様の入力欄つき）を開く
   if(q('tg'))q('tg').onclick=function(){S.rec={id:r.id,mail:C.normMail(d.mail),eventId:ev.id,eventName:ev.name,slotId:s.id,date:s.date,start:s.start,end:s.end,name:d.name,n:d.a+d.k+d.s+d.m,a:d.a,k:d.k,s:d.s,m:d.m,status:'confirmed',participants:d.participants||[],inv:{}};S.msg='';detailView()};
@@ -706,7 +715,7 @@ if(TXT.edit&&window.EDITSAMPLE){
   firebase.initializeApp(FIREBASE_CONFIG);
   var FDB=firebase.firestore();try{FDB.settings({experimentalAutoDetectLongPolling:true,merge:true})}catch(e){}
   C=makeCore(firebase,FDB);
-  if(window.PUSH&&!PV)PUSH.init(FDB,function(){return myGet().map(function(x){return x.id})});
+  if(window.PUSH)PUSH.init(FDB,function(){return myGet().map(function(x){return x.id}).concat(testGet())});
   var GM=/[?&]g=([A-HJ-NP-Z2-9]{12})(&|$)/.exec(location.search);
   if(GM){location.replace(location.pathname.replace(/[^/]*$/,'')+'guest.html'+location.search)}
   else syncTime().then(function(){return Promise.race([TXT.load(FDB),new Promise(function(r){setTimeout(r,1500)})])}).then(openFromLink);
