@@ -54,14 +54,46 @@
     if (!force && Date.now() - t < 30 * 864e5) return;   // 「今はしない」から30日は出さない
     card(box);
   }
+  /* ---------- 届いたお知らせ（この端末の中に保存）。アプリを開くと、内容を見られる ---------- */
+  function idb() { return new Promise(function (y, n) { try { var r = indexedDB.open('rv-push', 1); r.onupgradeneeded = function () { r.result.createObjectStore('msgs', { keyPath: 'id', autoIncrement: true }); }; r.onsuccess = function () { y(r.result); }; r.onerror = function () { n(r.error); }; } catch (e) { n(e); } }); }
+  function list() { return idb().then(function (db) { return new Promise(function (y, n) { var q = db.transaction('msgs').objectStore('msgs').getAll(); q.onsuccess = function () { y((q.result || []).sort(function (a, b) { return b.t - a.t; })); }; q.onerror = function () { n(q.error); }; }); }).catch(function () { return []; }); }
+  function readAll() { return idb().then(function (db) { return new Promise(function (y) { var t = db.transaction('msgs', 'readwrite'), st = t.objectStore('msgs'), q = st.openCursor(); q.onsuccess = function () { var c = q.result; if (!c) return; if (!c.value.read) { var v = c.value; v.read = true; c.update(v); } c.continue(); }; t.oncomplete = function () { y(); }; t.onerror = function () { y(); }; }); }).catch(function () {}); }
+  // アイコンの数字（バッジ）と、通知センターに残っている通知を消す
+  function clearBadge() {
+    try { if (navigator.clearAppBadge) navigator.clearAppBadge(); } catch (e) {}
+    try { if (navigator.serviceWorker) navigator.serviceWorker.getRegistration().then(function (r) { if (r) r.getNotifications().then(function (l) { l.forEach(function (n) { n.close(); }); }); }); } catch (e) {}
+  }
+  function fmt(t) { var d = new Date(t), p = function (n) { return ('0' + n).slice(-2); }; return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + d.getHours() + ':' + p(d.getMinutes()); }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  // ホーム画面の上に「お知らせ」を出す（未読は「新着」。出したら既読にして、数字を消す）
+  async function inbox(box) {
+    if (!box || !root.indexedDB) return;
+    var msgs = await list(); if (!msgs.length) { clearBadge(); return; }
+    var old = box.querySelector('#pushBox'); if (old) old.remove();
+    var un = msgs.filter(function (m) { return !m.read; }), rd = msgs.filter(function (m) { return m.read; }).slice(0, 15);
+    var item = function (m, nw) { return '<div class="box" style="margin:0 0 6px;' + (nw ? 'border-color:#c0392b;background:#fff6f4' : '') + '"><div style="display:flex;gap:6px;align-items:baseline"><b>' + esc(m.title) + '</b>' + (nw ? '<span class="tag w">' + T('新着') + '</span>' : '') + '<small class="note" style="margin-left:auto">' + fmt(m.t) + '</small></div><div style="white-space:pre-wrap;margin-top:2px">' + esc(m.body) + '</div></div>'; };
+    var d = document.createElement('div'); d.id = 'pushBox'; d.style.cssText = 'margin:0 0 14px';
+    d.innerHTML = (un.length ? '<h2 style="font-size:16px;margin:0 0 6px">' + T('新しいお知らせ') + '（' + un.length + '）</h2>' + un.map(function (m) { return item(m, true); }).join('') : '') +
+      (rd.length ? '<details' + (un.length ? '' : ' open') + '><summary class="note" style="cursor:pointer;margin:4px 0">' + T('これまでのお知らせ') + '（' + rd.length + '）</summary>' + rd.map(function (m) { return item(m, false); }).join('') + '</details>' : '');
+    box.insertBefore(d, box.firstChild);
+    if (un.length) { await readAll(); }
+    clearBadge();
+  }
+  var BOX = null;
+  function watch(getBox) {   // アプリに戻ってきたとき・お知らせが届いたとき：数字を消して、お知らせを見せる
+    var go = function () { clearBadge(); var b = getBox && getBox(); if (b && document.visibilityState === 'visible') inbox(b); };
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') go(); });
+    root.addEventListener('focus', go); root.addEventListener('pageshow', go);
+    try { navigator.serviceWorker.addEventListener('message', function (e) { if (e.data && e.data.type === 'push') go(); }); } catch (e) {}
+  }
   function init(fdb, getRids) { READY = init2(fdb, getRids); return READY; }
   async function init2(fdb, getRids) {
     db = fdb; rids = getRids || rids;
-    try { if (navigator.clearAppBadge) navigator.clearAppBadge(); } catch (e) {}
+    clearBadge();
     if (!ok()) return;
     try { reg = await navigator.serviceWorker.register('sw.js', { scope: './' }); } catch (e) { reg = null; return; }
     try { (await reg.getNotifications()).forEach(function (n) { n.close(); }); } catch (e) {}
     sync();
   }
-  root.PUSH = { init: init, ask: ask, sync: sync, supported: ok };
+  root.PUSH = { init: init, ask: ask, sync: sync, supported: ok, inbox: function (box) { BOX = box; return inbox(box); }, watch: watch, clearBadge: clearBadge };
 })(window);
