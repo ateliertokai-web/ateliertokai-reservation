@@ -102,6 +102,7 @@ TXT.add('お連れ様の入力ページ',{
  'gp.form.name':'お名前','gp.form.mail':'メールアドレス（任意・スコアボードの送信に使います）','gp.form.mail.saved':'保存済みです。変更するときだけ入力してください',
  'gp.form.own':'レクサス鹿児島東開のオーナーです',
  'gp.btn.send':'参加者情報を送信する','gp.btn.sending':'送信中…',
+ 'gp.privacy.link':'プライバシーポリシー',
  'gp.note.privacy':'ご入力いただいたメールアドレスは、店舗だけが確認します。代表者様には、お名前だけが表示されます。',
  'gp.reenter':'ご入力は、取り消されています。もう一度参加される場合は、入力してください。',
  'gp.cx.hint':'ご都合がつかなくなった場合は、入力を取り消すことができます。',
@@ -154,7 +155,7 @@ function viewForm(g){
    '<label class="chk"><input type="checkbox" id="go"'+(g.own&&!g.cx?' checked':'')+'>'+esc(T('gp.form.own'))+'</label>'+
    '<div class="err" id="er"></div><button class="p" id="gs" type="submit">'+esc(T('gp.btn.send'))+'</button></form>'+
    (g.name&&!g.cx?'<p class="note" style="text-align:center">'+esc(T('gp.cx.hint'))+'</p><button class="s d" id="gc" type="button">'+esc(T('gp.btn.cx'))+'</button>':'')+
-   '<p class="note">'+esc(T('gp.note.privacy'))+'</p>');
+   '<p class="note">'+esc(T('gp.note.privacy'))+' <a href="privacy.html" target="_blank" rel="noopener">'+esc(T('gp.privacy.link'))+'</a></p>');
   q('gf').onsubmit=async function(e){
     e.preventDefault();var nm=q('gn').value.trim(),ml=q('gm').value.trim(),er=q('er');
     if(!nm){er.textContent=T('gp.err.name');return}
@@ -181,7 +182,7 @@ function viewForm(g){
 function viewSaved(g){
   top();
   page(head(g)+facts(g)+'<div class="box ok"><b>'+esc(T('gp.done.title'))+'</b><br>'+esc(T('gp.done.body',{no:g.no,name:g.name}))+'</div>'+
-    '<button class="s" id="re" type="button">'+esc(T('gp.btn.edit'))+'</button><p class="note">'+esc(T('gp.note.privacy'))+'</p>');
+    '<button class="s" id="re" type="button">'+esc(T('gp.btn.edit'))+'</button><p class="note">'+esc(T('gp.note.privacy'))+' <a href="privacy.html" target="_blank" rel="noopener">'+esc(T('gp.privacy.link'))+'</a></p>');
   q('re').onclick=function(){show(g,'form')};
 }
 function viewCanceled(g){

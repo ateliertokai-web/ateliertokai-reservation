@@ -69,7 +69,7 @@ async function show(aid){
     (!files.length?'<div class="box">まだ写真・成績表がありません。</div>':'')+
     '<h2>同じ組の方に送る</h2><div class="tools"><button data-sh="line">LINEで送る</button><button data-sh="mail">メールで送る</button><button data-sh="copy">URLをコピー</button></div>'+
     '<div class="qr" id="qr"></div><p class="note" style="text-align:center">QRコードを、その場で読み取ってもらうこともできます。</p>'+
-    (forever?'':'<p class="note" style="text-align:center">掲載は '+(ed.getMonth()+1)+'月'+ed.getDate()+'日 までです。必要な写真は、それまでに保存してください。</p>'));
+    '<p class="note" style="text-align:center"><a href="privacy.html" target="_blank" rel="noopener">プライバシーポリシー</a></p>'+(forever?'':'<p class="note" style="text-align:center">掲載は '+(ed.getMonth()+1)+'月'+ed.getDate()+'日 までです。必要な写真は、それまでに保存してください。</p>'));
   try{document.getElementById('qr').innerHTML='<img alt="QRコード" src="'+QR.dataURL(url,6)+'">'}catch(e){}
   var data={};
   ph.forEach(function(f){C.albumData(f).then(function(d){if(!/^data:image\//.test(d))return;data[f.id]=d;var b=app.querySelector('[data-i="'+f.id+'"]');if(b)b.innerHTML='<img alt="記念写真" src="'+d.replace(/"/g,'')+'">'}).catch(function(){})});

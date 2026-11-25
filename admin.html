@@ -389,6 +389,23 @@ async function openEv(i,btn){
 
 
 /* ---------- お客様画面（説明書ボタンの表示・説明書の文章） ---------- */
+// プライバシーポリシーの、事業者名・責任者・窓口などを入力する（privacy.html に表示。config/privacy）
+function privacyCard(p){
+  var d=document.createElement('div');d.className='card';d.id='ppCard';
+  d.innerHTML='<h2 style="margin-top:0">プライバシーポリシー</h2><p class="note">お客様向けのページ（<a href="privacy.html" target="_blank" rel="noopener">privacy.html</a>）に表示されます。予約ページ・お連れ様の入力ページ・アルバムから、リンクされています。空欄の項目は、ページに「（管理画面で設定してください）」と出ます。文章は一般的なひな型です。<b>公開前に、会社の法務担当などが確認してください。</b></p>'+
+    '<label>事業者名（会社名・店舗名）<input id="ppB" maxlength="80"></label><label>住所<input id="ppA" maxlength="120"></label>'+
+    '<div class="row"><label>電話<input id="ppT" maxlength="30" inputmode="tel"></label><label>メール<input id="ppM" maxlength="80" inputmode="email"></label></div>'+
+    '<label>個人情報の責任者（役職・氏名）<input id="ppR" maxlength="60"></label><label>保管期間（例：イベント終了後1年）<input id="ppK" maxlength="80" value="イベント終了後1年"></label>'+
+    '<label>制定・改定日（例：2026年12月1日）<input id="ppD" maxlength="30"></label><label>その他の追記（任意）<textarea id="ppE" rows="3" maxlength="800"></textarea></label>'+
+    '<div class="tools"><button class="p" id="ppS" type="button" style="max-width:200px">保存する</button><a class="s" href="privacy.html" target="_blank" rel="noopener" style="text-decoration:none;color:inherit;border:1px solid var(--line);border-radius:7px;padding:7px 12px;background:#fff">ページを確認</a></div>';
+  p.appendChild(d);
+  var F={ppB:'biz',ppA:'addr',ppT:'tel',ppM:'mail',ppR:'resp',ppK:'keep',ppD:'date',ppE:'extra'};
+  C.cfg.doc('privacy').get().then(function(s){if(!s.exists)return;var v=s.data();Object.keys(F).forEach(function(k){if(typeof v[F[k]]==='string')q(k).value=v[F[k]]})}).catch(function(){});
+  q('ppS').onclick=async function(){
+    var o={updatedAt:firebase.firestore.FieldValue.serverTimestamp()};Object.keys(F).forEach(function(k){o[F[k]]=q(k).value.trim()});
+    this.disabled=true;try{await C.cfg.doc('privacy').set(o);say('プライバシーポリシーを保存しました')}catch(e){say('保存できませんでした: '+(e.code==='permission-denied'?'Firestoreのルールに「config」の設定がありません':e.message))}this.disabled=false;
+  };
+}
 // アプリの通知で、お知らせを送る（通知を許可した方だけに届く）
 function newsCard(p){
   var d=document.createElement('div');d.className='card';
@@ -442,7 +459,7 @@ function csView(){
     h+='<label>いちばん下の文<textarea id="gFoot" rows="2" maxlength="300">'+esc(val(g,'foot',D.foot))+'</textarea></label>'+
       '<p class="note">空欄にした欄は、初期の文章で表示されます。</p></div></details>'+
       '<div class="tools"><button class="p" id="gSave" style="max-width:260px">保存する</button><button class="s" id="gReset" type="button">文章を初期の内容に戻す</button></div>';
-    p.innerHTML=h;newsCard(p);
+    p.innerHTML=h;newsCard(p);privacyCard(p);
     q('gReset').onclick=function(){if(!confirm('説明書の文章を、初期の内容に戻します（「保存する」を押すまで反映されません）。よろしいですか？'))return;var on=q('gOn').checked;draw({on:on});q('gOn').checked=on;p.querySelector('details').open=true};
     q('gSave').onclick=async function(){
       var b=this,o={on:q('gOn').checked,label:q('gLabel').value.trim(),title:q('gTitle').value.trim(),intro:q('gIntro').value.trim(),foot:q('gFoot').value.trim(),steps:[],updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
