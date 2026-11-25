@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>来場受付</title>
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#111111">
+<style>
+/* お客様用の来場受付画面（iPadのインカメラ用）。お客様に見られてもよい画面：読み取った方ご本人のお名前だけを表示する。
+   管理画面にログインしたiPadで、管理画面の「来場受付」タブから開く。スタッフ用メニューは、上のロゴを2秒長押しで出る */
+:root{--bg:#111;--gold:#e8c872;--ink:#fff;--ok:#1f7a4d;--warn:#b26a00;--ng:#b3261e}
+*{box-sizing:border-box}html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--ink);font:18px/1.6 -apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;-webkit-text-size-adjust:100%;overflow:hidden;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+#app{height:100%;display:flex;flex-direction:column;padding:max(14px,env(safe-area-inset-top)) max(18px,env(safe-area-inset-right)) max(14px,env(safe-area-inset-bottom)) max(18px,env(safe-area-inset-left))}
+.hd{text-align:center;padding:6px 0 2px;letter-spacing:.12em;color:var(--gold);font-family:Georgia,"Hiragino Mincho ProN",serif;font-size:clamp(16px,2.4vw,26px)}
+.ev{text-align:center;font-size:clamp(18px,3vw,34px);font-weight:700;margin:2px 0 6px}
+.cam{position:relative;flex:1;min-height:0;display:grid;place-items:center}
+.vb{position:relative;height:100%;max-height:100%;aspect-ratio:1/1;max-width:100%;border-radius:28px;overflow:hidden;background:#000;box-shadow:0 0 0 3px #333}
+.vb video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+.vb .fr{position:absolute;inset:14%;border:5px solid var(--gold);border-radius:26px;box-shadow:0 0 0 999px rgba(0,0,0,.40);pointer-events:none}
+.vb .fr::before,.vb .fr::after{content:"";position:absolute;left:8%;right:8%;height:3px;background:rgba(232,200,114,.8);animation:sc 2.4s ease-in-out infinite}
+.vb .fr::before{top:8%}.vb .fr::after{display:none}
+@keyframes sc{0%,100%{top:8%}50%{top:90%}}
+.msg{text-align:center;padding:10px 6px 4px}.msg b{display:block;font-size:clamp(22px,3.6vw,44px);line-height:1.35}.msg span{display:block;color:#cfcfcf;font-size:clamp(15px,2.2vw,24px);margin-top:4px}
+.ov{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:30px;z-index:20}
+.ov.on{display:flex}.ov.ok{background:var(--ok)}.ov.dup{background:var(--warn)}.ov.ng{background:var(--ng)}
+.ov .ic{font-size:clamp(70px,14vw,170px);line-height:1}.ov .t1{font-size:clamp(30px,6vw,72px);font-weight:700;margin:10px 0}.ov .t2{font-size:clamp(24px,4.4vw,52px);font-weight:700}.ov .t3{font-size:clamp(18px,3vw,34px);margin-top:14px;opacity:.95}
+.sm{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;z-index:30;padding:20px}.sm.on{display:flex}
+.sm .in{background:#fff;color:#111;border-radius:16px;padding:18px;max-width:440px;width:100%;font-size:16px;-webkit-user-select:text;user-select:text}
+.sm h2{margin:0 0 8px;font-size:18px}.sm input{width:100%;padding:12px;font:inherit;border:1px solid #ccc;border-radius:10px;margin:6px 0}.sm .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.sm button,.sm a.b{flex:1;min-width:120px;padding:12px;border:1px solid #ccc;border-radius:10px;background:#fff;font:inherit;text-align:center;color:#111;text-decoration:none;cursor:pointer}.sm button.p{background:#111;color:var(--gold);border-color:#111}
+.big{max-width:640px;margin:auto;text-align:center;padding:40px 20px}.big a{color:var(--gold)}
+</style>
+</head>
+<body>
+<div id="app"><div class="big">読み込み中…</div></div>
+<div class="ov" id="ov" role="status" aria-live="assertive"></div>
+<div class="sm" id="sm"><div class="in"><h2>スタッフ用メニュー</h2>
+<p style="margin:0 0 6px;font-size:14px;color:#555">QRコードがない方の受付：予約番号を入力してください。</p>
+<form id="mf"><input id="mi" placeholder="予約番号（例：ABCD-EFGH-JKLM）" autocomplete="off" autocapitalize="characters"><div class="row"><button class="p" type="submit">受付する</button></div></form>
+<div class="row"><a class="b" id="mb" href="admin.html">管理画面へ戻る</a><button id="mc" type="button">閉じる</button></div>
+<p style="margin:10px 0 0;font-size:12px;color:#777">※ 受付のあと、このiPadは、ログアウトしておくと安心です（管理画面の「ログアウト」）。</p></div></div>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script>window.firebase||document.write('<script src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-app-compat.js"><\/script>')</script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script>(window.firebase&&firebase.auth)||document.write('<script src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-auth-compat.js"><\/script>')</script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>(window.firebase&&firebase.firestore)||document.write('<script src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-firestore-compat.js"><\/script>')</script>
+<script src="firebase-config.js"></script>
+<script src="core.js"></script>
+<script src="checkin.js"></script>
+<script>
+(function(){
+'use strict';
+var app=document.getElementById('app'),ov=document.getElementById('ov'),sm=document.getElementById('sm'),C=null,db=null,EV=null,stream=null,det=null,scanning=false,raf=0,hold='',holdAt=0,hideT=0,busy=false;
+var esc=function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})};
+var EID=(/[?&]e=([\w-]+)/.exec(location.search)||[])[1]||'';
+function big(h){app.innerHTML='<div class="big">'+h+'</div>'}
+/* ---- 音（短いチャイム） ---- */
+var AC=null;function tone(f,d,t){try{AC=AC||new (window.AudioContext||window.webkitAudioContext)();var o=AC.createOscillator(),g=AC.createGain();o.type='sine';o.frequency.value=f;g.gain.value=.12;o.connect(g);g.connect(AC.destination);o.start(AC.currentTime+(t||0));o.stop(AC.currentTime+(t||0)+d)}catch(e){}}
+function chime(k){if(k==='ok'){tone(880,.14);tone(1320,.22,.15)}else if(k==='dup'){tone(660,.2)}else{tone(330,.35)}}
+/* ---- 結果の表示（読み取った方ご本人のお名前だけ。ほかの方の情報は出さない） ---- */
+function show(k,h,sec){
+  clearTimeout(hideT);ov.className='ov on '+k;ov.innerHTML=h;chime(k);hideT=setTimeout(function(){ov.className='ov';ov.innerHTML=''},sec*1000);
+}
+ov.onclick=function(){clearTimeout(hideT);ov.className='ov';ov.innerHTML=''};
+function okView(r){show('ok','<div class="ic">✓</div><div class="t1">ご来場ありがとうございます</div><div class="t2">'+esc(r.name)+' 様　'+r.n+'名様</div><div class="t3">受付が完了しました。どうぞ、ご入場ください。</div>',5)}
+function dupView(r){var d=r.checkin&&r.checkin.at&&r.checkin.at.toDate?r.checkin.at.toDate():null,t=d?('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2):'';show('dup','<div class="ic">✓</div><div class="t1">すでに受付が済んでいます</div><div class="t2">'+esc(r.name)+' 様</div>'+(t?'<div class="t3">'+t+' に、受付済みです</div>':''),5)}
+function ngView(){show('ng','<div class="ic">!</div><div class="t1">受付できませんでした</div><div class="t3">お手数ですが、スタッフにお声がけください。</div>',6)}
+/* ---- 受付の処理 ---- */
+async function handle(text){
+  var id=CHK.parseId(text);if(!id){return}
+  if(busy)return;busy=true;
+  try{
+    var s=await C.res.doc(id).get();if(!s.exists){ngView();return}
+    var r=Object.assign({id:id},s.data());
+    if(r.eventId!==EID||!(r.status==='confirmed'||r.status==='won')){ngView();return}
+    if(r.checkin){dupView(r);return}
+    var u=firebase.auth().currentUser;
+    await C.res.doc(id).update({checkin:{at:firebase.firestore.FieldValue.serverTimestamp(),by:(u&&u.email)||''},updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+    try{await db.collection('auditLog').add({by:(u&&u.email)||'',action:'来場受付（受付画面）',detail:(r.name||'')+' 様（'+id+'）',at:firebase.firestore.FieldValue.serverTimestamp()})}catch(e){}
+    okView(r);
+  }catch(e){ngView()}
+  finally{busy=false}
+}
+/* ---- カメラ（インカメラ） ---- */
+async function startCam(){
+  try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:1280},height:{ideal:960}},audio:false})}
+  catch(e){document.getElementById('cmsg').innerHTML='<b>カメラを使えません</b><span>スタッフにお声がけください（スタッフ：カメラの許可をご確認ください）</span>';return}
+  var v=document.getElementById('vid');v.srcObject=stream;try{await v.play()}catch(e){}
+  if('BarcodeDetector' in window){try{det=new window.BarcodeDetector({formats:['qr_code']})}catch(e){det=null}}
+  if(!det){try{await CHK.loadJsQR()}catch(e){document.getElementById('cmsg').innerHTML='<b>読み取りの準備ができません</b><span>ページを再読み込みしてください</span>';return}}
+  var cv=document.createElement('canvas'),cx=cv.getContext('2d',{willReadFrequently:true}),b2=false;scanning=true;
+  var tick=async function(){
+    if(!scanning)return;
+    if(!b2&&v.readyState>=2&&v.videoWidth){
+      b2=true;var txt='';
+      try{
+        if(det){var r=await det.detect(v);txt=r&&r[0]?r[0].rawValue:''}
+        else{var w=Math.min(720,v.videoWidth),h=Math.round(v.videoHeight*w/v.videoWidth);cv.width=w;cv.height=h;cx.drawImage(v,0,0,w,h);var q=window.jsQR(cx.getImageData(0,0,w,h).data,w,h,{inversionAttempts:'attemptBoth'});txt=q?q.data:''}
+      }catch(e){txt=''}
+      b2=false;
+      var id=txt?CHK.parseId(txt):'';
+      if(id&&(id!==hold||Date.now()-holdAt>7000)){hold=id;holdAt=Date.now();await handle(txt)}
+    }
+    raf=requestAnimationFrame(tick);
+  };
+  raf=requestAnimationFrame(tick);
+  try{if(navigator.wakeLock)navigator.wakeLock.request('screen').catch(function(){})}catch(e){}
+  document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible'){try{navigator.wakeLock&&navigator.wakeLock.request('screen').catch(function(){})}catch(e){}}});
+}
+function screen(){
+  app.innerHTML='<div class="hd" id="logo">'+esc('Atelier Tokai')+'</div><div class="ev">'+esc(EV.name||'')+'</div>'+
+    '<div class="cam"><div class="vb"><video id="vid" playsinline muted></video><div class="fr"></div></div></div>'+
+    '<div class="msg" id="cmsg"><b>ご予約のQRコードを、カメラにかざしてください</b><span>QRコードをお持ちでない方は、スタッフにお声がけください</span></div>';
+  // 上のロゴを2秒長押し → スタッフ用メニュー
+  var lg=document.getElementById('logo'),t=0;
+  var down=function(){clearTimeout(t);t=setTimeout(function(){sm.className='sm on';document.getElementById('mb').href='admin.html'},2000)},up=function(){clearTimeout(t)};
+  lg.addEventListener('touchstart',down,{passive:true});lg.addEventListener('touchend',up);lg.addEventListener('touchcancel',up);lg.addEventListener('mousedown',down);lg.addEventListener('mouseup',up);lg.addEventListener('mouseleave',up);
+  startCam();
+}
+document.getElementById('mc').onclick=function(){sm.className='sm'};
+document.getElementById('mf').onsubmit=function(e){e.preventDefault();var v=document.getElementById('mi').value;document.getElementById('mi').value='';sm.className='sm';handle(v)};
+/* ---- 起動：管理画面にログイン済みの端末だけ ---- */
+function boot(){
+  if(typeof firebase==='undefined'||typeof makeCore==='undefined'){big('読み込めませんでした。電波の良い場所で、ページを再読み込みしてください。');return}
+  firebase.initializeApp(FIREBASE_CONFIG);db=firebase.firestore();try{db.settings({experimentalAutoDetectLongPolling:true,merge:true})}catch(e){}C=makeCore(firebase,db);
+  firebase.auth().onAuthStateChanged(async function(u){
+    if(!u){big('この画面は、スタッフ用です。<br>先に、<a href="admin.html">管理画面</a>でログインしてから、管理画面の「来場受付」タブから開いてください。');return}
+    try{
+      if(!EID){var s=await C.events.get(),l=s.docs.map(function(d){return Object.assign({id:d.id},d.data())}).filter(function(e){return e.checkin});
+        big(l.length?'<b>受付するイベントを選んでください</b><br><br>'+l.map(function(e){return '<a style="display:block;margin:10px 0;padding:14px;border:1px solid #555;border-radius:12px;color:#fff;text-decoration:none" href="?e='+esc(e.id)+'">'+esc(e.name)+'</a>'}).join(''):'来場受付を使うイベントがありません。<br><a href="admin.html">管理画面</a>で、イベントの設定の「来場受付（QR）を使う」にチェックを入れてください。');return}
+      var d=await C.events.doc(EID).get();if(!d.exists){big('イベントが見つかりません。<a href="admin.html">管理画面</a>から開き直してください。');return}
+      EV=Object.assign({id:EID},d.data());if(!EV.checkin){big('このイベントは、来場受付を使わない設定です。<a href="admin.html">管理画面</a>で設定してください。');return}
+      screen();
+    }catch(e){big('読み込めませんでした。管理者としてログインしているか、ご確認ください。<br><a href="admin.html">管理画面</a>')}
+  });
+}
+boot();
+})();
+</script>
+</body>
+</html>
