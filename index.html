@@ -102,6 +102,11 @@ function copyText(t){
   return new Promise(function(res,rej){var a=document.createElement('textarea');a.value=t;a.style.position='fixed';a.style.opacity='0';document.body.appendChild(a);a.select();try{document.execCommand('copy')?res():rej()}catch(e){rej(e)}a.remove()});
 }
 function slotText(rec){return day(rec.date)+' '+rng(rec)}
+// 来場受付のQR：管理画面で、イベントごとに、いつでもON／OFFを切り替えられる（初めはOFF。OFFのときは、何も出ない）
+function qrHTML(ev,id){
+  if(!(ev&&ev.checkin&&ev.checkinQr)||!id)return '';
+  var img='';try{img='<img src="'+QR.dataURL(id,6)+'" alt="'+T('来場受付用のQRコード')+'" style="width:200px;height:200px;image-rendering:pixelated;display:block;margin:8px auto;border:1px solid #ddd;background:#fff">'}catch(e){return ''}
+  return '<div class="box" style="margin-top:14px;text-align:center"><b style="font-size:14px">'+T('当日の受付用QRコード')+'</b>'+img+'<div class="code" style="font-size:15px">'+fmtCode(id)+'</div><p class="note" style="margin:6px 0 0">'+T('当日、受付で、この画面（またはスクリーンショット）をご提示ください。')+'</p></div>'}
 function keepHTML(rec){var m=!!(rec&&rec.mail);return ('<div class="box" style="margin-top:14px"><b style="font-size:14px">'+T('ご予約番号を、なくさないために')+'</b><div class="tools" style="margin:8px 0 0"><button type="button" class="s" id="kc">'+T('予約番号をコピー')+'</button>')+(m?('<button type="button" class="s" id="km">'+T('自分宛にメールで控える')+'</button>'):'')+('<button type="button" class="s" id="kd">'+T('カレンダーに追加')+'</button></div>')+(m?('<p class="note" style="margin:8px 0 0">'+T('メールの控えには、予約を開くためのリンクが入ります。他の方には、送らないでください。')+'</p>'):'')+'</div>'}
 function wireKeep(rec){
   var ev=rec.eventName||T('ご予約');
@@ -439,7 +444,7 @@ function doneView(r,d,gn){
   app.innerHTML='<h2>'+msg+'</h2><div class="card"><b>'+esc(ev.name)+'</b><br>'+day(s.date)+' '+rng(s)+'<br>'+esc(d.name)+(' '+T('様')+'　')+(d.a+d.k+d.s+d.m)+(T('名')+'</div>')+placeHTML(ev)+
    ('<p class="note" style="margin:14px 0 0">'+T('予約番号（変更・キャンセル'))+(ev.method==='抽選'?T('・抽選結果の確認'):'')+(T('に必要です）')+'</p><div class="code">')+fmtCode(r.id)+'</div>'+
    ('<div class="box">'+T('この予約番号は、この端末のトップ画面「あなたの予約」にも表示されます。別の端末で確認する場合に備えて、スクリーンショットを保存するか、予約番号をメモしてください。予約確認のメールは送信されません。')+'</div>')+
-   keepHTML({mail:d.mail})+(PV&&realTest(ev)?'<button class="p" id="tr" style="margin-top:14px">この予約を開いて、変更・キャンセルを試す</button>':'')+
+   qrHTML(ev,r.id)+keepHTML({mail:d.mail})+(PV&&realTest(ev)?'<button class="p" id="tr" style="margin-top:14px">この予約を開いて、変更・キャンセルを試す</button>':'')+
    (PV&&!realTest(ev)&&ev.golf&&(d.a+d.k+d.s+d.m)>=2?'<button class="p" id="tg" style="margin-top:14px">お連れ様の入力を練習する</button>':'')+(gn&&gn.length?'<div id="dgs"></div>':'')+('<button class="p" id="hm" style="margin-top:14px">'+T('トップへ戻る')+'</button>');
   q('hm').onclick=home;
   if(PV&&realTest(ev)&&window.PUSH)PUSH.ask(app,true);   // 準備中のイベントのテスト：通知の確認もここで試せる
@@ -540,6 +545,7 @@ function detailView(){
   if(r.status==='lost')h+=('<div class="box">'+T('今回は抽選の結果、ご案内できませんでした。')+'</div>');
   var golfG=can&&S.ev&&S.ev.golf&&r.n>=2;
   if(golfG)h+=('<h2 style="font-size:16px;margin-top:22px">'+T('お連れ様の入力')+'<small>'+T('お連れ様ご本人に、お名前とメールアドレスを入力してもらえます')+'</small></h2><div id="gst"><div class="loading sm" role="status"><span class="spin"></span>'+T('読み込み中…')+'</div></div>');
+  if(can&&r.status==='confirmed'||can&&r.status==='won')h+=qrHTML(S.ev,r.id);
   if(can)h+=keepHTML(r);
   // 変更を保存した直後は、押し間違いを防ぐためキャンセルボタンを出さない（トップから開き直すと表示される）
   var just=S.justChanged;S.justChanged=false;
