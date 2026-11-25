@@ -28,6 +28,7 @@
 <script src="qr.js"></script>
 <script src="album-admin.js"></script>
 <script src="pairing.js"></script>
+<script src="admin-extras.js"></script>
 <script src="texts.js"></script>
 <script>window.TXH=TXT.h;window.TXC=TXT.clean;try{delete window.T;delete window.TXT}catch(e){window.T=undefined}</script>
 <script src="texts-editor.js"></script>
@@ -93,7 +94,7 @@ async function loadSlots(){
 }
 function shell(){
   app.className='wide';
-  app.innerHTML='<div class="tools" style="justify-content:space-between"><div class="tabs" style="border:0;margin:0"><button data-t="res" class="'+(S.tab==='res'?'on':'')+'">予約一覧</button><button data-t="ev" class="'+(S.tab==='ev'?'on':'')+'">イベント・枠</button><button data-t="cs" class="'+(S.tab==='cs'?'on':'')+'">お客様画面</button><button data-t="tx" class="'+(S.tab==='tx'?'on':'')+'">お客様画面の文言</button>'+(isOwnerUser(auth.currentUser)?'<button data-t="st" class="'+(S.tab==='st'?'on':'')+'">スタッフ</button>':'')+'</div><div class="tools" style="margin:0;align-items:center"><a class="s" href="staff-guide.html" target="_blank" rel="noopener">使い方</a><button class="s" id="lo">ログアウト</button></div></div><div id="msg" class="box" '+(S.msg?'':'hidden')+'>'+esc(S.msg)+'</div><div id="pane"></div>';
+  app.innerHTML='<div class="tools" style="justify-content:space-between"><div class="tabs" style="border:0;margin:0"><button data-t="res" class="'+(S.tab==='res'?'on':'')+'">予約一覧</button><button data-t="stt" class="'+(S.tab==='stt'?'on':'')+'">受付状況</button><button data-t="ev" class="'+(S.tab==='ev'?'on':'')+'">イベント・枠</button><button data-t="cs" class="'+(S.tab==='cs'?'on':'')+'">お客様画面</button><button data-t="tx" class="'+(S.tab==='tx'?'on':'')+'">お客様画面の文言</button>'+(isOwnerUser(auth.currentUser)?'<button data-t="st" class="'+(S.tab==='st'?'on':'')+'">スタッフ</button>':'')+'</div><div class="tools" style="margin:0;align-items:center"><a class="s" href="staff-guide.html" target="_blank" rel="noopener">使い方</a><button class="s" id="lo">ログアウト</button></div></div><div id="msg" class="box" '+(S.msg?'':'hidden')+'>'+esc(S.msg)+'</div><div id="pane"></div>';
   app.querySelectorAll('[data-t]').forEach(function(b){b.onclick=function(){if(S.tab==='tx'&&S.txed&&S.txed.dirty()&&b.dataset.t!=='tx'&&!confirm('文言の変更が、まだ保存されていません。保存せずに、移動しますか？'))return;S.tab=b.dataset.t;S.msg='';go()}});
   q('lo').onclick=function(){auth.signOut()};
 }
@@ -103,7 +104,8 @@ async function go(){
   if(S.unsub){S.unsub();S.unsub=null}
   shell();q('pane').innerHTML='<div class="loading" role="status"><span class="spin"></span>読み込み中…</div>';
   try{await loadEvents();await loadSlots()}catch(e){say('読み込めませんでした: '+(e.code==='permission-denied'?'このアカウントは管理者として登録されていません。オーナーにスタッフ登録を依頼してください':e.message));return}
-  if(S.tab==='res')resView();else if(S.tab==='cs')csView();else if(S.tab==='tx')S.txed=TXED.view(q('pane'),{C:C,say:say,esc:esc});else if(S.tab==='st'&&isOwnerUser(auth.currentUser))staffView();else evView();
+  if(window.AX)AX.stop();
+  if(S.tab==='res')resView();else if(S.tab==='stt')AX.statusView(C,q('pane'),S.events);else if(S.tab==='cs')csView();else if(S.tab==='tx')S.txed=TXED.view(q('pane'),{C:C,say:say,esc:esc});else if(S.tab==='st'&&isOwnerUser(auth.currentUser))staffView();else evView();
   scrubOnce();
   if(!S.albClean){S.albClean=1;C.albumCleanup().then(function(n){if(n)toast('掲載期間が終わった写真・成績表を削除しました（'+n+'組）')}).catch(function(){})}
   migrateOnce();
@@ -194,7 +196,7 @@ function draw(){
     var b=e.target.closest('[data-pid]');if(!b)return;
     var r=S.rs.filter(function(x){return x.id===b.dataset.pid})[0];
     if(!confirm(r.name+' 様を確定にします。よろしいですか？'))return;
-    try{var y=await C.promote(r.id);if(y.ok)pushQ({type:'promote',rid:r.id,eid:r.eventId});say(y.ok?'確定にしました':y.msg);await loadSlots();draw()}catch(er){say('失敗しました: '+er.message)}
+    try{var y=await C.promote(r.id);if(y.ok){pushQ({type:'promote',rid:r.id,eid:r.eventId});AUDIT('繰り上げ',r.name+' 様（'+r.id+'）')}say(y.ok?'確定にしました':y.msg);await loadSlots();draw()}catch(er){say('失敗しました: '+er.message)}
   };
   var tl=(ev.golf?'<button class="s" id="pair" style="border-color:var(--gold);font-weight:700">組み合わせ表（Excel出力）</button>':'')+'<button class="s" id="csv">CSVを書き出す（Excel用）</button><button class="s" id="rc">人数を数え直す</button>';
   if(ev.method==='抽選'&&!ev.drawn)tl+='<button class="s" id="dr">抽選を実行する</button>';
@@ -218,17 +220,17 @@ function draw(){
     try{
       if(a==='alb'){ALB.open(C,r,ev,Object.keys(r.inv||{}).map(function(k){return r.inv[k]}).filter(Boolean),say);return}
       if(a==='inv'){await C.res.doc(id).update({invited:b.checked,updatedAt:firebase.firestore.FieldValue.serverTimestamp()})}
-      else if(a==='cx'){if(!confirm(r.name+' 様の予約を取り消します。よろしいですか？'))return;var x=await C.cancel(id,'',true);say(x.ok?'取り消しました'+(x.freed?'。枠に空きができました（キャンセル待ちの方は「繰り上げ」で確定できます）':''):x.msg);await loadSlots();draw()}
-      else if(a==='pro'){if(!confirm(r.name+' 様を確定にします。店舗からご連絡済みですか？'))return;var y=await C.promote(id);if(y.ok)pushQ({type:'promote',rid:id,eid:r.eventId});say(y.ok?'確定にしました':y.msg);await loadSlots();draw()}
+      else if(a==='cx'){if(!confirm(r.name+' 様の予約を取り消します。よろしいですか？'))return;var x=await C.cancel(id,'',true);if(x.ok)AUDIT('予約を取り消し',r.name+' 様（'+id+'）／'+(r.eventName||''));say(x.ok?'取り消しました'+(x.freed?'。枠に空きができました（キャンセル待ちの方は「繰り上げ」で確定できます）':''):x.msg);await loadSlots();draw()}
+      else if(a==='pro'){if(!confirm(r.name+' 様を確定にします。店舗からご連絡済みですか？'))return;var y=await C.promote(id);if(y.ok){pushQ({type:'promote',rid:id,eid:r.eventId});AUDIT('繰り上げ',r.name+' 様（'+id+'）')}say(y.ok?'確定にしました':y.msg);await loadSlots();draw()}
     }catch(er){say('失敗しました: '+er.message)}
   };
   q('csv').onclick=function(){csv(list)};
-  if(q('pair'))q('pair').onclick=function(){PAIR.open(C,ev,S.rs||[],S.gs||{},say)};
+  if(q('pair'))q('pair').onclick=function(){PAIR.open(C,ev,S.rs||[],S.gs||{},say,S.events)};
   q('rc').onclick=async function(){var b=this;b.disabled=true;try{await C.recount(S.evId);await loadSlots();say('人数を数え直しました');draw()}catch(er){b.disabled=false;say('失敗しました: '+er.message)}};
   if(q('dr'))q('dr').onclick=async function(){
     if(!confirm('「'+ev.name+'」の抽選を実行します。実行後は新しいお申し込みができなくなり、取り消せません。よろしいですか？'))return;
     this.disabled=true;
-    try{var r=await C.runLottery(S.evId);if(r.ok){pushQ({type:'lottery',eid:S.evId});say('抽選しました。当選 '+r.win+'組 / キャンセル待ち '+r.wait+'組 / 落選 '+r.lost+'組');await loadEvents();await loadSlots();resView()}else say(r.msg)}catch(er){say('失敗しました: '+er.message)}
+    try{var r=await C.runLottery(S.evId);if(r.ok){pushQ({type:'lottery',eid:S.evId});AUDIT('抽選を実行',ev.name+'（当選'+r.win+'・待ち'+r.wait+'・落選'+r.lost+'）');say('抽選しました。当選 '+r.win+'組 / キャンセル待ち '+r.wait+'組 / 落選 '+r.lost+'組');await loadEvents();await loadSlots();resView()}else say(r.msg)}catch(er){say('失敗しました: '+er.message)}
   };
 }
 function csv(list){
@@ -341,7 +343,7 @@ function evView(){
     if(R.allday){ev.meetAt=R.meet;ev.untilAt=R.until}   // 終日の集合・終了の目安は、イベントの設定として保存
     if(!ex&&ev.method==='抽選'&&!ev.deadlineMs){q('cer').textContent='抽選の締切を入力してください';return}
     var sb=q('cf').querySelector('button[type=submit]');sb.disabled=true;
-    try{var r=await C.createSlots(evId,ev,dates,o);if(r.ok){if(!ex){try{await saveImages(evId,'nw')}catch(ix){S.msg='枠は作成しましたが、写真の保存に失敗しました: '+ix.message;S.evId=evId;go();return}}S.msg=r.count+'件の枠を作成しました';S.evId=evId;go()}else{q('cer').textContent=r.msg;sb.disabled=false}}catch(x){q('cer').textContent='失敗しました: '+x.message;sb.disabled=false}
+    try{var r=await C.createSlots(evId,ev,dates,o);if(r.ok){AUDIT('枠を作成',name+'（'+r.count+'件）');if(!ex){try{await saveImages(evId,'nw')}catch(ix){S.msg='枠は作成しましたが、写真の保存に失敗しました: '+ix.message;S.evId=evId;go();return}}S.msg=r.count+'件の枠を作成しました';S.evId=evId;go()}else{q('cer').textContent=r.msg;sb.disabled=false}}catch(x){q('cer').textContent='失敗しました: '+x.message;sb.disabled=false}
   };
   app.querySelectorAll('[data-open]').forEach(function(b){b.onclick=function(){openEv(+b.dataset.open,b)}});
 }
@@ -353,18 +355,18 @@ async function openEv(i,btn){
   try{var sn=await C.slots.where('eventId','==',e.id).get()}catch(x){box.innerHTML='';say('読み込めませんでした: '+x.message);if(btn)btn.disabled=false;return}
   if(btn){btn.disabled=false;btn.textContent='閉じる'}
   var sl=sn.docs.map(function(d){return Object.assign({id:d.id},d.data())}).sort(function(a,b){return (a.date+a.start)<(b.date+b.start)?-1:1});
-  box.innerHTML='<div style="margin-top:10px">'+optHTML('e'+i,e)+'<div class="tools"><button class="s" data-a="save">設定を保存</button><button class="s" data-a="pv">保存前の設定でお客様画面を確認</button><button class="s d" data-a="del">イベントを削除</button></div></div>'+
+  box.innerHTML='<div style="margin-top:10px">'+optHTML('e'+i,e)+'<div class="tools"><button class="s" data-a="save">設定を保存</button><button class="s" data-a="pv">保存前の設定でお客様画面を確認</button><button class="s" data-a="dup">このイベントを複製</button><button class="s d" data-a="del">イベントを削除</button></div></div>'+
    '<details open><summary>枠 '+sl.length+'件</summary><div id="sx'+i+'"></div></details>';
   try{var ei=await C.eimgs.doc(e.id).get();wireImgs('e'+i,ei.exists?ei.data().imgs:[])}catch(x){wireImgs('e'+i,[])}
   box.addEventListener('change',function(ev){var t=ev.target;if(t.id&&/pl$/.test(t.id)){var o=q(t.id+'o');if(o)o.hidden=t.value!=='ot'}});
   SB.editor(q('sx'+i),sl,{label:function(s){return md(s.date)+'　'+rng(s)},
-    save:async function(ch){try{var b=firebase.firestore().batch();Object.keys(ch).forEach(function(id){b.update(C.slots.doc(id),ch[id])});await b.commit();say(Object.keys(ch).length+'枠の変更を保存しました')}catch(x){say('保存できませんでした: '+x.message);throw x}},
+    save:async function(ch){try{var b=firebase.firestore().batch();Object.keys(ch).forEach(function(id){b.update(C.slots.doc(id),ch[id])});await b.commit();AUDIT('枠の定員・上限を変更',Object.keys(ch).length+'枠（'+e.name+'）');say(Object.keys(ch).length+'枠の変更を保存しました')}catch(x){say('保存できませんでした: '+x.message);throw x}},
     remove:async function(ids){
       var busy=[],ok=[];
       for(var k=0;k<ids.length;k++){var left=(await C.res.where('slotId','==',ids[k]).get()).docs.filter(function(d){var st=d.data().status;return st!=='cancel'&&st!=='lost'}).length;if(left)busy.push(ids[k]);else ok.push(ids[k])}
       if(busy.length&&!ok.length){alert('選んだ枠には、まだ予約（確定・キャンセル待ち・抽選待ち）があります。先に「予約一覧」で取り消してから、削除してください。');return []}
       if(!confirm((busy.length?'予約が残っている '+busy.length+'枠は削除できません。残りの ':'')+ok.length+'枠を削除します。よろしいですか？'))return [];
-      try{for(var j=0;j<ok.length;j++)await C.slots.doc(ok[j]).delete();say(ok.length+'枠を削除しました');return ok}catch(x){say('削除できませんでした: '+x.message);throw x}
+      try{for(var j=0;j<ok.length;j++)await C.slots.doc(ok[j]).delete();AUDIT('枠を削除',ok.length+'枠（'+e.name+'）');say(ok.length+'枠を削除しました');return ok}catch(x){say('削除できませんでした: '+x.message);throw x}
     }});
   box.onclick=async function(ev){
     var b=ev.target.closest('[data-a]');if(!b)return;var a=b.dataset.a;
@@ -378,10 +380,12 @@ async function openEv(i,btn){
       if(a==='save'){
         var o=readOpt('e'+i,e.name);
         if(o.method==='抽選'&&!o.deadlineMs){say('抽選の締切を入力してください');return}
-        await C.events.doc(e.id).update(o);await saveImages(e.id,'e'+i);say('設定を保存しました');await go()
+        await C.events.doc(e.id).update(o);await saveImages(e.id,'e'+i);AUDIT('イベント設定を保存',e.name);say('設定を保存しました');await go()
+      }else if(a==='dup'){
+        await AX.duplicate(C,e,say);await go()
       }else if(a==='del'){
         if(!confirm('「'+e.name+'」と、その枠をすべて削除します。予約データは残りますが、お客様画面からは見えなくなります。よろしいですか？'))return;
-        await C.deleteEvent(e.id);say('削除しました');await go()
+        await C.deleteEvent(e.id);AUDIT('イベントを削除',e.name);say('削除しました');await go()
       }
     }catch(x){say('失敗しました: '+x.message)}
   };
@@ -488,12 +492,13 @@ function staffView(){
       '<tr><td>'+esc((auth.currentUser&&auth.currentUser.email)||'')+'</td><td>オーナー（あなた）</td><td></td><td class="note">削除できません</td></tr>'+
       list.map(function(a){return '<tr><td>'+esc(a.email)+'</td><td>'+esc(a.name||'')+'</td><td>'+ts(a.addedAt)+'</td><td><button class="s d" data-del="'+esc(a.email)+'">削除</button></td></tr>'}).join('')+'</table></div>'+
       '<p class="note">辞めた方は「削除」を押すと、すぐに管理画面に入れなくなります。</p>';
+    var au=document.createElement('div');p.appendChild(au);AX.auditView(au);
     q('af').onsubmit=async function(e){e.preventDefault();var m=q('am').value.trim().toLowerCase();
       if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(m)){say('メールアドレスを正しく入力してください');return}
       if(auth.currentUser&&m===String(auth.currentUser.email||'').toLowerCase()){say('オーナーは登録しなくても入れます');return}
-      try{await db.collection('admins').doc(m).set({name:q('an').value.trim(),addedAt:firebase.firestore.FieldValue.serverTimestamp(),addedBy:auth.currentUser.email});say(m+' を登録しました');staffView()}catch(x){say('登録できませんでした: '+(x.code==='permission-denied'?'最新の firestore.rules を公開してください（オーナーだけが登録できます）':x.message))}};
+      try{await db.collection('admins').doc(m).set({name:q('an').value.trim(),addedAt:firebase.firestore.FieldValue.serverTimestamp(),addedBy:auth.currentUser.email});AUDIT('スタッフを登録',m);say(m+' を登録しました');staffView()}catch(x){say('登録できませんでした: '+(x.code==='permission-denied'?'最新の firestore.rules を公開してください（オーナーだけが登録できます）':x.message))}};
     p.querySelectorAll('[data-del]').forEach(function(b){b.onclick=async function(){var m=b.dataset.del;if(!confirm(m+' を削除します。この方は管理画面に入れなくなります。よろしいですか？'))return;
-      try{await db.collection('admins').doc(m).delete();say(m+' を削除しました');staffView()}catch(x){say('削除できませんでした: '+x.message)}}});
+      try{await db.collection('admins').doc(m).delete();AUDIT('スタッフを削除',m);say(m+' を削除しました');staffView()}catch(x){say('削除できませんでした: '+x.message)}}});
   }).catch(function(e){p.innerHTML='';say('読み込めませんでした: '+(e.code==='permission-denied'?'最新の firestore.rules を公開してください':e.message))});
 }
 
