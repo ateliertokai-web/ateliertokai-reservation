@@ -148,7 +148,7 @@ function resView(){
   S.unsub=function(){u1();u2();u3()};
 }
 // 通知（プッシュ通知）の送信予約。GAS（sendPushes）が数分ごとに送る
-function pushQ(o){try{return firebase.firestore().collection('pushQueue').add(Object.assign({sent:false,createdAt:firebase.firestore.FieldValue.serverTimestamp()},o)).catch(function(){})}catch(e){return Promise.resolve()}}
+function pushQ(o){try{return firebase.firestore().collection('pushQueue').add(Object.assign({sent:false,createdAt:firebase.firestore.FieldValue.serverTimestamp()},o)).then(function(){if(window.AX)AX.kick()}).catch(function(){})}catch(e){return Promise.resolve()}}
 function kidsN(r){return (+r.k||0)+(+r.s||0)+(+r.m||0)}
 // 参加者名。ゴルフで「レクサスオーナー」にチェックがある方には（オーナー）を付ける
 function pTxt(r,html){var l=r.lexus||[];return (r.participants||[]).map(function(p,i){return p?(html?esc(p):p)+(l[i]?(html?'<b style="color:var(--gold-d)">（オーナー）</b>':'（オーナー）'):''):''}).filter(Boolean).join('、')}
@@ -291,7 +291,7 @@ function optHTML(p,e){
    '<label>受付の開始日時（空欄なら、今すぐ受付）<input type="datetime-local" id="'+p+'a" value="'+dtl(e.openAtMs)+'"></label>'+
    '<label>同一イベントグループ名（連日予約防止用）<input id="'+p+'g" value="'+esc(e.group)+'" placeholder="例：サッカー観戦"></label></div>'+
    '<div><label>お客様画面への表示<select id="'+p+'vs"><option value="open"'+(e.visible!==false?' selected':'')+'>公開する（お客様画面に表示）</option><option value="prep"'+(e.visible===false&&e.test?' selected':'')+'>準備中（お客様画面に表示しない）</option><option value="closed"'+(e.visible===false&&!e.test?' selected':'')+'>受付終了（お客様画面に表示せず、予約もできない）</option></select>'+
-   '<small class="help"><b>準備中</b>：お客様には見えません。「お客様画面で確認（練習）」で、予約・変更・キャンセルまで<b>本当に</b>試せます（試した予約は本当に保存されます）。<br><b>受付終了</b>：お客様には見えず、予約もできません。練習画面でも保存されません。</small></label>'+chk(p+'w',e.wait!==false,'満席時にキャンセル待ちを受け付ける')+chk(p+'l',!!e.lap,'未就学児の注意文を表示','カスタマイズイベントなどで、定員を超えて未就学児を連れてきたいご要望がありそうなときに使います。4名席のみの場合は「保護者の膝の上で」などの案内を、下の「未就学児の注意文」に入力してください。')+chk(p+'n',!!e.names,'参加者名の入力欄を表示','ゴルフやホテル宿泊など、お連れ様のお名前が必要なイベントで入力欄を出せます。未入力でも予約でき、あとからお客様が編集できます。')+chk(p+'gf',!!e.golf,'ゴルフ（お子様の選択なし・参加者名を自動で表示）','未就学児は参加できないため、2名以上でもお子様の選択肢が出ません。参加者1には申込者のお名前が自動で入ります。')+chk(p+'mo',!!e.mailOpt,'メールアドレスを任意にする（空欄でも予約できます）','必須のほうがセキュリティは高くなります（任意だと予約番号だけで変更できるため、やや低め）。個人情報をなるべく預からない観点では、任意がおすすめです。')+chk(p+'o',!!e.order,'ご注文中・新規のお客様チェック欄を表示','登録ナンバーで、お名前が違う場合（オーナーのご家族など）も判別できるようにしています。この欄を出すと、ご注文中で納車待ちのお客様も、ナンバーの入力を飛ばして参加できます。')+chk(p+'ci',!!e.checkin,'来場受付（QR）を使う（管理画面の「来場受付」タブに出ます）','当日、お客様の予約番号（QR）を読み取って、来場を記録できます。')+chk(p+'cq',!!e.checkinQr,'お客様の画面に、受付用のQRを表示する','初めはOFFです。ONにすると、ご予約の完了画面と、確定したご予約の画面に、QRコードが出ます。いつでも、切り替えられます。「来場受付」タブからも、すぐ切り替えられます。')+chk(p+'t',!!e.note,'お客様ページに備考欄を作成','お客様がご要望を入力できる備考欄を、お客様画面に出します（例：ゴルフ 9時ごろ希望）。')+'</div>'+
+   '<small class="help"><b>準備中</b>：お客様には見えません。「お客様画面で確認（練習）」で、予約・変更・キャンセルまで<b>本当に</b>試せます（試した予約は本当に保存されます）。<br><b>受付終了</b>：お客様には見えず、予約もできません。練習画面でも保存されません。</small></label>'+chk(p+'w',e.wait!==false,'満席時にキャンセル待ちを受け付ける')+chk(p+'l',!!e.lap,'未就学児の注意文を表示','カスタマイズイベントなどで、定員を超えて未就学児を連れてきたいご要望がありそうなときに使います。4名席のみの場合は「保護者の膝の上で」などの案内を、下の「未就学児の注意文」に入力してください。')+chk(p+'n',!!e.names,'参加者名の入力欄を表示','ゴルフやホテル宿泊など、お連れ様のお名前が必要なイベントで入力欄を出せます。未入力でも予約でき、あとからお客様が編集できます。')+chk(p+'gf',!!e.golf,'ゴルフ（お子様の選択なし・参加者名を自動で表示）','未就学児は参加できないため、2名以上でもお子様の選択肢が出ません。参加者1には申込者のお名前が自動で入ります。')+chk(p+'mo',!!e.mailOpt,'メールアドレスを任意にする（空欄でも予約できます）','必須のほうがセキュリティは高くなります（任意だと予約番号だけで変更できるため、やや低め）。個人情報をなるべく預からない観点では、任意がおすすめです。')+chk(p+'o',!!e.order,'ご注文中・新規のお客様チェック欄を表示','登録ナンバーで、お名前が違う場合（オーナーのご家族など）も判別できるようにしています。この欄を出すと、ご注文中で納車待ちのお客様も、ナンバーの入力を飛ばして参加できます。')+chk(p+'rm',e.remind!==false,'前日のリマインドを送る（通知・メール）','予約の前日の朝9時30分ごろに、予約した方へ、通知（許可した方）とメール（メールアドレスをご入力の方）で、お知らせします。テスト中（準備中）のイベントには、送りません。')+chk(p+'ci',!!e.checkin,'来場受付（QR）を使う（管理画面の「来場受付」タブに出ます）','当日、お客様の予約番号（QR）を読み取って、来場を記録できます。')+chk(p+'cq',!!e.checkinQr,'お客様の画面に、受付用のQRを表示する','初めはOFFです。ONにすると、ご予約の完了画面と、確定したご予約の画面に、QRコードが出ます。いつでも、切り替えられます。「来場受付」タブからも、すぐ切り替えられます。')+chk(p+'t',!!e.note,'お客様ページに備考欄を作成','お客様がご要望を入力できる備考欄を、お客様画面に出します（例：ゴルフ 9時ごろ希望）。')+'</div>'+
    '<label>お客様画面に出すメッセージ（空欄なら非表示）<small class="help" style="font-weight:400">店舗からお客様へのご連絡や、補足のご案内に使えます。</small><textarea id="'+p+'s" rows="2">'+esc(e.msg)+'</textarea></label>'+
    '<label>未就学児の注意文（空欄なら標準の文）<textarea id="'+p+'p" rows="2">'+esc(e.lapText)+'</textarea></label>'+placeHTML(p,e)+imgHTML(p);
 }
@@ -306,7 +306,7 @@ function placeHTML(p,e){
 }
 function readOpt(p,name){
   var m=q(p+'m').value,dv=q(p+'d').value;
-  var o={name:name,method:m,test:q(p+'vs').value==='prep',visible:q(p+'vs').value==='open',wait:q(p+'w').checked,lap:q(p+'l').checked,names:q(p+'n').checked,golf:q(p+'gf').checked,mailOpt:q(p+'mo').checked,order:q(p+'o').checked,note:q(p+'t').checked,checkin:q(p+'ci').checked,checkinQr:q(p+'cq').checked,
+  var o={name:name,method:m,test:q(p+'vs').value==='prep',visible:q(p+'vs').value==='open',wait:q(p+'w').checked,lap:q(p+'l').checked,names:q(p+'n').checked,golf:q(p+'gf').checked,mailOpt:q(p+'mo').checked,order:q(p+'o').checked,note:q(p+'t').checked,remind:q(p+'rm').checked,checkin:q(p+'ci').checked,checkinQr:q(p+'cq').checked,
     group:q(p+'g').value.trim(),msg:q(p+'s').value.trim(),lapText:q(p+'p').value.trim()};
   o.deadlineMs=(m==='抽選'&&dv)?new Date(dv).getTime():0;
   var av=q(p+'a').value;o.openAtMs=av?new Date(av).getTime():0;
@@ -417,16 +417,16 @@ function newsCard(p){
   d.innerHTML='<h2 style="margin-top:0">アプリの通知でお知らせを送る</h2><p class="note">予約ページをホーム画面に追加し、通知を許可したお客様のスマホに届きます。<span id="nwN"></span>キャンセル待ちの繰り上げ・抽選の結果は、自動で届きます。</p>'+
     '<label>送る相手<select id="nwT"><option value="">通知を許可した全員</option>'+S.events.map(function(e){return '<option value="'+e.id+'">「'+esc(e.name)+'」を予約した方</option>'}).join('')+'</select></label>'+
     '<label>見出し<input id="nwH" maxlength="40" placeholder="例：レクサス鹿児島東開からのお知らせ"></label><label>本文<textarea id="nwB" rows="3" maxlength="200" placeholder="例：明日のゴルフコンペは予定どおり開催します。"></textarea></label>'+
-    '<div class="tools"><button class="p" id="nwS" type="button" style="max-width:220px">お知らせを送る</button></div><p class="note">送信は数分以内に行われます（自動処理のGASが送ります）。</p>';
+    '<div class="tools"><button class="p" id="nwS" type="button" style="max-width:220px">お知らせを送る</button></div><p class="note">「すぐ届ける設定」（スタッフタブ）が済んでいれば、数秒で届きます。未設定のときは、5分ごとの自動処理で、数分以内に届きます。</p>';
   p.insertBefore(d,p.firstChild);
   firebase.firestore().collection('pushSubs').get().then(function(s){q('nwN').textContent='いま通知を受け取っている端末：'+s.size+'台。'}).catch(function(){});
   q('nwS').onclick=async function(){
-    var t=q('nwH').value.trim()||'レクサス鹿児島東開からのお知らせ',b=q('nwB').value.trim(),ev=q('nwT').value;
+    var t=q('nwH').value.trim()||'レクサス鹿児島東開からのお知らせ',b=q('nwB').value.trim(),ev=q('nwT').value,who=ev?'（'+((S.events.filter(function(e){return e.id===ev})[0]||{}).name||'')+'の予約者）':'（全員）';
     if(!b){say('本文を入力してください');return}
     var who=ev?'「'+(S.events.filter(function(e){return e.id===ev})[0]||{}).name+'」を予約した方':'通知を許可した全員';
     if(!confirm(who+'に、お知らせを送ります。よろしいですか？\n\n'+t+'\n'+b))return;
     this.disabled=true;
-    try{await firebase.firestore().collection('pushQueue').add({type:'news',eid:ev,title:t.slice(0,40),body:b.slice(0,200),sent:false,createdAt:firebase.firestore.FieldValue.serverTimestamp()});q('nwB').value='';say('お知らせの送信を受け付けました（数分以内に届きます）')}
+    try{await firebase.firestore().collection('pushQueue').add({type:'news',eid:ev,title:t.slice(0,40),body:b.slice(0,200),sent:false,createdAt:firebase.firestore.FieldValue.serverTimestamp()});q('nwB').value='';AUDIT('お知らせを送信',t+'／'+who);AX.kick().then(function(k){say(k?'お知らせを送りました（数秒で届きます）':'お知らせの送信を受け付けました（数分以内に届きます）')})}
     catch(e){say('送れませんでした: '+(e.code==='permission-denied'?'Firestoreのルールに「pushQueue」の設定がまだありません':e.message))}
     this.disabled=false;
   };
@@ -493,6 +493,7 @@ function staffView(){
       '<tr><td>'+esc((auth.currentUser&&auth.currentUser.email)||'')+'</td><td>オーナー（あなた）</td><td></td><td class="note">削除できません</td></tr>'+
       list.map(function(a){return '<tr><td>'+esc(a.email)+'</td><td>'+esc(a.name||'')+'</td><td>'+ts(a.addedAt)+'</td><td><button class="s d" data-del="'+esc(a.email)+'">削除</button></td></tr>'}).join('')+'</table></div>'+
       '<p class="note">辞めた方は「削除」を押すと、すぐに管理画面に入れなくなります。</p>';
+    var kk=document.createElement('div');p.appendChild(kk);AX.kickCard(kk,say);
     var au=document.createElement('div');p.appendChild(au);AX.auditView(au);
     q('af').onsubmit=async function(e){e.preventDefault();var m=q('am').value.trim().toLowerCase();
       if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(m)){say('メールアドレスを正しく入力してください');return}
