@@ -7,16 +7,18 @@
     keep: 'イベント終了後1年', date: '', extra: ''
   };
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function has(v, k) { return !!(String((v && v[k]) || '').trim() || (k === 'keep' && DEF.keep)); }
   function f(v, k) { var s = String((v && v[k]) || '').trim() || DEF[k]; return s ? esc(s) : '<span class="ph">（管理画面で設定してください）</span>'; }
   function html(v) {
     v = v || {};
     var ex = String(v.extra || '').trim();
     return '<h1>プライバシーポリシー（個人情報の取り扱いについて）</h1>' +
-      '<p class="upd">制定・改定日：' + f(v, 'date') + '</p>' +
+      (has(v, 'date') ? '<p class="upd">制定・改定日：' + f(v, 'date') + '</p>' : '') +
       '<p>' + f(v, 'biz') + '（以下「当社」）は、この予約システム（予約ページ・お連れ様の入力ページ・アプリ）で、お客様からお預かりする個人情報を、次のとおり、取り扱います。</p>' +
       '<h2>1. 事業者・お問い合わせ窓口</h2>' +
-      '<table><tr><th>事業者名</th><td>' + f(v, 'biz') + '</td></tr><tr><th>住所</th><td>' + f(v, 'addr') + '</td></tr><tr><th>個人情報の責任者</th><td>' + f(v, 'resp') + '</td></tr>' +
-      '<tr><th>お問い合わせ</th><td>電話：' + f(v, 'tel') + '<br>メール：' + f(v, 'mail') + '</td></tr></table>' +
+      // 空欄の項目は、表に出さない（事業者名と、お問い合わせの窓口が1つもないときだけ、設定のお願いを出す）
+      '<table><tr><th>事業者名</th><td>' + f(v, 'biz') + '</td></tr>' + (has(v, 'addr') ? '<tr><th>住所</th><td>' + f(v, 'addr') + '</td></tr>' : '') + (has(v, 'resp') ? '<tr><th>個人情報の責任者</th><td>' + f(v, 'resp') + '</td></tr>' : '') +
+      '<tr><th>お問い合わせ</th><td>' + ((has(v, 'tel') || has(v, 'mail')) ? [has(v, 'tel') ? '電話：' + f(v, 'tel') : '', has(v, 'mail') ? 'メール：' + f(v, 'mail') : ''].filter(Boolean).join('<br>') : '<span class="ph">（管理画面で設定してください）</span>') + '</td></tr></table>' +
       '<h2>2. お預かりする情報</h2><ul><li>お名前（ご予約の代表者様、参加者様、お連れ様）、法人名</li><li>連絡先（電話番号）、メールアドレス</li>' +
       '<li>保有車両の登録ナンバー・車種（またはご注文中・新規のお申し出）、オーナーズカードID、ご利用店舗・担当スタッフ</li>' +
       '<li>ゴルフのイベント：参加者のお名前、レクサスオーナーかどうか、お連れ様がご自身で入力されたお名前・メールアドレス</li>' +
