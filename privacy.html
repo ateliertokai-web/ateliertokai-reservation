@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>プライバシーポリシー | Atelier Tokai reservation</title>
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#111111">
+<link rel="stylesheet" href="style.css">
+<style>
+main.pp{max-width:760px;margin:0 auto;padding:16px 16px 48px}
+.pp h1{font-size:22px;margin:10px 0 4px}.pp h2{font-size:16px;margin:26px 0 6px;padding-bottom:5px;border-bottom:2px solid var(--gold,#b8955a)}
+.pp p,.pp li{line-height:1.8;font-size:15px}.pp ul{padding-left:1.3em;margin:6px 0}.pp .upd{color:var(--ink2);font-size:13px}
+.pp table{border-collapse:collapse;width:100%;font-size:14px}.pp th,.pp td{border:1px solid var(--line,#ddd);padding:8px 10px;text-align:left;vertical-align:top}.pp th{background:#f7f4ec;width:9em;white-space:nowrap}
+.pp .back{display:inline-block;margin:6px 0 0}.pp .ph{background:#fff1d6;color:#8a5a00;border-radius:4px;padding:0 4px}
+</style>
+</head>
+<body>
+<header class="top"><div>Atelier Tokai reservation</div></header>
+<main class="pp" id="app"><div class="loading" role="status"><span class="spin"></span>読み込み中…</div></main>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script>window.firebase||document.write('<script src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-app-compat.js"><\/script>')</script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>(window.firebase&&firebase.firestore)||document.write('<script src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-firestore-compat.js"><\/script>')</script>
+<script src="firebase-config.js"></script>
+<script src="privacy-text.js"></script>
+<script>
+(function(){
+var app=document.getElementById('app');
+function draw(v){app.innerHTML='<a class="l back" href="./">← 予約ページへ</a>'+PRIVACY.html(v)}
+draw({});
+try{
+  firebase.initializeApp(FIREBASE_CONFIG);var db=firebase.firestore();
+  db.collection('config').doc('privacy').get().then(function(s){draw(s.exists?s.data():{})}).catch(function(){});
+}catch(e){}
+})();
+</script>
+</body>
+</html>
