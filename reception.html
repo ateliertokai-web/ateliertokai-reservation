@@ -57,8 +57,8 @@ body{background:var(--bg);color:var(--ink);font:18px/1.6 -apple-system,BlinkMacS
 'use strict';
 var app=document.getElementById('app'),ov=document.getElementById('ov'),sm=document.getElementById('sm'),C=null,db=null,EV=null,stream=null,det=null,scanning=false,raf=0,hold='',holdAt=0,hideT=0,busy=false;
 var esc=function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})};
-var EID=(/[?&]e=([\w-]+)/.exec(location.search)||[])[1]||'';
-function big(h){app.innerHTML='<div class="big">'+h+'</div>'}
+var stage='開始';var EID=(/[?&]e=([\w-]+)/.exec(location.search)||[])[1]||'';
+function big(h){if(stage!=='x')stage='完了';app.innerHTML='<div class="big">'+h+'</div>'}
 /* ---- 音（短いチャイム） ---- */
 var AC=null;function tone(f,d,t){try{AC=AC||new (window.AudioContext||window.webkitAudioContext)();var o=AC.createOscillator(),g=AC.createGain();o.type='sine';o.frequency.value=f;g.gain.value=.12;o.connect(g);g.connect(AC.destination);o.start(AC.currentTime+(t||0));o.stop(AC.currentTime+(t||0)+d)}catch(e){}}
 function chime(k){if(k==='ok'){tone(880,.14);tone(1320,.22,.15)}else if(k==='dup'){tone(660,.2)}else{tone(330,.35)}}
@@ -125,17 +125,20 @@ function screen(){
 document.getElementById('mc').onclick=function(){sm.className='sm'};
 document.getElementById('mf').onsubmit=function(e){e.preventDefault();var v=document.getElementById('mi').value;document.getElementById('mi').value='';sm.className='sm';handle(v)};
 /* ---- 起動：管理画面にログイン済みの端末だけ ---- */
+window.addEventListener('error',function(e){if(stage!=='完了')app.innerHTML=('<div class="big">読み込めませんでした。<br><span style="font-size:.5em;opacity:.7">'+esc(stage+'：'+(e.message||''))+'</span><br><a href="admin.html">管理画面</a></div>')});
+setTimeout(function(){if(stage!=='完了')app.innerHTML=('<div class="big">読み込みに時間がかかっています。<br>電波をご確認のうえ、ページを再読み込みしてください。<br><span style="font-size:.5em;opacity:.7">（'+esc(stage)+'）</span><br><a href="admin.html">管理画面</a>')},15000);
 function boot(){
+  stage='部品の読み込み';
   if(typeof firebase==='undefined'||typeof makeCore==='undefined'){big('読み込めませんでした。電波の良い場所で、ページを再読み込みしてください。');return}
   firebase.initializeApp(FIREBASE_CONFIG);db=firebase.firestore();try{db.settings({experimentalAutoDetectLongPolling:true,merge:true})}catch(e){}C=makeCore(firebase,db);
-  firebase.auth().onAuthStateChanged(async function(u){
-    if(!u){big('この画面は、スタッフ用です。<br>先に、<a href="admin.html">管理画面</a>でログインしてから、管理画面の「来場受付」タブから開いてください。');return}
+  stage='ログイン確認';firebase.auth().onAuthStateChanged(async function(u){stage='イベント取得';
+    if(!u){stage='完了';big('この画面は、スタッフ用です。<br>先に、<a href="admin.html">管理画面</a>でログインしてから、管理画面の「来場受付」タブから開いてください。');return}
     try{
       if(!EID){var s=await C.events.get(),l=s.docs.map(function(d){return Object.assign({id:d.id},d.data())}).filter(function(e){return e.checkin});
         big(l.length?'<b>受付するイベントを選んでください</b><br><br>'+l.map(function(e){return '<a style="display:block;margin:10px 0;padding:14px;border:1px solid #555;border-radius:12px;color:#fff;text-decoration:none" href="?e='+esc(e.id)+'">'+esc(e.name)+'</a>'}).join(''):'来場受付を使うイベントがありません。<br><a href="admin.html">管理画面</a>で、イベントの設定の「来場受付（QR）を使う」にチェックを入れてください。');return}
       var d=await C.events.doc(EID).get();if(!d.exists){big('イベントが見つかりません。<a href="admin.html">管理画面</a>から開き直してください。');return}
       EV=Object.assign({id:EID},d.data());if(!EV.checkin){big('このイベントは、来場受付を使わない設定です。<a href="admin.html">管理画面</a>で設定してください。');return}
-      screen();
+      screen();stage='完了';
     }catch(e){big('読み込めませんでした。管理者としてログインしているか、ご確認ください。<br><a href="admin.html">管理画面</a>')}
   });
 }
