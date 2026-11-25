@@ -115,11 +115,14 @@
     }
     function draw() {
       box.innerHTML = '<div class="card"><h2 style="margin-top:0">来場受付（QR）</h2><p class="note" style="margin:0 0 8px">お客様の予約番号のQR（または予約番号）を読み取って、来場を記録します。管理画面だけの機能で、お客様の画面には出ません。</p>' +
-        '<label>イベント<select id="ckEv">' + list.map(function (e) { return '<option value="' + e.id + '"' + (e.id === eid ? ' selected' : '') + '>' + esc(e.name) + '</option>'; }).join('') + '</select></label>' +
+        '<div id="ckQr" class="box" style="margin:0 0 8px"></div><label>イベント<select id="ckEv">' + list.map(function (e) { return '<option value="' + e.id + '"' + (e.id === eid ? ' selected' : '') + '>' + esc(e.name) + '</option>'; }).join('') + '</select></label>' +
         '<div id="ckHead" style="margin:8px 0"></div>' +
         '<div class="row2"><button class="p" id="ckScan" type="button" style="max-width:220px">カメラで読み取る</button><label class="chk" style="margin:0"><input type="checkbox" id="ckAuto">読み取ったら、すぐ受付する</label></div><div id="ckCam"></div>' +
         '<form id="ckF" class="row2" style="margin-top:8px"><input id="ckI" placeholder="予約番号を入力（例：ABCD-EFGH-JKLM）" autocomplete="off" autocapitalize="characters" style="flex:1;min-width:200px"><button class="s" type="submit">確認</button></form><div id="ckRes"></div></div>' +
         '<div class="card"><h2 style="margin-top:0;font-size:16px">予約の一覧</h2><input id="ckQ" placeholder="お名前・電話・予約番号で絞り込み" style="width:100%;margin-bottom:8px" value="' + esc(filter) + '"><div id="ckList"></div></div>';
+      var ev = list.filter(function (e) { return e.id === eid; })[0], qb = box.querySelector('#ckQr');
+      function qdraw() { qb.innerHTML = '<b>お客様の画面に、受付用のQRを表示：' + (ev.checkinQr ? '<span style="color:#1f7a4d">ON（表示中）</span>' : '<span style="color:#6b665d">OFF（表示していません）</span>') + '</b><div class="row2" style="margin-top:6px"><button class="' + (ev.checkinQr ? 's' : 'p') + '" id="ckQt" type="button">' + (ev.checkinQr ? '表示をやめる（OFFにする）' : '表示する（ONにする）') + '</button></div><p class="note" style="margin:6px 0 0">ONにすると、ご予約の完了画面と、確定したご予約の画面に、QRコードが出ます。いつでも切り替えられます。</p>'; qb.querySelector('#ckQt').onclick = async function () { this.disabled = true; try { var nv = !ev.checkinQr; await C.events.doc(eid).update({ checkinQr: nv }); ev.checkinQr = nv; if (root.AUDIT) root.AUDIT('お客様画面のQR表示を' + (nv ? 'ON' : 'OFF'), ev.name); say(nv ? 'お客様の画面に、QRを表示します' : 'お客様の画面の、QR表示をやめました'); } catch (e) { say('切り替えられませんでした: ' + e.message); } qdraw(); }; }
+      qdraw();
       box.querySelector('#ckEv').onchange = function () { stopCam(); eid = this.value; box.__eid = eid; last = null; unsub(); sub(); draw(); };
       box.querySelector('#ckScan').onclick = scan;
       box.querySelector('#ckF').onsubmit = function (e) { e.preventDefault(); var i = box.querySelector('#ckI'); handle(i.value); i.select(); };
