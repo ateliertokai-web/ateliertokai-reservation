@@ -13,8 +13,8 @@
     s = s.replace(/[\s\-ー－　]/g, ''); if (/^[A-HJ-NP-Z2-9]{12}$/.test(s)) return s;
     m = ID.exec(s.replace(/[^A-Z0-9]/g, '')); return m ? m[0] : '';
   }
-  var JSQR = 'https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js';
-  function loadJsQR() { if (root.jsQR) return Promise.resolve(); return new Promise(function (y, n) { var s = document.createElement('script'); s.src = JSQR; s.onload = y; s.onerror = function () { n(new Error('読み取りの部品を読み込めませんでした')); }; document.head.appendChild(s); }); }
+  var JSQR = 'jsqr.min.js';   // 読み取りの部品は、このサイトの中に置いてある（外のサイトに頼らない。カメラで読み取るときだけ、読み込む）
+  function loadJsQR() { if (root.jsQR) return Promise.resolve(); return new Promise(function (y, n) { var s = document.createElement('script'); s.src = JSQR; s.onload = y; s.onerror = function () { n(new Error('読み取りの部品を読み込めませんでした（電波をご確認のうえ、ページを再読み込みしてください）。予約番号の入力でも、受付できます')); }; document.head.appendChild(s); }); }
   function css() {
     if (document.getElementById('ckcss')) return;
     var s = document.createElement('style'); s.id = 'ckcss';
