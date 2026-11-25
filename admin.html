@@ -396,7 +396,7 @@ async function openEv(i,btn){
 // プライバシーポリシーの、事業者名・責任者・窓口などを入力する（privacy.html に表示。config/privacy）
 function privacyCard(p){
   var d=document.createElement('div');d.className='card';d.id='ppCard';
-  d.innerHTML='<h2 style="margin-top:0">プライバシーポリシー</h2><p class="note">お客様向けのページ（<a href="privacy.html" target="_blank" rel="noopener">privacy.html</a>）に表示されます。予約ページ・お連れ様の入力ページ・アルバムから、リンクされています。空欄の項目は、ページに「（管理画面で設定してください）」と出ます。文章は一般的なひな型です。<b>公開前に、会社の法務担当などが確認してください。</b></p>'+
+  d.innerHTML='<h2 style="margin-top:0">プライバシーポリシー</h2><p class="note">お客様向けのページ（<a href="privacy.html" target="_blank" rel="noopener">privacy.html</a>）に表示されます。予約ページ・お連れ様の入力ページ・アルバムから、リンクされています。空欄の項目（住所・責任者・電話・メール・制定日）は、ページに出ません。事業者名が空のとき、電話もメールも空のときだけ、「（管理画面で設定してください）」と出ます。文章は一般的なひな型です。<b>公開前に、会社の法務担当などが確認してください。</b></p>'+
     '<label>事業者名（会社名・店舗名）<input id="ppB" maxlength="80"></label><label>住所<input id="ppA" maxlength="120"></label>'+
     '<div class="row"><label>電話<input id="ppT" maxlength="30" inputmode="tel"></label><label>メール<input id="ppM" maxlength="80" inputmode="email"></label></div>'+
     '<label>個人情報の責任者（役職・氏名）<input id="ppR" maxlength="60"></label><label>保管期間（例：イベント終了後1年）<input id="ppK" maxlength="80" value="イベント終了後1年"></label>'+
