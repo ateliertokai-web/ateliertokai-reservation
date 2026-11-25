@@ -59,7 +59,7 @@
     return new Promise(function (ok, ng) { var s = document.createElement('script'); s.src = EXCEL; s.onload = function () { ok(root.ExcelJS); }; s.onerror = function () { ng(new Error('Excelの部品を読み込めませんでした（電波をご確認ください）')); }; document.head.appendChild(s); });
   }
 
-  async function open(C, ev, rs, gs, say) {
+  async function open(C, ev, rs, gs, say, events) {
     css();
     var ref = firebase.firestore().collection('pairings').doc(ev.id);
     var live = rs.filter(function (r) { return r.status === 'confirmed' || r.status === 'won'; });
@@ -134,7 +134,7 @@
     function draw() {
       var sx = wrap.querySelector('.side'), sy = sx ? sx.scrollTop : 0, py = wrap.scrollTop;
       wrap.className = 'pair v-' + view + (sel ? ' sel' : '');
-      wrap.innerHTML = '<div class="hd"><b>組み合わせ表</b><button type="button" data-a="auto">未配置を自動で並べる</button><button type="button" data-a="xls">Excel（お客様・ゴルフ場用）</button><button type="button" data-a="xlsS">Excel（スタッフ用・色付き）</button>' +
+      wrap.innerHTML = '<div class="hd"><b>組み合わせ表</b><button type="button" data-a="auto">未配置を自動で並べる</button><button type="button" data-a="reuse">前回の並びを呼び出す</button><button type="button" data-a="xls">Excel（お客様・ゴルフ場用）</button><button type="button" data-a="xlsS">Excel（スタッフ用・色付き）</button>' +
         '<button type="button" class="sv' + (dirty ? ' dirty' : '') + '" data-a="save">' + (dirty ? '保存する（未保存）' : '保存済み') + '</button><button type="button" data-a="close">閉じる</button></div>' +
         '<div class="tip">パソコン：右の組、または表の名前を、入れたい行へドラッグ。スマホ：組をタップして選び、行の「ここに入れる」をタップ。★＝レクサスオーナー、色＝担当スタッフ。' + (dropped ? '（取り消された予約 ' + dropped + '件は、表から外して左に詰めました）' : '') + '</div>' +
         '<div class="bd"><div class="sheet"><div class="meta"><div class="t"><label>タイトル</label><input data-m="title" value="' + esc(meta.title) + '"></div><div><label>◆開催日</label><input data-m="date" value="' + esc(meta.date) + '"></div><div><label>◆開催コース</label><input data-m="course" value="' + esc(meta.course) + '"></div><div><label>℡（コース）</label><input data-m="tel" value="' + esc(meta.tel) + '" inputmode="tel"></div></div>' +
@@ -162,6 +162,47 @@
       rows.forEach(function (x) { x.items = x.items.filter(function (id) { return id !== rid; }); });   // 元の行からは外す（左に詰まる）
       if (z !== 'pool' && rows[+z]) rows[+z].items.push(rid);
       sel = ''; dirty = true; draw();
+    }
+    // 前回（ほかのイベント）の並びを呼び出す：代表者のお名前が同じ予約を、同じ行・同じ位置に入れる。前回にいなかった組は、未配置のまま
+    async function reuse() {
+      var cand = [];
+      try {
+        for (var i = 0; i < (events || []).length; i++) {
+          var e = events[i]; if (e.id === ev.id) continue;
+          var d = await firebase.firestore().collection('pairings').doc(e.id).get();
+          if (d.exists && (d.data().rows || []).some(function (x) { return (x.items || []).length; })) cand.push({ e: e, d: d.data() });
+        }
+      } catch (x) { say('呼び出せませんでした: ' + x.message); return; }
+      if (!cand.length) { say('呼び出せる、前回の組み合わせ表がありません（ほかのイベントで、組み合わせ表を保存すると、ここに出ます）'); return; }
+      var m = document.createElement('div'); m.className = 'edm';
+      m.innerHTML = '<div class="in"><h3>前回の並びを呼び出す</h3><p class="note">選んだイベントの組み合わせ表を、今回の表に写します。<b>代表者のお名前が同じ予約</b>を、前回と同じ行・同じ位置に入れます（前回にいなかった方は、未配置のまま）。いまの並びは、置き換わります。</p>' +
+        '<div class="er"><select id="reS">' + cand.map(function (c, i) { return '<option value="' + i + '">' + esc(c.e.name) + '</option>'; }).join('') + '</select></div>' +
+        '<div class="tools" style="margin-top:12px"><button type="button" class="s sv" data-e="ok">呼び出す</button><button type="button" class="s" data-e="cl">やめる</button></div></div>';
+      wrap.appendChild(m);
+      m.addEventListener('click', async function (e2) {
+        if (e2.target === m) return m.remove(); var b = e2.target.closest('[data-e]'); if (!b) return;
+        if (b.dataset.e === 'cl') return m.remove();
+        if (rows.some(function (x) { return x.items.length; }) && !confirm('いまの並びは、置き換わります。よろしいですか？')) return;
+        b.disabled = true;
+        try {
+          var c = cand[+m.querySelector('#reS').value], old = {}, byN = {}, usedNew = {}, ok = 0;
+          (await C.res.where('eventId', '==', c.e.id).get()).docs.forEach(function (d) { old[d.id] = d.data(); });
+          live.forEach(function (r) { var k = C.normName(r.name); if (k) (byN[k] = byN[k] || []).push(r); });
+          var nr = (c.d.rows || []).map(function (x) {
+            var its = [];
+            (x.items || []).forEach(function (id) {
+              var o = old[id]; if (!o) return; var k = C.normName(o.name), hit = (byN[k] || []).filter(function (r) { return !usedNew[r.id]; })[0];
+              if (hit) { usedNew[hit.id] = 1; its.push(hit.id); ok++; }
+            });
+            return { id: C.newId(), time: x.time || '', course: x.course === 'IN' ? 'IN' : 'OUT', items: its };
+          });
+          rows = nr; if (c.d.tm) tm = { OUT: Object.assign(tm.OUT, c.d.tm.OUT || {}), IN: Object.assign(tm.IN, c.d.tm.IN || {}) };
+          if (c.d.meta) { meta.course = c.d.meta.course || meta.course; meta.tel = c.d.meta.tel || meta.tel; }
+          dirty = true; m.remove(); draw();
+          var left = live.filter(function (r) { return !usedNew[r.id]; }).length;
+          say(ok + '組を呼び出しました。未配置の組：' + left + '組（前回にいなかった方）。必要に応じて、動かして調整してください');
+        } catch (x) { b.disabled = false; say('呼び出せませんでした: ' + x.message); }
+      });
     }
     // 名前・担当・オーナーの手直し（組み合わせ表の中だけ。予約そのものは変わらない）
     function editor(rid) {
@@ -192,7 +233,7 @@
     }
     function close() { if (dirty && !confirm('組み合わせ表の変更が、まだ保存されていません。保存せずに閉じますか？')) return; wrap.remove(); document.removeEventListener('pointermove', pm); document.removeEventListener('pointerup', pu); }
     async function save() {
-      try { await ref.set({ eid: ev.id, meta: meta, tm: tm, edits: edits, rows: rows.map(function (x) { return { id: x.id, time: x.time, course: x.course, items: x.items }; }), updatedAt: firebase.firestore.FieldValue.serverTimestamp() }); dirty = false; say('組み合わせ表を保存しました'); draw(); }
+      try { await ref.set({ eid: ev.id, meta: meta, tm: tm, edits: edits, rows: rows.map(function (x) { return { id: x.id, time: x.time, course: x.course, items: x.items }; }), updatedAt: firebase.firestore.FieldValue.serverTimestamp() }); dirty = false; say('組み合わせ表を保存しました'); if (root.AUDIT) root.AUDIT('組み合わせ表を保存', ev.name); draw(); }
       catch (e) { say('保存できませんでした: ' + (e.code === 'permission-denied' ? 'Firestoreのルールに「pairings」の設定がまだありません' : e.message)); }
     }
     function auto() {
@@ -318,7 +359,7 @@
       if (t.dataset.v) { view = t.dataset.v; return draw(); }
       if (t.dataset.del != null) { var i = +t.dataset.del; if (rows[i].items.length && !confirm(lab(i) + 'の行を削除します。入っている組は「未配置」に戻ります。よろしいですか？')) return; rows.splice(i, 1); dirty = true; return draw(); }
       var a = t.dataset.a;
-      if (a === 'close') close(); else if (a === 'save') save(); else if (a === 'auto') auto(); else if (a === 'xls') xls(false); else if (a === 'xlsS') xls(true);
+      if (a === 'close') close(); else if (a === 'save') save(); else if (a === 'auto') auto(); else if (a === 'reuse') reuse(); else if (a === 'xls') xls(false); else if (a === 'xlsS') xls(true);
       else if (a === 'add') { rows.push(newRow(t.dataset.c || view)); dirty = true; draw(); }
       else if (a === 'upto') {   // OUT・INそれぞれ、◯組目まで、まとめて作る（足りない分だけ足す）
         var c = t.dataset.c, n = +wrap.querySelector('[data-upto=' + c + ']').value;
