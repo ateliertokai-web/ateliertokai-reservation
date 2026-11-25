@@ -64,15 +64,71 @@
   /* ---------- ③受付状況 ---------- */
   var timer = 0;
   function stop() { clearInterval(timer); timer = 0; }
+  function css() {
+    if (document.getElementById('axcss')) return;
+    var s = document.createElement('style'); s.id = 'axcss';
+    s.textContent = '.calx{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px}.calx .w{text-align:center;font-size:12px;color:#6b665d;padding:2px 0}.calx .su{color:#c0392b}.calx .sa{color:#1e88e5}' +
+      '.calx .cd{display:flex;flex-direction:column;align-items:stretch;gap:1px;min-height:64px;padding:3px;border:1px solid var(--line,#ddd);border-radius:7px;background:#fff;text-align:left;font:inherit;cursor:pointer;color:inherit;overflow:hidden}.calx .cd.no{background:#faf9f6;color:#b5b0a5}.calx .cd.td{border-color:#b8955a;box-shadow:inset 0 0 0 1px #b8955a}.calx .cd.on{outline:2px solid #111}' +
+      '.calx .dn{font-size:12px;font-weight:700}.calx .dt{font-size:11.5px;font-weight:700;color:#1f7a4d;line-height:1.2}.calx .dt.fl{color:#c0392b}.calx .de{font-size:9.5px;line-height:1.25;border-left:3px solid;padding-left:3px;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
+      '@media(max-width:560px){.calx{gap:2px}.calx .de{display:none}.calx .cd{min-height:52px;padding:2px}.calx .dt{font-size:10px;word-break:break-all;line-height:1.15}}';
+    document.head.appendChild(s);
+  }
   function statusView(C, box, events) {
+    css();
     stop();
-    var showAll = false;
+    var showAll = false, mode = 'ev', cm = '', sel = '';
     async function draw() {
+      if (mode === 'cal') return drawCal();
       var list = events.filter(function (e) { return showAll || e.visible !== false || e.test; });
-      box.innerHTML = '<div class="tools" style="justify-content:space-between;margin:0 0 8px"><b style="font-size:16px">受付状況</b><span><label class="chk" style="display:inline-flex;margin:0 8px 0 0"><input type="checkbox" id="stA"' + (showAll ? ' checked' : '') + '>受付終了のイベントも見る</label><button class="s" id="stR">更新</button> <small class="note" id="stT"></small></span></div><div id="stB"><div class="loading sm" role="status"><span class="spin"></span>読み込み中…</div></div>';
+      box.innerHTML = '<div class="tools" style="justify-content:space-between;margin:0 0 8px"><span><button class="s on" data-md="ev">イベント別</button> <button class="s" data-md="cal">カレンダー（日・月ごと）</button></span><span><label class="chk" style="display:inline-flex;margin:0 8px 0 0"><input type="checkbox" id="stA"' + (showAll ? ' checked' : '') + '>受付終了のイベントも見る</label><button class="s" id="stR">更新</button> <small class="note" id="stT"></small></span></div><div id="stB"><div class="loading sm" role="status"><span class="spin"></span>読み込み中…</div></div>';
       box.querySelector('#stA').onchange = function () { showAll = this.checked; draw(); };
+      box.querySelectorAll('[data-md]').forEach(function (b) { b.onclick = function () { mode = b.dataset.md; draw(); }; });
       box.querySelector('#stR').onclick = function () { fill(list); };
       fill(list);
+    }
+
+    // カレンダー：日ごと・月ごとの「予約 ◯／定員 ◯」。枠の数え方（組・人数）に合わせる。日をタップすると、その日の枠の一覧
+    var PALC = ['#1e88e5', '#d81b60', '#43a047', '#fb8c00', '#5e35b1', '#00acc1', '#9e9d24', '#e64a19', '#546e7a', '#8e24aa'];
+    async function drawCal() {
+      box.innerHTML = '<div class="tools" style="justify-content:space-between;margin:0 0 8px"><span><button class="s" data-md="ev">イベント別</button> <button class="s on" data-md="cal">カレンダー（日・月ごと）</button></span><label class="chk" style="display:inline-flex;margin:0"><input type="checkbox" id="stA"' + (showAll ? ' checked' : '') + '>受付終了のイベントも含める</label></div><div id="cB"><div class="loading sm" role="status"><span class="spin"></span>読み込み中…</div></div>';
+      box.querySelectorAll('[data-md]').forEach(function (b) { b.onclick = function () { mode = b.dataset.md; draw(); }; });
+      box.querySelector('#stA').onchange = function () { showAll = this.checked; drawCal(); };
+      var evs = {}; events.forEach(function (e) { if (showAll || e.visible !== false || e.test) evs[e.id] = e; });
+      var sl;
+      try { sl = (await C.slots.get()).docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); }).filter(function (s) { return evs[s.eventId]; }); }
+      catch (er) { box.querySelector('#cB').innerHTML = '<p class="err">読み込めませんでした: ' + esc(er.message) + '</p>'; return; }
+      var ids = Object.keys(evs).sort(), color = {}; ids.forEach(function (id, i) { color[id] = PALC[i % PALC.length]; });
+      var today = new Date(), ty = today.getFullYear() + '-' + ('0' + (today.getMonth() + 1)).slice(-2) + '-' + ('0' + today.getDate()).slice(-2);
+      if (!cm) { var up = sl.map(function (s) { return s.date; }).filter(function (d) { return d >= ty; }).sort()[0] || sl.map(function (s) { return s.date; }).sort().pop() || ty; cm = up.slice(0, 7); }
+      function use(list) {   // 組で数える枠は組、人数で数える枠は人数。定員なしは数のみ
+        var g = { b: 0, c: 0 }, p = { b: 0, c: 0 }, n = { b: 0, c: 0 }, people = 0, groups = 0;
+        list.forEach(function (s) { groups += s.booked || 0; people += s.people || 0; if (s.capG) { g.b += s.booked || 0; g.c += s.capG; } else if (s.capP) { p.b += s.people || 0; p.c += s.capP; } else { n.b += s.booked || 0; } });
+        return { g: g, p: p, n: n, groups: groups, people: people };
+      }
+      function txt(u) { var a = []; if (u.g.c) a.push(u.g.b + '/' + u.g.c + '組'); if (u.p.c) a.push(u.p.b + '/' + u.p.c + '名'); if (u.n.b && !u.g.c && !u.p.c) a.push(u.n.b + '組'); return a.join(' ') || '0'; }
+      function full(u) { return (u.g.c && u.g.b >= u.g.c) || (u.p.c && u.p.b >= u.p.c); }
+      var p = cm.split('-'), y = +p[0], mo = +p[1] - 1, first = new Date(y, mo, 1).getDay(), days = new Date(y, mo + 1, 0).getDate();
+      var inM = sl.filter(function (s) { return s.date.slice(0, 7) === cm; }), tot = use(inM);
+      var h = '<div class="tools" style="justify-content:space-between;align-items:center;margin:0 0 6px"><button class="s" data-mv="-1">‹ 前の月</button><b style="font-size:17px">' + y + '年' + (mo + 1) + '月</b><button class="s" data-mv="1">次の月 ›</button></div>' +
+        '<div class="sum" style="margin:0 0 8px"><div><b>この月の合計</b>　予約 <b>' + txt(tot) + '</b></div><div>予約した人数 <b>' + tot.people + '</b>名</div><div>枠 ' + inM.length + '件</div></div>' +
+        '<div class="calx">' + [].map.call('日月火水木金土', function (w, i) { return '<b class="w' + (i === 0 ? ' su' : i === 6 ? ' sa' : '') + '">' + w + '</b>'; }).join('');
+      for (var i = 0; i < first; i++) h += '<span></span>';
+      for (var d = 1; d <= days; d++) {
+        var ds = cm + '-' + ('0' + d).slice(-2), day = sl.filter(function (s) { return s.date === ds; }), u = use(day), per = {};
+        day.forEach(function (s) { (per[s.eventId] = per[s.eventId] || []).push(s); });
+        h += '<button type="button" class="cd' + (ds === ty ? ' td' : '') + (sel === ds ? ' on' : '') + (day.length ? '' : ' no') + '" data-d="' + ds + '"><span class="dn">' + d + '</span>' + (day.length ? '<span class="dt' + (full(u) ? ' fl' : '') + '">' + txt(u) + '</span>' + Object.keys(per).map(function (id) { return '<span class="de" style="border-color:' + color[id] + '">' + esc(evs[id].name.slice(0, 5)) + ' ' + txt(use(per[id])) + '</span>'; }).join('') : '') + '</button>';
+      }
+      h += '</div><div class="note" style="margin:6px 0">各日の数字は「予約／定員」です（組で数える枠は組、人数で数える枠は名）。日をタップすると、その日の枠が下に出ます。</div><div id="cD"></div>' +
+        '<h3 style="margin:14px 0 6px;font-size:15px">イベントごとの凡例</h3><div class="tools">' + ids.map(function (id) { return '<span class="tag" style="border-color:' + color[id] + '">' + esc(evs[id].name) + '</span>'; }).join('') + '</div>';
+      var B = box.querySelector('#cB'); B.innerHTML = h;
+      B.querySelectorAll('[data-mv]').forEach(function (b) { b.onclick = function () { var dt = new Date(y, mo + +b.dataset.mv, 1); cm = dt.getFullYear() + '-' + ('0' + (dt.getMonth() + 1)).slice(-2); sel = ''; drawCal(); }; });
+      function detail(ds) {
+        var day = sl.filter(function (s) { return s.date === ds; }).sort(function (a, b) { return (a.start + a.eventId) < (b.start + b.eventId) ? -1 : 1; });
+        B.querySelector('#cD').innerHTML = '<div class="card"><b>' + esc(md(ds)) + ' の枠</b>' + (day.length ? '<div class="scroll"><table style="width:100%;margin-top:6px"><tr><th>イベント</th><th>時間</th><th>予約／定員</th></tr>' + day.map(function (s) {
+          var u = use([s]); return '<tr><td>' + esc(evs[s.eventId].name) + '</td><td style="white-space:nowrap">' + (s.start === '00:00' && s.end === '24:00' ? '終日' : esc(s.start + '–' + s.end)) + '</td><td>' + txt(u) + '（' + (s.people || 0) + '名）' + (full(u) ? ' <span class="tag w">満席</span>' : '') + '</td></tr>'; }).join('') + '</table></div>' : '<p class="note">この日に、枠はありません。</p>') + '</div>';
+      }
+      B.querySelectorAll('[data-d]').forEach(function (b) { b.onclick = function () { sel = b.dataset.d; B.querySelectorAll('.cd.on').forEach(function (x) { x.classList.remove('on'); }); b.classList.add('on'); detail(sel); }; });
+      if (sel) detail(sel);
     }
     async function fill(list) {
       var out = '';
@@ -97,7 +153,7 @@
       } catch (er) { var bb = box.querySelector('#stB'); if (bb) bb.innerHTML = '<p class="err">読み込めませんでした: ' + esc(er.message) + '</p>'; }
     }
     draw();
-    timer = setInterval(function () { if (!box.isConnected) return stop(); if (document.visibilityState === 'visible') fill(events.filter(function (e) { return showAll || e.visible !== false || e.test; })); }, 30000);
+    timer = setInterval(function () { if (!box.isConnected) return stop(); if (mode === 'ev' && document.visibilityState === 'visible') fill(events.filter(function (e) { return showAll || e.visible !== false || e.test; })); }, 30000);
   }
 
   root.AX = { audit: audit, auditView: auditView, duplicate: duplicate, statusView: statusView, stop: stop };
