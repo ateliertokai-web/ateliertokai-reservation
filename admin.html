@@ -237,12 +237,12 @@ function draw(){
 function csv(list){
   var head=['予約番号','受付日時','状態','イベント','日付','開始','終了','代表者','法人名','連絡先','メール','大人','未就学児','小学生','中学生以上','合計'];
   for(var i=1;i<=12;i++)head.push('参加者'+i);
-  head=head.concat(['登録ナンバー','車種','ご注文中・新規','利用店舗','担当スタッフ','備考','オーナーズカードID','お連れ様（入力内容）','来場受付']);
+  head=head.concat(['登録ナンバー','車種','ご注文中・新規','利用店舗','担当スタッフ','備考','オーナーズカードID','お連れ様（入力内容）','来場受付','来店人数・大人','来店人数・こども（中学生未満）']);
   var rows=list.map(function(r){
     var c=r.car||{},p=r.participants||[];
     var a=[r.id,ts(r.createdAt),ST[r.status]+(r.status==='wait'?(r.waitNo||''):''),r.eventName,r.date,r.start,r.end,r.name,r.corp||'',r.tel,r.mail,r.a,r.k,r.s,r.m,r.n];
     for(var i=0;i<12;i++)a.push(p[i]?(p[i]+((r.lexus||[])[i]?'（オーナー）':'')):'');
-    return a.concat([r.order?'':[c.pref,c.cls,c.kana,c.num].join(' '),r.order?'':(c.model||''),r.order?'○':'',(r.stores||[]).join(' / '),(r.stores||[]).map(function(k){return (r.staff||{})[k]||''}).join(' / '),r.note||'',r.owner||'',guestList(r).map(guestTxt).join(' / '),r.checkin?ts(r.checkin.at):'']);
+    return a.concat([r.order?'':[c.pref,c.cls,c.kana,c.num].join(' '),r.order?'':(c.model||''),r.order?'○':'',(r.stores||[]).join(' / '),(r.stores||[]).map(function(k){return (r.staff||{})[k]||''}).join(' / '),r.note||'',r.owner||'',guestList(r).map(guestTxt).join(' / '),r.checkin?ts(r.checkin.at):'',r.checkin?CHK.arr(r).a:'',r.checkin?CHK.arr(r).c:'']);
   });
   var text=[head].concat(rows).map(function(r){return r.map(function(v){v=String(v==null?'':v);return '"'+v.replace(/"/g,'""')+'"'}).join(',')}).join('\r\n');
   var a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['﻿'+text],{type:'text/csv'}));
