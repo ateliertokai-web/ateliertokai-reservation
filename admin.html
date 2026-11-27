@@ -31,6 +31,7 @@
 <script src="admin-extras.js"></script>
 <script src="checkin.js"></script>
 <script src="delreq.js"></script>
+<script src="visit-sheet.js"></script>
 <script src="privacy-text.js"></script>
 <script src="texts.js"></script>
 <script>window.TXH=TXT.h;window.TXC=TXT.clean;try{delete window.T;delete window.TXT}catch(e){window.T=undefined}</script>
@@ -207,7 +208,7 @@ function draw(){
     if(!confirm(r.name+' 様を確定にします。よろしいですか？'))return;
     try{var y=await C.promote(r.id);if(y.ok){pushQ({type:'promote',rid:r.id,eid:r.eventId});AUDIT('繰り上げ',r.name+' 様（'+r.id+'）')}say(y.ok?'確定にしました':y.msg);await loadSlots();draw()}catch(er){say('失敗しました: '+er.message)}
   };
-  var tl=(ev.golf?'<button class="s" id="pair" style="border-color:var(--gold);font-weight:700">組み合わせ表（Excel出力）</button>':'')+'<button class="s" id="csv">CSVを書き出す（Excel用）</button><button class="s" id="rc">人数を数え直す</button>';
+  var tl=(ev.golf?'<button class="s" id="pair" style="border-color:var(--gold);font-weight:700">組み合わせ表（Excel出力）</button>':'')+'<button class="s" id="csv">CSVを書き出す（Excel用）</button><button class="s" id="vs">来店表（A4縦・Excel）</button><button class="s" id="rc">人数を数え直す</button>';
   if(ev.method==='抽選'&&!ev.drawn)tl+='<button class="s" id="dr">抽選を実行する</button>';
   if(ev.method==='抽選'&&ev.drawn)tl+='<span class="tag k">抽選済み</span>';
   q('tl').innerHTML=tl;
@@ -234,6 +235,7 @@ function draw(){
     }catch(er){say('失敗しました: '+er.message)}
   };
   q('csv').onclick=function(){csv(list)};
+  q('vs').onclick=async function(){var b=this,t=b.textContent;b.disabled=true;b.textContent='作成中…';try{var o=await VSHEET.download(list,ev,CHK.loadExcel);say('来店表を作りました（'+o.groups+'組）。画面で絞り込んだ日付・時間帯の分だけが入ります')}catch(er){say('来店表を作れませんでした: '+er.message)}b.disabled=false;b.textContent=t};
   if(q('pair'))q('pair').onclick=function(){PAIR.open(C,ev,S.rs||[],S.gs||{},say,S.events)};
   q('rc').onclick=async function(){var b=this;b.disabled=true;try{await C.recount(S.evId);await loadSlots();say('人数を数え直しました');draw()}catch(er){b.disabled=false;say('失敗しました: '+er.message)}};
   if(q('dr'))q('dr').onclick=async function(){
