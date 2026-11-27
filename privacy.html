@@ -13,6 +13,7 @@ main.pp{max-width:760px;margin:0 auto;padding:16px 16px 48px}
 .pp h1{font-size:22px;margin:10px 0 4px}.pp h2{font-size:16px;margin:26px 0 6px;padding-bottom:5px;border-bottom:2px solid var(--gold,#b8955a)}
 .pp p,.pp li{line-height:1.8;font-size:15px}.pp ul{padding-left:1.3em;margin:6px 0}.pp .upd{color:var(--ink2);font-size:13px}
 .pp table{border-collapse:collapse;width:100%;font-size:14px}.pp th,.pp td{border:1px solid var(--line,#ddd);padding:8px 10px;text-align:left;vertical-align:top}.pp th{background:#f7f4ec;width:9em;white-space:nowrap}
+.pp .dq label{display:block;margin:10px 0 0;font-size:14px}.pp .dq input,.pp .dq textarea{width:100%;font:inherit;font-size:16px;padding:10px;border:1px solid #c9c4b8;border-radius:8px;margin-top:4px;box-sizing:border-box}.pp .dqr{display:grid;grid-template-columns:2fr 1.4fr 1fr 1.6fr;gap:8px}.pp .hint{font-size:13px;color:var(--ink2);margin:6px 0 0;line-height:1.6}.pp .dqb{margin-top:14px;width:100%;padding:13px;border:0;border-radius:10px;background:#111;color:#e8c872;font:inherit;font-weight:700}.pp .dqb:disabled{opacity:.5}
 .pp .back{display:inline-block;margin:6px 0 0}.pp .ph{background:#fff1d6;color:#8a5a00;border-radius:4px;padding:0 4px}
 </style>
 </head>
@@ -27,11 +28,33 @@ main.pp{max-width:760px;margin:0 auto;padding:16px 16px 48px}
 <script src="privacy-text.js"></script>
 <script>
 (function(){
-var app=document.getElementById('app');
-function draw(v){app.innerHTML='<a class="l back" href="./">← 予約ページへ</a>'+PRIVACY.html(v)}
+var app=document.getElementById('app'),db=null;
+var esc=function(x){return String(x==null?'':x).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})};
+var FORM='<h2 id="delete">お客様情報の削除のご依頼</h2><p>保管期間を待たずに、ご予約でお預かりした、お客様の情報の削除をご希望の場合は、こちらからお申し込みください。ご本人かどうかを確認するため、<b>ご予約のときの、お名前・ご連絡先・お車のナンバー</b>を、ご入力ください。確認のうえ、該当の情報を削除し、必要に応じて、店舗からご連絡します。</p>'+
+ '<form id="dq" class="dq" novalidate><label>お名前（ご予約のときのお名前）<input id="dqN" maxlength="60" autocomplete="name"></label>'+
+ '<div class="dqr"><label>地名<input id="dqP" maxlength="6" placeholder="鹿児島"></label><label>分類番号<input id="dqC" inputmode="numeric" maxlength="3" placeholder="300"></label><label>ひらがな<input id="dqK" maxlength="1" placeholder="あ"></label><label>番号<input id="dqU" inputmode="numeric" maxlength="4" placeholder="1234"></label></div>'+
+ '<p class="hint">お車のナンバー（ご予約のときに入力したもの。ご注文中・新規のお申し出の方は、空欄でかまいません）</p>'+
+ '<label>ご連絡先（電話番号 または メールアドレス）<input id="dqT" maxlength="80" autocomplete="tel"></label>'+
+ '<label>ご要望など（任意）<textarea id="dqM" rows="3" maxlength="300" placeholder="例：〇〇のイベントのご予約の情報を、削除してください"></textarea></label>'+
+ '<button type="submit" id="dqS" class="dqb">削除を依頼する</button><p id="dqR" role="status" class="hint" style="margin-top:10px"></p></form>';
+function bind(){
+  var f=document.getElementById('dq');if(!f)return;
+  f.onsubmit=function(e){
+    e.preventDefault();var g=function(i){return document.getElementById(i).value.trim()},r=document.getElementById('dqR'),b=document.getElementById('dqS');
+    var name=g('dqN'),ct=g('dqT'),num=g('dqU').normalize('NFKC'),cls=g('dqC').normalize('NFKC'),kana=g('dqK');
+    var err=!name?'お名前を入力してください':(!ct?'ご連絡先を入力してください':(!(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ct)||ct.normalize('NFKC').replace(/\D/g,'').length>=9)?'ご連絡先は、電話番号か、メールアドレスで入力してください':(num&&!/^\d{1,4}$/.test(num)?'番号は、数字で入力してください':(cls&&!/^\d{1,3}$/.test(cls)?'分類番号は、数字で入力してください':''))));
+    if(err){r.style.color='#b42318';r.textContent=err;return}
+    try{var t=+localStorage.getItem('dq_at')||0;if(Date.now()-t<60000){r.style.color='#b42318';r.textContent='続けて送信できません。1分ほど、お待ちください';return}}catch(x){}
+    b.disabled=true;r.style.color='';r.textContent='送信しています…';
+    db.collection('deleteRequests').add({name:name,plate:{pref:g('dqP'),cls:cls,kana:kana,num:num},contact:ct,note:g('dqM'),status:'new',notified:false,createdAt:firebase.firestore.FieldValue.serverTimestamp()})
+     .then(function(){try{localStorage.setItem('dq_at',String(Date.now()))}catch(x){}f.innerHTML='<p><b>ご依頼を、承りました。</b></p><p>内容を確認のうえ、該当の情報を削除します。ご本人の確認などのため、店舗から、ご連絡することがあります。</p>'})
+     .catch(function(){b.disabled=false;r.style.color='#b42318';r.textContent='送信できませんでした。電波の良い場所で、もう一度お試しください。繰り返しできない場合は、お問い合わせ窓口まで、ご連絡ください。'});
+  };
+}
+function draw(v){var p=document.getElementById('pol');if(!p){app.innerHTML='<a class="l back" href="./">← 予約ページへ</a><div id="pol"></div>'+FORM;bind();p=document.getElementById('pol')}p.innerHTML=PRIVACY.html(v);if(location.hash==='#delete'){var d=document.getElementById('delete');if(d&&d.scrollIntoView)d.scrollIntoView()}}
 draw({});
 try{
-  firebase.initializeApp(FIREBASE_CONFIG);var db=firebase.firestore();
+  firebase.initializeApp(FIREBASE_CONFIG);db=firebase.firestore();
   db.collection('config').doc('privacy').get().then(function(s){draw(s.exists?s.data():{})}).catch(function(){});
 }catch(e){}
 })();

@@ -191,7 +191,7 @@ async function home(){
     app.innerHTML=h;
     app.querySelectorAll('.ev').forEach(function(b){b.onclick=function(){S.ev=evs[+b.dataset.i];pickSlot()}});
     q('lk').onclick=lookupView;
-    app.insertAdjacentHTML('beforeend','<p class="note" style="text-align:center;margin:26px 0 0"><a href="privacy.html" target="_blank" rel="noopener">'+T('プライバシーポリシー')+'</a></p>');
+    app.insertAdjacentHTML('beforeend','<p class="note" style="text-align:center;margin:26px 0 0"><a href="privacy.html" target="_blank" rel="noopener">'+T('プライバシーポリシー')+'</a>　<a href="privacy.html#delete" target="_blank" rel="noopener">'+T('お客様情報の削除を依頼する')+'</a></p>');
     if(window.PUSH&&!TXT.edit){PUSH.inbox(app);if(!PV)PUSH.ask(app)}   // 届いたお知らせ／アプリとして使っている方に「通知を受け取りますか？」
     // 説明書（ご予約の方法）へのボタン。管理画面の「お客様画面」で表示ONのときだけ出す
     C.cfg.doc('guide').get().then(function(s){var g=s.exists?s.data():null,box=q('gd');
@@ -310,7 +310,7 @@ function formView(){
         '<label class="stf" data-k="'+esc(k)+'"'+(on?'':' hidden')+('>'+T('担当スタッフ（'))+esc(k)+'）<select data-k="'+esc(k)+('"><option value="">'+T('選択してください')+'</option>')+RV.STORES[k].map(function(n){return '<option'+(((r.staff||{})[k]===n)?' selected':'')+'>'+esc(n)+'</option>'}).join('')+'</select></label>';
     }).join('')+'</fieldset>'+
    (ev.note?('<label>'+T('備考（ご要望・ご連絡事項など）')+'<textarea id="nt" rows="3" maxlength="500">')+esc(r.note)+'</textarea></label>':'')+
-   ('<p class="note privacy">'+T('ご入力いただいた個人情報は、本イベントのご案内・ご連絡およびご予約の管理にのみ使用し、法令に基づく場合を除き、第三者に提供することはありません。')+' <a href="privacy.html" target="_blank" rel="noopener">'+T('プライバシーポリシー')+'</a></p>')+
+   ('<p class="note privacy">'+T('ご入力いただいた個人情報は、本イベントのご案内・ご連絡およびご予約の管理にのみ使用し、イベントの運営に必要な範囲（ゴルフ場・宿泊先など）と、法令に基づく場合を除き、第三者に提供することはありません。')+' <a href="privacy.html" target="_blank" rel="noopener">'+T('プライバシーポリシー')+'</a></p>')+
    '<div class="err" id="er"></div><button class="p" id="go" type="submit">'+(edit?T('変更を保存する'):ev.method==='抽選'?T('抽選に申し込む'):T('予約する'))+'</button>'+
    (edit?('<div style="text-align:center;margin-top:18px"><button type="button" class="s d" id="cx">'+T('この予約をキャンセルする')+'</button></div>'):'')+'</form>';
   app.innerHTML=h;
@@ -550,6 +550,7 @@ function detailView(){
   // 変更を保存した直後は、押し間違いを防ぐためキャンセルボタンを出さない（トップから開き直すと表示される）
   var just=S.justChanged;S.justChanged=false;
   if(can)h+=('<button class="p" id="ed" style="margin-top:14px">'+T('内容を変更する')+'</button>')+(just?('<p class="note" style="text-align:center;margin-top:16px">'+T('ご予約をキャンセルする場合は、トップ画面からご予約を開き直してください。')+'</p>'):('<div style="text-align:center;margin-top:16px"><button class="s d" id="cx">'+T('この予約をキャンセルする')+'</button></div>'));
+  h+='<p class="note" style="text-align:center;margin-top:14px"><a href="privacy.html#delete" target="_blank" rel="noopener">'+T('お客様情報の削除を依頼する')+'</a></p>';
   app.innerHTML=h;
   q('bk').onclick=home;
   if(can)wireKeep(r);
