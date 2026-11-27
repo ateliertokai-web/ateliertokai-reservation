@@ -43,7 +43,9 @@ if(PV){var pvb=document.createElement('div');pvb.id='pvbar';pvb.style.cssText='p
 /* 管理画面の「保存前の設定でお客様画面を確認」から渡された、未保存の設定（練習モードのときだけ使う） */
 function pvGet(){if(!PV)return null;try{var o=JSON.parse(localStorage.getItem('rv_preview')||'null');return o&&o.id&&Date.now()-o.at<12*3600e3?o:null}catch(e){return null}}
 function realTest(ev){return !!(ev&&ev.savedTest)}
-function pvApply(e){e.savedTest=!!e.test;var o=pvGet();if(!o||o.id!==e.id)return e;var r=Object.assign({},e,o.ev,{pvDraft:true,savedTest:!!e.test});if(o.imgs){r.thumb=o.thumb;r.imgN=o.imgN}return r}
+// お連れ様の入力欄は、保存済みの設定が「ゴルフ」のときだけ、本当に作れる（設定を保存する前の確認画面では、練習用になる）
+function guestPractice(ev){return PV&&(!realTest(ev)||(ev.pvDraft&&!ev.savedGolf))}
+function pvApply(e){e.savedTest=!!e.test;e.savedGolf=!!e.golf;var o=pvGet();if(!o||o.id!==e.id)return e;var r=Object.assign({},e,o.ev,{pvDraft:true,savedTest:!!e.test,savedGolf:!!e.golf});if(o.imgs){r.thumb=o.thumb;r.imgN=o.imgN}return r}
 if(PV&&pvGet()){var pvn=document.createElement('div');pvn.style.cssText='font-size:13px;margin-top:4px;font-weight:700';pvn.textContent='管理画面の「保存していない設定」で表示しています';document.getElementById('pvbar').appendChild(pvn)}
 var app=document.getElementById('app'),C,S={ev:null,slots:[],slot:null,mode:'new',rec:null};
 var esc=function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})};
@@ -460,7 +462,7 @@ function doneView(r,d,gn){
 
 /* 予約の完了画面：入力画面でチェックしたお連れ様の、専用URL・QRコードをすぐに出す */
 async function doneGuests(r,d,gn){
-  var box=q('dgs'),s=S.slot,ev=S.ev,PRX=PV&&!realTest(ev);
+  var box=q('dgs'),s=S.slot,ev=S.ev,PRX=guestPractice(ev);
   var rec={id:r.id,mail:C.normMail(d.mail),eventId:ev.id,eventName:ev.name,slotId:s.id,date:s.date,start:s.start,end:s.end,name:d.name,n:d.a+d.k+d.s+d.m,status:r.status,participants:d.participants||[],inv:{}};
   S.rec=rec;
   var h='<h2 style="font-size:16px;margin-top:22px">'+T('お連れ様への、入力のご案内')+'</h2>';
@@ -477,8 +479,8 @@ async function doneGuests(r,d,gn){
     }else if(multi){
       var mg=await C.makeGroup(rec,gn);grp=mg.grp;gn.forEach(function(no,i){ids[no]=mg.members[i];rec.inv[no]=mg.members[i]});
     }else{ids[gn[0]]=await C.makeInvite(rec,gn[0]);rec.inv[gn[0]]=ids[gn[0]]}
-  }catch(e){box.innerHTML=h+'<p class="err">'+T('URLを作れませんでした。ご予約は完了しています。トップ画面の「あなたの予約」を開いて、もう一度お試しください。')+'</p>';return}
-  h+=(PRX?'<p class="note" style="color:#c0392b">'+T('練習用のURLです。この端末のブラウザの中だけで開けます。')+'</p>':'');
+  }catch(e){box.innerHTML=h+'<p class="err">'+T('URLを作れませんでした。ご予約は完了しています。トップ画面の「あなたの予約」を開いて、もう一度お試しください。')+(e&&e.code?' ('+esc(e.code)+')':'')+(e&&e.code==='permission-denied'&&PV?'<br>'+T('設定が保存されていない可能性があります（管理画面で、お連れ様QRコード送信可能のチェックを入れて、保存してください）')+'':'')+'</p>';return}
+  h+=(PRX?'<p class="note" style="color:#c0392b">'+T('練習用のURLです。この端末のブラウザの中だけで開けます。')+(PV&&realTest(ev)?'（保存済みの設定が「お連れ様QRコード送信可能（ゴルフ）」ではないため。管理画面で、この設定を保存すると、本当のURL・QRコードが作れます）':'')+'</p>':'');
   if(grp){
     h+='<div class="card" style="margin:8px 0;padding:10px 12px"><b>'+T('全員共通のURL（おすすめ）')+'</b><p class="note" style="margin:4px 0 0">'+T('お連れ様の全員に、同じURLを送れます。お連れ様が入力して送信した順に、空いている枠へ入ります（お連れ様は、自分の番号を知らなくて大丈夫です）。同じ組のご参加者のお名前は、お連れ様にも表示されます。')+'</p><div data-gp="grp"></div></div>'+
       '<details style="margin:8px 0"><summary class="note" style="cursor:pointer">'+T('1人ずつ別のURLで送る場合')+'</summary>'+gn.map(function(no){return '<div class="card" style="margin:8px 0;padding:10px 12px"><div>'+T('参加者')+no+'</div><div data-gp="'+no+'"></div></div>'}).join('')+'</details>';
@@ -590,7 +592,7 @@ function guestSharePane(pane,gid,isGrp){
 }
 async function loadGuests(){
   var box=q('gst');if(!box)return;
-  var r=S.rec,inv=r.inv||{},rows=[],sync=false,ps=(r.participants||[]).slice(),notes=[],PRX=PV&&!realTest(S.ev);   // PRX：練習（何もサーバーに保存しない）
+  var r=S.rec,inv=r.inv||{},rows=[],sync=false,ps=(r.participants||[]).slice(),notes=[],PRX=guestPractice(S.ev);   // PRX：練習（何もサーバーに保存しない）
   for(var no=2;no<=r.n;no++){
     var g=null;
     if(inv[no]){try{g=(PRX&&PRAC.isId(inv[no]))?PRAC.get(inv[no]):await C.getGuest(inv[no])}catch(e){}}
@@ -651,7 +653,7 @@ async function loadGuests(){
           var ps3=(S.rec.participants||[]).slice();if(nm1&&ps3[no-1]===nm1){ps3[no-1]='';S.rec.participants=ps3}
           await loadGuests();
         }
-      }catch(e){pane.innerHTML=('<p class="err">'+T('うまくいきませんでした。もう一度お試しください。')+'</p>')}
+      }catch(e){pane.innerHTML=('<p class="err">'+T('うまくいきませんでした。もう一度お試しください。')+(e&&e.code?' ('+esc(e.code)+')':'')+'</p>')}
       return}
     b.disabled=true;
     try{
@@ -667,7 +669,7 @@ async function loadGuests(){
         var inv2=Object.assign({},S.rec.inv||{});delete inv2[no];S.rec.inv=inv2;if(ps2)S.rec.participants=ps2;
         await loadGuests();return;
       }
-    }catch(e){pane.innerHTML=('<p class="err">'+T('うまくいきませんでした。もう一度お試しください。')+'</p>')}
+    }catch(e){pane.innerHTML=('<p class="err">'+T('うまくいきませんでした。もう一度お試しください。')+(e&&e.code?' ('+esc(e.code)+')':'')+(e&&e.code==='permission-denied'&&PV?'<br>'+T('設定が保存されていない可能性があります（管理画面で、お連れ様QRコード送信可能のチェックを入れて、保存してください）')+'':'')+'</p>')}
     b.disabled=false;
   }});
 }
