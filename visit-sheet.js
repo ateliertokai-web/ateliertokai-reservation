@@ -21,7 +21,7 @@
       }) };
     });
   }
-  async function make(list, ev, loadExcel) {
+  async function make(list, ev, loadExcel, comp) {
     var X = await loadExcel(), g = group(list), wb = new X.Workbook();
     var ws = wb.addWorksheet('来店表', { pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: .4, right: .4, top: .5, bottom: .5, header: .2, footer: .2 } } });
     ws.columns = [{ width: 15 }, { width: 26 }, { width: 6 }, { width: 24 }, { width: 18 }, { width: 8 }, { width: 18 }];
@@ -40,9 +40,12 @@
         var tp = t.rows.reduce(function (b, r) { return b + (+r.n || 0); }, 0);
         ws.mergeCells('A' + n + ':G' + n); var s = ws.getCell('A' + n); s.value = t.label + '　' + t.rows.length + '組・' + tp + '名'; s.font = { bold: true, size: 11 }; s.fill = fill('FFF3EAD3'); s.border = bd; n++;
         t.rows.forEach(function (r) {
-          var row = ws.getRow(n); row.values = [(r.id || '').replace(/(.{4})(?=.)/g, '$1-'), who(r), +r.n || 0, car(r), stores(r), '', ''];
+          var row = ws.getRow(n), cs = (comp ? comp(r) : []) || [];
+          row.values = [(r.id || '').replace(/(.{4})(?=.)/g, '$1-'), who(r), +r.n || 0, car(r), stores(r), '', ''];
+          // お連れ様・参加者が、ほかにいるときは、代表者の下に、小さく（グレーで）並べる
+          if (cs.length) row.getCell(2).value = { richText: [{ text: who(r), font: { size: 10, bold: true } }].concat(cs.map(function (p) { return { text: '\n└ ' + p + ' 様', font: { size: 8, color: { argb: 'FF666666' } } }; })) };
           row.eachCell({ includeEmpty: true }, function (c2, i) { c2.border = bd; c2.font = { size: 10 }; c2.alignment = { vertical: 'middle', wrapText: i === 2 || i === 4 || i === 5, horizontal: i === 3 ? 'center' : 'left' }; });
-          row.height = 24; dataRows.push(n); total += +r.n || 0; groups++; n++;
+          row.height = Math.max(24, 16 + 11 * cs.length); dataRows.push(n); total += +r.n || 0; groups++; n++;
         });
       });
     });
@@ -52,8 +55,8 @@
     var buf = await wb.xlsx.writeBuffer();
     return { buf: buf, name: '来店表_' + String(ev.name || '').replace(/[\\/:*?"<>|]/g, '') + '_' + new Date().toISOString().slice(0, 10) + '.xlsx', groups: groups };
   }
-  async function download(list, ev, loadExcel) {
-    var o = await make(list, ev, loadExcel), a = document.createElement('a');
+  async function download(list, ev, loadExcel, comp) {
+    var o = await make(list, ev, loadExcel, comp), a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([o.buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })); a.download = o.name; document.body.appendChild(a); a.click();
     setTimeout(function () { a.remove(); URL.revokeObjectURL(a.href); }, 1500); return o;
   }

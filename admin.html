@@ -164,6 +164,8 @@ function guestList(r){var inv=r.inv||{},out=[];for(var no=2;no<=r.n;no++){var gi
 function guestTxt(x){if(x.cx)return '参加者'+x.no+'：取り消し'+(x.cxName?'（'+x.cxName+'）':'');return '参加者'+x.no+'：'+(x.name||'未入力')+(x.own?'（東開オーナー）':'')+(x.mail?' '+x.mail:'')}
 // お連れ様が入力したお名前を、予約の参加者名にも反映する（スプレッドシートにも出るように）
 function syncGuests(list){S.syncing=S.syncing||{};list.forEach(function(r){if(r.status==='cancel'||S.syncing[r.id])return;var ps=(r.participants||[]).slice(),ch=false;guestList(r).forEach(function(x){var cur=ps[x.no-1]||'',w=null;if(!x.cx&&x.name&&cur!==x.name)w=x.name;else if(x.cx&&x.cxName&&cur===x.cxName)w='';if(w!==null){while(ps.length<x.no)ps.push('');ps[x.no-1]=w;ch=true}});if(ch){S.syncing[r.id]=1;C.syncParticipants(r.id,ps).catch(function(){}).then(function(){delete S.syncing[r.id]})}})}
+// 代表者以外の、参加者・お連れ様のお名前（来店表で、代表者の下に小さく出す）
+function companions(r){var seen={};seen[C.normName(r.name)]=1;var out=[];(r.participants||[]).concat(guestList(r).filter(function(x){return !x.cx}).map(function(x){return x.name})).forEach(function(p){var k=C.normName(p);if(!k||seen[k])return;seen[k]=1;out.push(p)});return out}
 function carTxt(r){if(r.order)return 'ご注文中・新規';var c=r.car||{};return [c.pref,c.cls,c.kana,c.num].join(' ')+' '+(c.model||'')}
 function draw(){
   var ev=S.events.filter(function(e){return e.id===S.evId})[0]||{};
@@ -235,7 +237,7 @@ function draw(){
     }catch(er){say('失敗しました: '+er.message)}
   };
   q('csv').onclick=function(){csv(list)};
-  q('vs').onclick=async function(){var b=this,t=b.textContent;b.disabled=true;b.textContent='作成中…';try{var o=await VSHEET.download(list,ev,CHK.loadExcel);say('来店表を作りました（'+o.groups+'組）。画面で絞り込んだ日付・時間帯の分だけが入ります')}catch(er){say('来店表を作れませんでした: '+er.message)}b.disabled=false;b.textContent=t};
+  q('vs').onclick=async function(){var b=this,t=b.textContent;b.disabled=true;b.textContent='作成中…';try{var o=await VSHEET.download(list,ev,CHK.loadExcel,companions);say('来店表を作りました（'+o.groups+'組）。画面で絞り込んだ日付・時間帯の分だけが入ります')}catch(er){say('来店表を作れませんでした: '+er.message)}b.disabled=false;b.textContent=t};
   if(q('pair'))q('pair').onclick=function(){PAIR.open(C,ev,S.rs||[],S.gs||{},say,S.events)};
   q('rc').onclick=async function(){var b=this;b.disabled=true;try{await C.recount(S.evId);await loadSlots();say('人数を数え直しました');draw()}catch(er){b.disabled=false;say('失敗しました: '+er.message)}};
   if(q('dr'))q('dr').onclick=async function(){
