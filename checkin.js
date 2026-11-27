@@ -197,5 +197,5 @@
     sub(); draw();
     return function () { stopCam(); unsub(); };
   }
-  root.CHK = { view: view, parseId: parseId, loadJsQR: loadJsQR, arr: arr, adv: adv };
+  root.CHK = { view: view, parseId: parseId, loadJsQR: loadJsQR, arr: arr, adv: adv, loadExcel: loadExcel };
 })(window);
