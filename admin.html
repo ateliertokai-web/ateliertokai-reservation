@@ -411,11 +411,14 @@ function privacyCard(p){
     '<div class="row"><label>電話<input id="ppT" maxlength="30" inputmode="tel"></label><label>メール<input id="ppM" maxlength="80" inputmode="email"></label></div>'+
     '<label>個人情報の責任者（役職・氏名）<input id="ppR" maxlength="60"></label><label>保管期間（例：イベント終了後1年）<input id="ppK" maxlength="80" value="イベント終了後1年"></label>'+
     '<label>第三者への提供（イベントの運営のために、開催先・宿泊先などに、お客様の情報をお知らせする場合。1行に1件。提供しないときは「なし」とだけ入力）<textarea id="ppV" rows="4" maxlength="1200"></textarea></label><small class="help">例：「ゴルフのイベント：ゴルフ場に、参加者のお名前（組み合わせ表の作成のため）」「ホテル宿泊を伴うイベント：ホテルに、お名前・人数・ご連絡先（宿泊の手配のため）」。イベントが増えたら、行を足してください。</small><label>制定・改定日（例：2026年12月1日）<input id="ppD" maxlength="30"></label><label>その他の追記（任意）<textarea id="ppE" rows="3" maxlength="800"></textarea></label>'+
-    '<div class="tools"><button class="p" id="ppS" type="button" style="max-width:200px">保存する</button><a class="s" href="privacy.html" target="_blank" rel="noopener" style="text-decoration:none;color:inherit;border:1px solid var(--line);border-radius:7px;padding:7px 12px;background:#fff">ページを確認</a></div>';
+    '<div class="box" style="margin:10px 0"><b>全文を、自由に編集する（任意）</b><small class="help">上の欄では足りないとき、文章の全体を、書き換えられます。「ひな型を読み込む」を押すと、いまの文章が下の欄に入るので、必要な所だけ、直してください。書き方：「# 」で大見出し、「## 」で見出し、「- 」で箇条書き、空行で段落が分かれます。下の欄に文章が入っていると、上の欄の入力は、使われません（空にして保存すると、ひな型に戻ります）。削除のご依頼のフォームは、文章の下に、必ず出ます。</small><textarea id="ppF" rows="16" maxlength="20000" style="margin-top:6px" placeholder="空欄＝ひな型を使う"></textarea><div class="tools"><button class="s" id="ppL" type="button">ひな型を読み込む</button><button class="s" id="ppC" type="button">空にする（ひな型に戻す）</button></div></div><div class="tools"><button class="p" id="ppS" type="button" style="max-width:200px">保存する</button><a class="s" href="privacy.html" target="_blank" rel="noopener" style="text-decoration:none;color:inherit;border:1px solid var(--line);border-radius:7px;padding:7px 12px;background:#fff">ページを確認</a></div>';
   p.appendChild(d);
-  var F={ppB:'biz',ppA:'addr',ppT:'tel',ppM:'mail',ppR:'resp',ppK:'keep',ppD:'date',ppE:'extra',ppV:'provide'};
+  var F={ppB:'biz',ppA:'addr',ppT:'tel',ppM:'mail',ppR:'resp',ppK:'keep',ppD:'date',ppE:'extra',ppV:'provide',ppF:'full'};
   C.cfg.doc('privacy').get().then(function(s){if(!s.exists)return;var v=s.data();Object.keys(F).forEach(function(k){if(typeof v[F[k]]==='string')q(k).value=v[F[k]]});if(!q('ppV').value.trim())q('ppV').value=PRIVACY.DEF.provide}).catch(function(){});
   if(window.PRIVACY)q('ppV').value=PRIVACY.DEF.provide;
+  var cur=function(){var o={};Object.keys(F).forEach(function(k){o[F[k]]=q(k).value.trim()});o.full='';return o};
+  q('ppL').onclick=function(){if(q('ppF').value.trim()&&!confirm('いまの全文の欄は、ひな型で置き換わります。よろしいですか？'))return;q('ppF').value=PRIVACY.toText(cur())};
+  q('ppC').onclick=function(){q('ppF').value=''};
   q('ppS').onclick=async function(){
     var o={updatedAt:firebase.firestore.FieldValue.serverTimestamp()};Object.keys(F).forEach(function(k){o[F[k]]=q(k).value.trim()});
     this.disabled=true;try{await C.cfg.doc('privacy').set(o);say('プライバシーポリシーを保存しました')}catch(e){say('保存できませんでした: '+(e.code==='permission-denied'?'Firestoreのルールに「config」の設定がありません':e.message))}this.disabled=false;
