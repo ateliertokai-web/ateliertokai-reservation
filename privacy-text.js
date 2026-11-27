@@ -17,8 +17,32 @@
     if (/^(なし|ない|無し|提供しない)$/.test(t)) return '<p>現在、イベントの運営のために、開催先・宿泊先などへ、お客様の情報を提供する予定は、ありません。</p>';
     return '<ul>' + t.split(/\r?\n/).map(function (x) { return x.trim(); }).filter(Boolean).map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>';
   }
+  // 全文編集：簡単な書き方の文章 → ページの表示。「# 見出し」「## 小見出し」「- 箇条書き」、空行で段落を分ける
+  function render(t) {
+    var out = [], ul = false, para = [];
+    function endP() { if (para.length) { out.push('<p>' + para.join('<br>') + '</p>'); para = []; } }
+    function endU() { if (ul) { out.push('</ul>'); ul = false; } }
+    String(t || '').replace(/\r/g, '').split('\n').forEach(function (l) {
+      var m;
+      if (!l.trim()) { endP(); endU(); }
+      else if ((m = /^#\s+(.*)$/.exec(l))) { endP(); endU(); out.push('<h1>' + esc(m[1]) + '</h1>'); }
+      else if ((m = /^##\s+(.*)$/.exec(l))) { endP(); endU(); out.push('<h2>' + esc(m[1]) + '</h2>'); }
+      else if ((m = /^[-・]\s+(.*)$/.exec(l))) { endP(); if (!ul) { out.push('<ul>'); ul = true; } out.push('<li>' + esc(m[1]) + '</li>'); }
+      else { endU(); para.push(esc(l)); }
+    });
+    endP(); endU(); return out.join('');
+  }
+  // いまのひな型の文章を、全文編集用の文章にする（編集の出発点）
+  function toText(v) {
+    var h = html(Object.assign({}, v || {}, { full: '' })), ent = { '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'" };
+    return h.replace(/<h1>(.*?)<\/h1>/g, '# $1\n\n').replace(/<h2[^>]*>(.*?)<\/h2>/g, '## $1\n\n')
+      .replace(/<tr><th>(.*?)<\/th><td>(.*?)<\/td><\/tr>/g, function (a, k, x) { return '- ' + k + '：' + x.replace(/<br>/g, ' ／ ') + '\n'; })
+      .replace(/<li>(.*?)<\/li>/g, '- $1\n').replace(/<\/(ul|table)>/g, '\n').replace(/<p[^>]*>(.*?)<\/p>/g, '$1\n\n').replace(/<br>/g, '\n')
+      .replace(/<[^>]+>/g, '').replace(/&(amp|lt|gt|quot|#39);/g, function (m) { return ent[m]; }).replace(/\n{3,}/g, '\n\n').trim();
+  }
   function html(v) {
     v = v || {};
+    if (String(v.full || '').trim()) return render(v.full);
     var ex = String(v.extra || '').trim();
     return '<h1>プライバシーポリシー（個人情報の取り扱いについて）</h1>' +
       (has(v, 'date') ? '<p class="upd">制定・改定日：' + f(v, 'date') + '</p>' : '') +
@@ -49,5 +73,5 @@
       '<h2>10. 改定</h2><p>この内容は、法令の改正や、システムの変更に合わせて、改定することがあります。改定した場合は、このページで、お知らせします。</p>' +
       (ex ? '<h2>11. その他</h2><p>' + esc(ex).replace(/\n/g, '<br>') + '</p>' : '');
   }
-  root.PRIVACY = { html: html, DEF: DEF };
+  root.PRIVACY = { html: html, DEF: DEF, toText: toText, render: render };
 })(window);
