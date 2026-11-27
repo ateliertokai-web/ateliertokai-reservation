@@ -42,10 +42,14 @@
         t.rows.forEach(function (r) {
           var row = ws.getRow(n), cs = (comp ? comp(r) : []) || [];
           row.values = [(r.id || '').replace(/(.{4})(?=.)/g, '$1-'), who(r), +r.n || 0, car(r), stores(r), '', ''];
-          // お連れ様・参加者が、ほかにいるときは、代表者の下に、小さく（グレーで）並べる
-          if (cs.length) row.getCell(2).value = { richText: [{ text: who(r), font: { size: 10, bold: true } }].concat(cs.map(function (p) { return { text: '\n└ ' + p + ' 様', font: { size: 8, color: { argb: 'FF666666' } } }; })) };
           row.eachCell({ includeEmpty: true }, function (c2, i) { c2.border = bd; c2.font = { size: 10 }; c2.alignment = { vertical: 'middle', wrapText: i === 2 || i === 4 || i === 5, horizontal: i === 3 ? 'center' : 'left' }; });
-          row.height = Math.max(24, 16 + 11 * cs.length); dataRows.push(n); total += +r.n || 0; groups++; n++;
+          row.height = 24; dataRows.push(n); total += +r.n || 0; groups++; n++;
+          // お連れ様・参加者が、ほかにいるときは、代表者の下に、小さな行（グレーの小さい文字）を足す
+          cs.forEach(function (p) {
+            var sr = ws.getRow(n); sr.getCell(2).value = '　└ ' + p + ' 様'; sr.height = 14;
+            for (var i = 1; i <= 7; i++) { var c3 = sr.getCell(i); c3.font = { size: 8, color: { argb: 'FF666666' } }; c3.border = { left: thin, right: thin, bottom: { style: 'hair', color: { argb: 'FFBBBBBB' } } }; c3.alignment = { vertical: 'middle' }; }
+            n++;
+          });
         });
       });
     });
