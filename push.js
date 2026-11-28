@@ -69,13 +69,16 @@
   }
   function fmt(t) { var d = new Date(t), p = function (n) { return ('0' + n).slice(-2); }; return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + d.getHours() + ':' + p(d.getMinutes()); }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  // 読んだお知らせを出す日数（管理画面「お知らせ」タブで変えられる。config/push の days。初めは7日）
+  var DAYS = null;
+  function days() { if (DAYS !== null) return Promise.resolve(DAYS); if (!db) return Promise.resolve(7); return db.collection('config').doc('push').get().then(function (s) { var d = s.exists ? +s.data().days : 0; DAYS = (d >= 1 && d <= 365) ? d : 7; return DAYS; }).catch(function () { return 7; }); }
   // ホーム画面の上に「お知らせ」を出す（未読は「新着」。出したら既読にして、数字を消す）
   async function inbox(box) {
     if (!box || !root.indexedDB) return;
     var msgs = await list(); if (!msgs.length) { clearBadge(); return; }
     var old = box.querySelector('#pushBox'); if (old) old.remove();
-    // 新着（未読）は、読むまで出す。読んだお知らせは、届いてから14日間だけ、「これまでのお知らせ」（閉じた状態）に出す
-    var lim = Date.now() - 14 * 864e5, un = msgs.filter(function (m) { return !m.read; }), rd = msgs.filter(function (m) { return m.read && m.t >= lim; }).slice(0, 15);
+    // 新着（未読）は、読むまで出す。読んだお知らせは、届いてから決めた日数（初めは7日）だけ、「これまでのお知らせ」（閉じた状態）に出す
+    var lim = Date.now() - (await days()) * 864e5, un = msgs.filter(function (m) { return !m.read; }), rd = msgs.filter(function (m) { return m.read && m.t >= lim; }).slice(0, 15);
     if (!un.length && !rd.length) { clearBadge(); return; }
     var item = function (m, nw) { return '<div class="box" style="margin:0 0 6px;' + (nw ? 'border-color:#c0392b;background:#fff6f4' : '') + '"><div style="display:flex;gap:6px;align-items:baseline"><b>' + esc(m.title) + '</b>' + (nw ? '<span class="tag w">' + T('新着') + '</span>' : '') + '<small class="note" style="margin-left:auto">' + fmt(m.t) + '</small></div><div style="white-space:pre-wrap;margin-top:2px">' + esc(m.body) + '</div></div>'; };
     var d = document.createElement('div'); d.id = 'pushBox'; d.style.cssText = 'margin:0 0 14px';
