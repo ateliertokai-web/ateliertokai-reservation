@@ -34,6 +34,7 @@ a.innerHTML='<div class="card err">読み込みに時間がかかっています
 <script src="qr.js"></script>
 <script src="texts.js"></script>
 <script src="push.js"></script>
+<script src="tutorial.js"></script>
 <script src="edit-sample.js"></script>
 <script>
 (function(){
@@ -193,7 +194,8 @@ async function home(){
     app.innerHTML=h;
     app.querySelectorAll('.ev').forEach(function(b){b.onclick=function(){S.ev=evs[+b.dataset.i];pickSlot()}});
     q('lk').onclick=lookupView;
-    app.insertAdjacentHTML('beforeend','<p class="note" style="text-align:center;margin:26px 0 0"><a href="privacy.html" target="_blank" rel="noopener">'+T('プライバシーポリシー')+'</a>　<a href="privacy.html#delete" target="_blank" rel="noopener">'+T('お客様情報の削除を依頼する')+'</a></p>');
+    app.insertAdjacentHTML('beforeend','<p class="note" style="text-align:center;margin:26px 0 0"><a href="privacy.html" target="_blank" rel="noopener">'+T('プライバシーポリシー')+'</a>　<a href="privacy.html#delete" target="_blank" rel="noopener">'+T('お客様情報の削除を依頼する')+'</a><br><a href="#" id="tutLink" hidden>'+T('ホーム画面に追加する方法')+'</a></p>');
+    if(window.TUT)TUT.init(T,{link:q('tutLink'),skip:PV||TXT.edit});
     if(window.PUSH&&!TXT.edit){PUSH.inbox(app);if(!PV)PUSH.ask(app)}   // 届いたお知らせ／アプリとして使っている方に「通知を受け取りますか？」
     // 説明書（ご予約の方法）へのボタン。管理画面の「お客様画面」で表示ONのときだけ出す
     C.cfg.doc('guide').get().then(function(s){var g=s.exists?s.data():null,box=q('gd');
