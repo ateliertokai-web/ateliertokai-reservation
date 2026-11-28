@@ -404,6 +404,7 @@ function makeCore(firebase, db, opts) {
     var ops = ss.docs.map(function (d) { return function (b) { b.delete(slots.doc(d.id)); }; });
     ops.push(function (b) { b.delete(events.doc(eventId)); });
     ops.push(function (b) { b.delete(eimgs.doc(eventId)); });
+    ops.push(function (b) { b.delete(eimgs.doc(eventId + '-seat')); });
     await chunked(ops);
     return ok({});
   }

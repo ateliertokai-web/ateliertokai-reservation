@@ -18,6 +18,55 @@
   function arr(r) { var b = adv(r), o = r.arrive; if (o && typeof o.a === 'number' && typeof o.c === 'number') return { a: o.a, c: o.c, mod: o.a !== b.a || o.c !== b.c }; return { a: b.a, c: b.c, mod: false }; }
   var EXCEL = 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';
   function loadExcel() { if (root.ExcelJS) return Promise.resolve(root.ExcelJS); return new Promise(function (y, n) { var t = document.createElement('script'); t.src = EXCEL; t.onload = function () { y(root.ExcelJS); }; t.onerror = function () { n(new Error('Excelの部品を読み込めませんでした（電波をご確認ください）')); }; document.head.appendChild(t); }); }
+  // 受付の記録をつくる（管理画面の受付・お客様用の受付画面で共通）。席番号が「受付順に自動」のときは、番号を、順番に（重ならないように）付ける
+  //   ex：{a, c（来店人数）, ckx（✔した項目の名前の一覧）, seat（席番号）}
+  async function doCheckin(C, r, ev, by, ex) {
+    var FVv = firebase.firestore.FieldValue, up = { updatedAt: FVv.serverTimestamp(), checkin: { at: FVv.serverTimestamp(), by: by || '' } };
+    ex = ex || {};
+    if (ex.a != null) { var b0 = adv(r); if (ex.a !== b0.a || ex.c !== b0.c) up.arrive = { a: ex.a, c: ex.c, by: by || '', at: FVv.serverTimestamp() }; }
+    if (ex.ckx && ex.ckx.length) up.ckx = ex.ckx;
+    var seat = String(ex.seat || '').trim().slice(0, 8); if (seat) up.seat = seat;
+    if (((ev && ev.ckSeat) === 'auto') && !seat && !r.seat) {
+      var out = await firebase.firestore().runTransaction(async function (tx) {
+        var eRef = C.events.doc(r.eventId), rRef = C.res.doc(r.id), es = await tx.get(eRef), rs = await tx.get(rRef);
+        if (!rs.exists) return { missing: true };
+        if (rs.data().checkin) return { dup: true };
+        var n = (es.exists && +es.data().seatNext) || 1;
+        tx.update(eRef, { seatNext: n + 1 }); tx.update(rRef, Object.assign({}, up, { seat: String(n) }));
+        return { seat: String(n) };
+      });
+      if (out.dup) return 'dup';
+      return { seat: out.seat };
+    }
+    await C.res.doc(r.id).update(up);
+    return { seat: seat || r.seat || '' };
+  }
+  // 席図（店舗の簡易席図）：イベントごとに1枚。eventImages/{イベントID}-seat に、画像（文字にしたもの）を置く
+  async function seatImg(C, eid) { try { var s = await C.eimgs.doc(eid + '-seat').get(); return s.exists ? (s.data().img || '') : ''; } catch (e) { return ''; } }
+  function packSeat(file) {
+    return new Promise(function (ok, ng) {
+      var fr = new FileReader(); fr.onerror = function () { ng(new Error('画像を読み込めませんでした')); };
+      fr.onload = function () {
+        var im = new Image(); im.onerror = function () { ng(new Error('画像を読み込めませんでした')); };
+        im.onload = function () {
+          var max = 1400, q = .82, out = '';
+          for (var i = 0; i < 8; i++) {
+            var k = Math.min(1, max / Math.max(im.naturalWidth, im.naturalHeight)), c = document.createElement('canvas'); c.width = Math.max(1, Math.round(im.naturalWidth * k)); c.height = Math.max(1, Math.round(im.naturalHeight * k));
+            var x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(im, 0, 0, c.width, c.height); out = c.toDataURL('image/jpeg', q);
+            if (out.length <= 240000) break; max = Math.round(max * .85); q = Math.max(.5, q - .05);
+          }
+          if (out.length > 240000) ng(new Error('画像が大きすぎます')); else ok(out);
+        };
+        im.src = fr.result;
+      };
+      fr.readAsDataURL(file);
+    });
+  }
+  function showMap(img) {
+    var v = document.createElement('div'); v.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:14px';
+    v.innerHTML = '<img alt="席図" src="' + String(img).replace(/"/g, '') + '" style="max-width:100%;max-height:82vh;background:#fff;border-radius:6px"><button type="button" style="margin-top:12px;padding:10px 26px;border-radius:10px;border:1px solid #888;background:none;color:#fff;font:inherit">閉じる</button>';
+    v.onclick = function () { v.remove(); }; document.body.appendChild(v);
+  }
   var JSQR = 'jsqr.min.js';   // 読み取りの部品は、このサイトの中に置いてある（外のサイトに頼らない。カメラで読み取るときだけ、読み込む）
   function loadJsQR() { if (root.jsQR) return Promise.resolve(); return new Promise(function (y, n) { var s = document.createElement('script'); s.src = JSQR; s.onload = y; s.onerror = function () { n(new Error('読み取りの部品を読み込めませんでした（電波をご確認のうえ、ページを再読み込みしてください）。予約番号の入力でも、受付できます')); }; document.head.appendChild(s); }); }
   function css() {
@@ -34,8 +83,9 @@
     css();
     var list = events.filter(function (e) { return e.checkin; });
     if (!list.length) { box.innerHTML = '<div class="card"><h2 style="margin-top:0">来場受付（QR）</h2><p class="note">来場受付を使うイベントが、ありません。「イベント・枠」で、イベントの設定を開き、「来場受付（QR）を使う」にチェックを入れて、保存してください。<br>※ この機能は、管理画面だけです。お客様の画面には、何も出ません。</p></div>'; return function () {}; }
-    var cur = null, eid = (box.__eid && list.some(function (e) { return e.id === box.__eid; })) ? box.__eid : list[0].id, rs = [], filter = '', last = null, unsub = function () {}, stream = null, raf = 0, scanning = false, det = null;
+    var seatMap = null, cur = null, eid = (box.__eid && list.some(function (e) { return e.id === box.__eid; })) ? box.__eid : list[0].id, rs = [], filter = '', last = null, unsub = function () {}, stream = null, raf = 0, scanning = false, det = null;
     box.className = 'ck';
+    function curEv() { return list.filter(function (e) { return e.id === eid; })[0] || {}; }
     function who() { var u = firebase.auth().currentUser; return (u && u.email) || ''; }
     function live() { return rs.filter(function (r) { return r.status === 'confirmed' || r.status === 'won'; }); }
     function stopCam() { scanning = false; cancelAnimationFrame(raf); if (stream) { stream.getTracks().forEach(function (t) { t.stop(); }); stream = null; } var c = box.querySelector('#ckCam'); if (c) c.innerHTML = ''; var b = box.querySelector('#ckScan'); if (b) b.textContent = 'カメラで読み取る'; }
@@ -43,37 +93,54 @@
     function arrUp(r, a, c) {   // 来店人数が、予約と違うときだけ、記録する（同じなら、記録を消す）
       var b = adv(r); return (a !== b.a || c !== b.c) ? { a: a, c: c, by: who(), at: FV().serverTimestamp() } : FV().delete();
     }
-    async function mark(r, on, a, c) {
-      var up = { updatedAt: FV().serverTimestamp() };
-      if (on) { if (r.checkin) return 'dup'; up.checkin = { at: FV().serverTimestamp(), by: who() }; if (a != null) { var b0 = adv(r); if (a !== b0.a || c !== b0.c) up.arrive = arrUp(r, a, c); } }
-      else { up.checkin = FV().delete(); up.arrive = FV().delete(); }
-      await C.res.doc(r.id).update(up);
+    async function mark(r, on, a, c, ex) {
+      var seat = '';
+      if (on) {
+        if (r.checkin) return 'dup';
+        var o = await doCheckin(C, r, curEv(), who(), Object.assign({ a: a, c: c }, ex || {})); if (o === 'dup') return 'dup'; seat = o.seat || '';
+      } else await C.res.doc(r.id).update({ updatedAt: FV().serverTimestamp(), checkin: FV().delete(), arrive: FV().delete(), ckx: FV().delete(), seat: FV().delete() });
       var b = adv(r), chg = on && a != null && (a !== b.a || c !== b.c);
-      if (root.AUDIT) root.AUDIT(on ? '来場受付' : '来場受付を取り消し', r.name + ' 様（' + r.id + '）' + (chg ? '／来店人数を修正：大人' + b.a + '→' + a + '・こども' + b.c + '→' + c : ''));
+      if (root.AUDIT) root.AUDIT(on ? '来場受付' : '来場受付を取り消し', r.name + ' 様（' + r.id + '）' + (chg ? '／来店人数を修正：大人' + b.a + '→' + a + '・こども' + b.c + '→' + c : '') + (on && seat ? '／席 ' + seat : ''));
       return 'ok';
     }
-    async function saveArrive(r, a, c) {
-      await C.res.doc(r.id).update({ arrive: arrUp(r, a, c), updatedAt: FV().serverTimestamp() });
-      var b = adv(r); if (root.AUDIT) root.AUDIT('来店人数を修正', r.name + ' 様（' + r.id + '）：大人' + b.a + '→' + a + '・こども' + b.c + '→' + c);
+    async function saveArrive(r, a, c, ex) {
+      var up = { arrive: arrUp(r, a, c), updatedAt: FV().serverTimestamp() };
+      if (ex) { up.ckx = (ex.ckx && ex.ckx.length) ? ex.ckx : FV().delete(); var sv = String(ex.seat || '').trim().slice(0, 8); up.seat = sv ? sv : FV().delete(); }
+      await C.res.doc(r.id).update(up);
+      var b = adv(r); if (root.AUDIT) root.AUDIT('受付の内容を修正', r.name + ' 様（' + r.id + '）：大人' + b.a + '→' + a + '・こども' + b.c + '→' + c + (ex && ex.seat ? '／席 ' + ex.seat : ''));
     }
+    // 受付の追加の✔項目・席番号・席図（イベントの「受付の設定」で決める）
+    function extraHtml(r) {
+      var ev = curEv(), items = ev.ckItems || [], mode = ev.ckSeat || 'off', h = '';
+      if (items.length) h += '<div style="margin-top:8px"><b>受付のチェック</b>' + items.map(function (t) { return '<label class="chk" style="margin:3px 0"><input type="checkbox" data-x="' + esc(t) + '"' + (cur.x.indexOf(t) >= 0 ? ' checked' : '') + '>' + esc(t) + '</label>'; }).join('') + '</div>';
+      if (mode !== 'off') h += '<div class="row2" style="margin-top:8px;gap:8px">席番号 <input id="ckSeat" maxlength="8" value="' + esc(cur.seat) + '" placeholder="' + (mode === 'auto' && !cur.seat ? '受付で、自動で付きます' : '例：12') + '" style="width:9em">' + (mode === 'manual' ? '<button class="s" id="ckNext" type="button">次の番号</button>' : '') + (seatMap ? '<button class="s" id="ckMap" type="button">席図を見る</button>' : '') + '</div>';
+      return h;
+    }
+    function exOf() { return { ckx: cur.x.slice(), seat: cur.seat }; }
     function card(r, msg, cls) {
       var el = box.querySelector('#ckRes'); if (!el) return;
       if (!r) { el.innerHTML = msg ? '<div class="res ng"><b>' + esc(msg) + '</b></div>' : ''; return; }
       var inn = !!r.checkin, other = r.eventId !== eid, bad = !(r.status === 'confirmed' || r.status === 'won');
-      if (!cur || cur.id !== r.id || cur.fresh !== (r.arrive ? JSON.stringify(r.arrive.a) + JSON.stringify(r.arrive.c) : '') + inn) { var ar = arr(r); cur = { id: r.id, a: ar.a, c: ar.c, fresh: (r.arrive ? JSON.stringify(r.arrive.a) + JSON.stringify(r.arrive.c) : '') + inn }; }
+      var sig = (r.arrive ? JSON.stringify(r.arrive.a) + JSON.stringify(r.arrive.c) : '') + inn + '|' + (r.ckx || []).join(',') + '|' + (r.seat || '');
+      if (!cur || cur.id !== r.id || cur.fresh !== sig) { var ar = arr(r); cur = { id: r.id, a: ar.a, c: ar.c, x: (r.ckx || []).slice(), seat: r.seat || '', fresh: sig }; }
       el.innerHTML = '<div class="res ' + (cls || (inn ? 'ok' : bad ? 'ng' : '')) + '"><div class="big">' + esc(r.name) + ' 様　' + r.n + '名</div><div>' + esc(r.date || '') + ' ' + (r.start === '00:00' && r.end === '24:00' ? '終日' : esc((r.start || '') + '–' + (r.end || ''))) + '　予約番号 ' + esc(r.id.replace(/(.{4})(?=.)/g, '$1-')) + '</div>' +
         (bad ? '<div style="color:#c0392b;font-weight:700;margin-top:4px">この予約は、' + ({ cancel: '取り消されています', wait: 'キャンセル待ちです', lottery: '抽選待ちです', lost: '落選です' }[r.status] || '確定ではありません') + '</div>' : '') +
         (inn ? '<div style="color:#1f7a4d;font-weight:700;margin-top:4px">✓ 来場済み（' + esc(fmt(r.checkin.at)) + '）</div>' : '') +
         (msg ? '<div style="margin-top:4px">' + esc(msg) + '</div>' : '') +
         ((!bad && !other) ? '<div class="row2" style="margin-top:8px;gap:16px"><span>来店人数　大人 <span class="stp" data-k="a"><button type="button" data-d="-1">−</button><b id="ckA" style="min-width:1.6em;display:inline-block;text-align:center">' + cur.a + '</b><button type="button" data-d="1">＋</button></span></span><span>こども（中学生未満） <span class="stp" data-k="c"><button type="button" data-d="-1">−</button><b id="ckC" style="min-width:1.6em;display:inline-block;text-align:center">' + cur.c + '</b><button type="button" data-d="1">＋</button></span></span></div><div class="note" style="margin:4px 0 0">予約：大人 ' + adv(r).a + '・こども ' + adv(r).c + '（変更があるときは、ここで直せます。直した人数は、一覧・Excelで、赤く出ます）</div>' : '') +
-        '<div class="row2" style="margin-top:8px">' + (!inn && !bad && !other ? '<button class="p" id="ckGo" type="button" style="max-width:200px">受付する</button>' : '') + (inn && !other ? '<button class="p" id="ckSave" type="button" style="max-width:200px">人数を保存</button><button class="s" id="ckUndo" type="button">受付を取り消す</button>' : '') + '</div></div>';
+        ((!bad && !other) ? extraHtml(r) : '') +
+        '<div class="row2" style="margin-top:8px">' + (!inn && !bad && !other ? '<button class="p" id="ckGo" type="button" style="max-width:200px">受付する</button>' : '') + (inn && !other ? '<button class="p" id="ckSave" type="button" style="max-width:200px">保存</button><button class="s" id="ckUndo" type="button">受付を取り消す</button>' : '') + '</div></div>';
       el.querySelectorAll('.stp').forEach(function (g) { g.querySelectorAll('button').forEach(function (bt) { bt.onclick = function () { var k = g.dataset.k; cur[k] = Math.max(0, cur[k] + +bt.dataset.d); el.querySelector(k === 'a' ? '#ckA' : '#ckC').textContent = cur[k]; }; }); });
-      var go = el.querySelector('#ckGo'); if (go) go.onclick = async function () { this.disabled = true; await act(r, true, cur.a, cur.c); };
-      var sv = el.querySelector('#ckSave'); if (sv) sv.onclick = async function () { this.disabled = true; try { await saveArrive(r, cur.a, cur.c); say('来店人数を保存しました（大人 ' + cur.a + '・こども ' + cur.c + '）'); } catch (e) { say('保存できませんでした: ' + e.message); } this.disabled = false; };
+      el.querySelectorAll('[data-x]').forEach(function (cb) { cb.onchange = function () { cur.x = [].map.call(el.querySelectorAll('[data-x]:checked'), function (c) { return c.dataset.x; }); }; });
+      var si = el.querySelector('#ckSeat'); if (si) si.oninput = function () { cur.seat = this.value; };
+      var sn = el.querySelector('#ckNext'); if (sn) sn.onclick = function () { var mx = 0; rs.forEach(function (x) { var n = parseInt(x.seat, 10); if (n > mx) mx = n; }); cur.seat = String(mx + 1); si.value = cur.seat; };
+      var sm = el.querySelector('#ckMap'); if (sm) sm.onclick = function () { showMap(seatMap); };
+      var go = el.querySelector('#ckGo'); if (go) go.onclick = async function () { this.disabled = true; await act(r, true, cur.a, cur.c, exOf()); };
+      var sv = el.querySelector('#ckSave'); if (sv) sv.onclick = async function () { this.disabled = true; try { await saveArrive(r, cur.a, cur.c, exOf()); say('保存しました（大人 ' + cur.a + '・こども ' + cur.c + (cur.seat ? '・席 ' + cur.seat : '') + '）'); } catch (e) { say('保存できませんでした: ' + e.message); } this.disabled = false; };
       var un = el.querySelector('#ckUndo'); if (un) un.onclick = async function () { if (!confirm(r.name + ' 様の来場受付を、取り消します。よろしいですか？')) return; this.disabled = true; await act(r, false); };
     }
-    async function act(r, on, a, c) {
-      try { var s = await mark(r, on, a, c); var f = rs.filter(function (x) { return x.id === r.id; })[0] || r; if (s === 'dup') say('すでに受付済みです'); else say(on ? f.name + ' 様を受付しました' : '受付を取り消しました'); }
+    async function act(r, on, a, c, ex) {
+      try { var s = await mark(r, on, a, c, ex); var f = rs.filter(function (x) { return x.id === r.id; })[0] || r; if (s === 'dup') say('すでに受付済みです'); else say(on ? f.name + ' 様を受付しました' : '受付を取り消しました'); }
       catch (e) { say('記録できませんでした: ' + e.message); }
     }
     function find(id) { return rs.filter(function (r) { return r.id === id; })[0]; }
@@ -132,7 +199,7 @@
       var rr = rows();
       l.innerHTML = rr.length ? rr.slice(0, 200).map(function (r) {
         var q = arr(r), p = adv(r);
-        return '<div class="rl' + (r.checkin ? ' in' : '') + '"><div data-o="' + r.id + '" style="cursor:pointer;flex:1"><b>' + esc(r.name) + ' 様</b>　大人' + (r.checkin && q.a !== p.a ? '<span style="color:#c0392b;font-weight:700">' + q.a + '</span>' : p.a) + '・こども' + (r.checkin && q.c !== p.c ? '<span style="color:#c0392b;font-weight:700">' + q.c + '</span>' : p.c) + '<br><small>' + esc(r.date || '') + ' ' + (r.start === '00:00' && r.end === '24:00' ? '終日' : esc((r.start || '') + '–' + (r.end || ''))) + '　' + esc(r.id.replace(/(.{4})(?=.)/g, '$1-')) + (r.checkin ? '　✓ ' + esc(fmt(r.checkin.at)) : '') + '</small></div>' +
+        return '<div class="rl' + (r.checkin ? ' in' : '') + '"><div data-o="' + r.id + '" style="cursor:pointer;flex:1"><b>' + esc(r.name) + ' 様</b>　大人' + (r.checkin && q.a !== p.a ? '<span style="color:#c0392b;font-weight:700">' + q.a + '</span>' : p.a) + '・こども' + (r.checkin && q.c !== p.c ? '<span style="color:#c0392b;font-weight:700">' + q.c + '</span>' : p.c) + '<br><small>' + esc(r.date || '') + ' ' + (r.start === '00:00' && r.end === '24:00' ? '終日' : esc((r.start || '') + '–' + (r.end || ''))) + '　' + esc(r.id.replace(/(.{4})(?=.)/g, '$1-')) + (r.checkin ? '　✓ ' + esc(fmt(r.checkin.at)) : '') + (r.seat ? '　<b>席 ' + esc(r.seat) + '</b>' : '') + '</small></div>' +
           (r.checkin ? '<button class="s" data-u="' + r.id + '">取消</button>' : '<button class="p" data-g="' + r.id + '" style="max-width:110px;padding:8px 14px">受付</button>') + '</div>';
       }).join('') + (rr.length > 200 ? '<p class="note">最初の200件を表示しています。名前で絞り込んでください。</p>' : '') : '<p class="note">該当する予約はありません。</p>';
       l.querySelectorAll('[data-o]').forEach(function (b) { b.onclick = function () { var r = find(b.dataset.o); if (r) { last = r.id; card(r); var e = box.querySelector('#ckRes'); if (e && e.scrollIntoView) e.scrollIntoView({ block: 'nearest' }); } }; });
@@ -157,7 +224,7 @@
         var f = 5;
         ls.forEach(function (r, i) {
           var p = adv(r), q = arr(r), inn = !!r.checkin, row = ws.getRow(f + i), tm = (r.start === '00:00' && r.end === '24:00') ? '終日' : (r.start || '');
-          row.values = [i + 1, tm, (r.name || '') + ' 様', r.id.replace(/(.{4})(?=.)/g, '$1-'), p.a, p.c, { formula: 'E' + (f + i) + '+F' + (f + i), result: p.a + p.c }, inn ? q.a : null, inn ? q.c : null, inn ? { formula: 'H' + (f + i) + '+I' + (f + i), result: q.a + q.c } : null, inn ? fmt(r.checkin.at) : '', ''];
+          row.values = [i + 1, tm, (r.name || '') + ' 様', r.id.replace(/(.{4})(?=.)/g, '$1-'), p.a, p.c, { formula: 'E' + (f + i) + '+F' + (f + i), result: p.a + p.c }, inn ? q.a : null, inn ? q.c : null, inn ? { formula: 'H' + (f + i) + '+I' + (f + i), result: q.a + q.c } : null, inn ? fmt(r.checkin.at) : '', [r.seat ? '席 ' + r.seat : '', (r.ckx || []).join('・')].filter(Boolean).join('　')];
           row.eachCell({ includeEmpty: true }, function (c, n) {
             c.border = bd; c.font = { size: 10 }; c.alignment = { vertical: 'middle', horizontal: n === 3 || n === 12 ? 'left' : 'center' };
             if (inn) c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFC0CB' } };
@@ -178,7 +245,7 @@
     }
     function draw() {
       box.innerHTML = '<div class="card"><h2 style="margin-top:0">来場受付（QR）</h2><p class="note" style="margin:0 0 8px">お客様の予約番号のQR（または予約番号）を読み取って、来場を記録します。管理画面だけの機能で、お客様の画面には出ません。</p>' +
-        '<div id="ckQr" class="box" style="margin:0 0 8px"></div><div class="box" style="margin:0 0 8px"><b>お客様用の受付画面（iPadのインカメラ）</b><p class="note" style="margin:4px 0 8px">お客様に見てもらう画面です。お客様が、ご自身でQRをかざして、受付できます（お名前は、読み取った方ご本人のものだけが出ます）。iPadで、管理画面にログインしたまま、開いてください。</p><a class="p" id="ckKiosk" href="reception.html?e=' + encodeURIComponent(eid) + '" style="display:inline-block;text-decoration:none;text-align:center;padding:12px 18px;border-radius:10px">お客様用の受付画面を開く</a></div><label>イベント<select id="ckEv">' + list.map(function (e) { return '<option value="' + e.id + '"' + (e.id === eid ? ' selected' : '') + '>' + esc(e.name) + '</option>'; }).join('') + '</select></label>' +
+        '<div id="ckQr" class="box" style="margin:0 0 8px"></div><div class="box" style="margin:0 0 8px"><b>お客様用の受付画面（iPadのインカメラ）</b><p class="note" style="margin:4px 0 8px">お客様に見てもらう画面です。お客様が、ご自身でQRをかざして、受付できます（お名前は、読み取った方ご本人のものだけが出ます）。iPadで、管理画面にログインしたまま、開いてください。</p><a class="p" id="ckKiosk" href="reception.html?e=' + encodeURIComponent(eid) + '" style="display:inline-block;text-decoration:none;text-align:center;padding:12px 18px;border-radius:10px">お客様用の受付画面を開く</a></div><details class="box" id="ckSet" style="margin:0 0 8px"><summary><b>受付の設定（このイベント）</b>　<small>追加の✔項目・席番号・席図</small></summary><div style="margin-top:8px"></div></details><label>イベント<select id="ckEv">' + list.map(function (e) { return '<option value="' + e.id + '"' + (e.id === eid ? ' selected' : '') + '>' + esc(e.name) + '</option>'; }).join('') + '</select></label>' +
         '<div id="ckHead" style="margin:8px 0"></div>' +
         '<div class="row2"><button class="p" id="ckScan" type="button" style="max-width:220px">カメラで読み取る</button><label class="chk" style="margin:0"><input type="checkbox" id="ckAuto">読み取ったら、すぐ受付する</label></div><div id="ckCam"></div>' +
         '<form id="ckF" class="row2" style="margin-top:8px"><input id="ckI" placeholder="予約番号を入力（例：ABCD-EFGH-JKLM）" autocomplete="off" autocapitalize="characters" style="flex:1;min-width:200px"><button class="s" type="submit">確認</button></form><div id="ckRes"></div></div>' +
@@ -186,6 +253,28 @@
       var ev = list.filter(function (e) { return e.id === eid; })[0], qb = box.querySelector('#ckQr');
       function qdraw() { qb.innerHTML = '<b>お客様の画面に、受付用のQRを表示：' + (ev.checkinQr ? '<span style="color:#1f7a4d">ON（表示中）</span>' : '<span style="color:#6b665d">OFF（表示していません）</span>') + '</b><div class="row2" style="margin-top:6px"><button class="' + (ev.checkinQr ? 's' : 'p') + '" id="ckQt" type="button">' + (ev.checkinQr ? '表示をやめる（OFFにする）' : '表示する（ONにする）') + '</button></div><p class="note" style="margin:6px 0 0">ONにすると、ご予約の完了画面と、確定したご予約の画面に、QRコードが出ます。いつでも切り替えられます。</p>'; qb.querySelector('#ckQt').onclick = async function () { this.disabled = true; try { var nv = !ev.checkinQr; await C.events.doc(eid).update({ checkinQr: nv }); ev.checkinQr = nv; if (root.AUDIT) root.AUDIT('お客様画面のQR表示を' + (nv ? 'ON' : 'OFF'), ev.name); say(nv ? 'お客様の画面に、QRを表示します' : 'お客様の画面の、QR表示をやめました'); } catch (e) { say('切り替えられませんでした: ' + e.message); } qdraw(); }; }
       qdraw();
+      (function setCard() {
+        var wrap = box.querySelector('#ckSet > div'), E = curEv(), img = null, dirty = false;
+        wrap.innerHTML = '<label>追加の✔項目（1行に1つ。最大6つ。例：名札を渡した／資料を渡した）<textarea id="ckXi" rows="3" maxlength="200" placeholder="空欄＝追加の✔なし">' + esc((E.ckItems || []).join('\n')) + '</textarea></label>' +
+          '<label>席番号<select id="ckSm"><option value="off"' + ((E.ckSeat || 'off') === 'off' ? ' selected' : '') + '>使わない</option><option value="manual"' + (E.ckSeat === 'manual' ? ' selected' : '') + '>スタッフが入力する</option><option value="auto"' + (E.ckSeat === 'auto' ? ' selected' : '') + '>受付した順に、自動で付ける（1, 2, 3…）</option></select></label>' +
+          '<div class="box" style="margin:8px 0"><b>店舗の簡易席図（画像）</b><div id="ckMp" style="margin:6px 0"></div><input type="file" id="ckMf" accept="image/*"><div class="row2" style="margin-top:6px"><button class="s" id="ckMd" type="button">席図を削除</button></div><p class="note" style="margin:6px 0 0">受付の画面の「席図を見る」と、お客様用の受付画面（席番号を表示するとき）に出ます。</p></div>' +
+          '<div class="row2"><button class="p" id="ckSs" type="button" style="max-width:200px">受付の設定を保存</button></div>';
+        var mp = wrap.querySelector('#ckMp');
+        function pv() { var u = img === '' ? '' : (img || seatMap || ''); mp.innerHTML = u ? '<img alt="席図" src="' + u.replace(/"/g, '') + '" style="max-width:100%;max-height:160px;border:1px solid #ddd;border-radius:6px;background:#fff">' : '<span class="note">席図は、まだありません。</span>'; }
+        pv();
+        wrap.querySelector('#ckMf').onchange = async function () { var f = this.files && this.files[0]; if (!f) return; try { img = await packSeat(f); dirty = true; pv(); } catch (e) { say(e.message); } };
+        wrap.querySelector('#ckMd').onclick = function () { img = ''; dirty = true; pv(); };
+        wrap.querySelector('#ckSs').onclick = async function () {
+          var items = wrap.querySelector('#ckXi').value.split(/\r?\n/).map(function (x) { return x.trim().slice(0, 20); }).filter(Boolean).slice(0, 6), mode = wrap.querySelector('#ckSm').value;
+          this.disabled = true;
+          try {
+            await C.events.doc(eid).update({ ckItems: items, ckSeat: mode });
+            if (dirty) { if (img) await C.eimgs.doc(eid + '-seat').set({ img: img }); else await C.eimgs.doc(eid + '-seat').delete(); seatMap = img || ''; dirty = false; }
+            E.ckItems = items; E.ckSeat = mode; if (root.AUDIT) root.AUDIT('受付の設定を保存', E.name || ''); say('受付の設定を保存しました');
+          } catch (e) { say('保存できませんでした: ' + e.message); }
+          this.disabled = false;
+        };
+      })();
       box.querySelector('#ckEv').onchange = function () { stopCam(); eid = this.value; box.__eid = eid; last = null; unsub(); sub(); draw(); };
       box.querySelector('#ckXl').onclick = function () { xlsx(this); };
       box.querySelector('#ckScan').onclick = scan;
@@ -193,9 +282,9 @@
       box.querySelector('#ckQ').oninput = function () { filter = this.value; drawList(); };
       drawList();
     }
-    function sub() { unsub = C.res.where('eventId', '==', eid).onSnapshot(function (sn) { rs = sn.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); }); if (!box.querySelector('#ckList')) draw(); else drawList(); }, function (e) { say('読み込めませんでした: ' + e.message); }); }
+    function sub() { seatMap = null; seatImg(C, eid).then(function (img) { seatMap = img; if (last) { var rr = find(last); if (rr && box.querySelector('#ckRes .res')) card(rr, '', ''); } }); unsub = C.res.where('eventId', '==', eid).onSnapshot(function (sn) { rs = sn.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); }); if (!box.querySelector('#ckList')) draw(); else drawList(); }, function (e) { say('読み込めませんでした: ' + e.message); }); }
     sub(); draw();
     return function () { stopCam(); unsub(); };
   }
-  root.CHK = { view: view, parseId: parseId, loadJsQR: loadJsQR, arr: arr, adv: adv, loadExcel: loadExcel };
+  root.CHK = { doCheckin: doCheckin, seatImg: seatImg, view: view, parseId: parseId, loadJsQR: loadJsQR, arr: arr, adv: adv, loadExcel: loadExcel };
 })(window);
