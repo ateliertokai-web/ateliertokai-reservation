@@ -456,7 +456,7 @@ function doneView(r,d,gn){
    qrHTML(ev,r.id)+keepHTML({mail:d.mail})+(PV&&realTest(ev)?'<button class="p" id="tr" style="margin-top:14px">この予約を開いて、変更・キャンセルを試す</button>':'')+
    (PV&&!realTest(ev)&&ev.golf&&(d.a+d.k+d.s+d.m)>=2?'<button class="p" id="tg" style="margin-top:14px">お連れ様の入力を練習する</button>':'')+(gn&&gn.length?'<div id="dgs"></div>':'')+('<button class="p" id="hm" style="margin-top:14px">'+T('トップへ戻る')+'</button>');
   q('hm').onclick=home;
-  if(PV&&realTest(ev)&&window.PUSH)PUSH.ask(app,true);   // 準備中のイベントのテスト：通知の確認もここで試せる
+  if(PV&&realTest(ev)&&window.PUSH)PUSH.ask(app);   // 準備中のイベントのテスト：アプリとして開いていて、まだ通知を決めていないときだけ出す（許可済みなら出さない）
   if(gn&&gn.length)doneGuests(r,d,gn);
   // 練習画面（ゴルフ・テスト用ではないイベント）：保存されない見本の予約で、予約の確認画面（お連れ様の入力欄つき）を開く
   if(q('tg'))q('tg').onclick=function(){S.rec={id:r.id,mail:C.normMail(d.mail),eventId:ev.id,eventName:ev.name,slotId:s.id,date:s.date,start:s.start,end:s.end,name:d.name,n:d.a+d.k+d.s+d.m,a:d.a,k:d.k,s:d.s,m:d.m,status:'confirmed',participants:d.participants||[],inv:{}};S.msg='';detailView()};
