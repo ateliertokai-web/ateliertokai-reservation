@@ -74,11 +74,13 @@
     if (!box || !root.indexedDB) return;
     var msgs = await list(); if (!msgs.length) { clearBadge(); return; }
     var old = box.querySelector('#pushBox'); if (old) old.remove();
-    var un = msgs.filter(function (m) { return !m.read; }), rd = msgs.filter(function (m) { return m.read; }).slice(0, 15);
+    // 新着（未読）は、読むまで出す。読んだお知らせは、届いてから14日間だけ、「これまでのお知らせ」（閉じた状態）に出す
+    var lim = Date.now() - 14 * 864e5, un = msgs.filter(function (m) { return !m.read; }), rd = msgs.filter(function (m) { return m.read && m.t >= lim; }).slice(0, 15);
+    if (!un.length && !rd.length) { clearBadge(); return; }
     var item = function (m, nw) { return '<div class="box" style="margin:0 0 6px;' + (nw ? 'border-color:#c0392b;background:#fff6f4' : '') + '"><div style="display:flex;gap:6px;align-items:baseline"><b>' + esc(m.title) + '</b>' + (nw ? '<span class="tag w">' + T('新着') + '</span>' : '') + '<small class="note" style="margin-left:auto">' + fmt(m.t) + '</small></div><div style="white-space:pre-wrap;margin-top:2px">' + esc(m.body) + '</div></div>'; };
     var d = document.createElement('div'); d.id = 'pushBox'; d.style.cssText = 'margin:0 0 14px';
     d.innerHTML = (un.length ? '<h2 style="font-size:16px;margin:0 0 6px">' + T('新しいお知らせ') + '（' + un.length + '）</h2>' + un.map(function (m) { return item(m, true); }).join('') : '') +
-      (rd.length ? '<details' + (un.length ? '' : ' open') + '><summary class="note" style="cursor:pointer;margin:4px 0">' + T('これまでのお知らせ') + '（' + rd.length + '）</summary>' + rd.map(function (m) { return item(m, false); }).join('') + '</details>' : '');
+      (rd.length ? '<details><summary class="note" style="cursor:pointer;margin:4px 0">' + T('これまでのお知らせ') + '（' + rd.length + '）</summary>' + rd.map(function (m) { return item(m, false); }).join('') + '</details>' : '');
     box.insertBefore(d, box.firstChild);
     if (un.length) { await readAll(); }
     clearBadge();
