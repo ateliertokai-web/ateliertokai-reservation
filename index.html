@@ -68,6 +68,9 @@ function top(){window.scrollTo(0,0)}
 /* サーバーの時刻に合わせる（お客様のスマホの時計がずれていても、受付開始の判定がずれないように） */
 var TOFF=0;
 function nowS(){return Date.now()+TOFF}
+// 枠の開始時刻（日本時間）を過ぎたら、受付終了（グレーアウト）。「終日」の枠は、その日の終わりまで。準備中のイベント（テスト）は、いつでも予約できる
+function slotStartMs(s){var st=(s.start==='00:00'&&s.end==='24:00')?'23:59':(s.start||'00:00');return new Date(s.date+'T'+st+':00+09:00').getTime()}
+function slotPast(s,ev){return !(ev&&ev.test)&&!!s.date&&nowS()>=slotStartMs(s)+((s.start==='00:00'&&s.end==='24:00')?60000:0)}
 function tmo(p,ms){return Promise.race([p,new Promise(function(_,rej){setTimeout(function(){rej(new Error('timeout'))},ms||12000)})])}
 function syncTime(){
   return Promise.race([
@@ -180,9 +183,9 @@ async function home(){
     evs.forEach(function(e,i){
       var notYet=e.openAtMs&&nowS()<e.openAtMs;
       if(notYet&&(!soon||e.openAtMs<soon))soon=e.openAtMs;
-      var closed=e.method==='抽選'&&(e.drawn||(e.deadlineMs&&nowS()>e.deadlineMs));
+      var closed=(e.method==='抽選'&&e.drawn)||!!(e.deadlineMs&&nowS()>e.deadlineMs);
       var inner='<b>'+esc(e.name)+'</b>'+(PV&&e.visible===false&&!e.test?('<span class="tag w">'+T('受付終了')+'</span>'):'')+(e.pvDraft?('<span class="tag w">'+T('未保存の設定')+'</span>'):'')+(e.savedTest?('<span class="tag k">'+T('準備中・本当に保存')+'</span>'):'')+
-        (e.method==='抽選'?('<span class="tag k">'+T('抽選')+'</span><span>')+(closed?T('受付は終了しました'):(T('締切')+' ')+dl(e))+'</span>':('<span class="tag">'+T('先着順')+'</span>'))+
+        (e.method==='抽選'?('<span class="tag k">'+T('抽選')+'</span><span>')+(closed?T('受付は終了しました'):(T('締切')+' ')+dl(e))+'</span>':('<span class="tag">'+T('先着順')+'</span>'+(closed?('<span>'+T('受付は終了しました')+'</span>'):e.deadlineMs?('<span>'+T('締切')+' '+dl(e)+'</span>'):'')))+
         (notYet?('<div class="note" style="margin-top:6px;color:#8a6d2f"><b>'+T('ご予約は')+' ')+openText(e.openAtMs)+(' '+T('からです')+'</b><br><span class="cd" data-t="')+e.openAtMs+'"></span></div>':'');
       h+='<button class="ev" data-i="'+i+'"'+((closed||notYet)?' disabled style="opacity:.55"':'')+'>'+(e.thumb?'<div class="evr"><img class="evimg" src="'+esc(e.thumb)+'" alt=""><div>'+inner+'</div></div>':inner)+'</button>';
     });
@@ -245,13 +248,14 @@ async function loadMine(mine){
 /* ---------- 日時の選択 ---------- */
 async function pickSlot(){
   if(S.ev&&S.ev.openAtMs&&nowS()<S.ev.openAtMs){home();return}
+  if(S.ev&&((S.ev.method==='抽選'&&S.ev.drawn)||(S.ev.deadlineMs&&nowS()>S.ev.deadlineMs))&&!PV){home();return}
   top();
   app.innerHTML=('<div class="loading" role="status"><span class="spin"></span>'+T('読み込み中…')+'</div>');
   try{
     var snap=await tmo(C.slots.where('eventId','==',S.ev.id).get());
     S.slots=snap.docs.map(function(d){return Object.assign({id:d.id},d.data())}).sort(function(a,b){return (a.date+a.start)<(b.date+b.start)?-1:1});
   }catch(e){app.innerHTML=('<div class="card err">'+T('読み込めませんでした。電波の良い場所で、もう一度お試しください。')+'<br><button class="s" id="rt" style="margin-top:10px">'+T('もう一度読み込む')+'</button></div>');var rt=q('rt');if(rt)rt.onclick=pickSlot;return}
-  var ev=S.ev,h=('<button class="l" id="bk">'+T('← イベント一覧へ')+'</button><h2>')+esc(ev.name)+'<small>'+(ev.method==='抽選'?(T('抽選のお申し込みです（締切')+' ')+dl(ev)+'）':T('先着順のお申し込みです'))+'</small></h2>'+placeHTML(ev);
+  var ev=S.ev,h=('<button class="l" id="bk">'+T('← イベント一覧へ')+'</button><h2>')+esc(ev.name)+'<small>'+(ev.method==='抽選'?(T('抽選のお申し込みです（締切')+' ')+dl(ev)+'）':T('先着順のお申し込みです')+(ev.deadlineMs?'（'+T('締切')+' '+dl(ev)+'）':''))+'</small></h2>'+placeHTML(ev);
   if(PV&&realTest(ev))h+='<div class="box" style="border-color:#c0392b"><b>準備中のイベントです。</b>ここでの予約・変更・キャンセルは<b>本当に保存</b>されます（お客様には見えません）。試し終わったら、管理画面でこのイベントを削除するか、予約を取り消してください。</div>';
   if(ev.msg)h+='<div class="box">'+esc(ev.msg).replace(/\n/g,'<br>')+'</div>';
   if(ev.imgN>0){h+=(ev.thumb?'<img class="gthumb" id="gt" src="'+esc(ev.thumb)+'" alt="">':'')+('<div id="gal"><button class="s" id="gb">'+T('写真・パンフレットを見る（'))+ev.imgN+(T('枚）')+'</button></div>')}
@@ -259,9 +263,10 @@ async function pickSlot(){
   if(!S.slots.length)h+=('<div class="card note">'+T('現在、選べる日時がありません。')+'</div>');
   S.slots.forEach(function(s,i){
     if(s.date!==cur){cur=s.date;h+='<h2 style="font-size:16px">'+day(s.date)+'</h2>'}
+    var past=slotPast(s,ev);
     var full=!ev.method||ev.method==='先着'?((s.capG&&(s.booked||0)>=s.capG)||(s.capP&&(s.people||0)>=s.capP)):false;
-    var lab=ev.method==='抽選'?('<em>'+T('抽選受付中')+'</em>'):full?(ev.wait?('<em class="f">'+T('満席・キャンセル待ち')+'</em>'):('<em class="f">'+T('満席')+'</em>')):(s.capG?('<em>'+T('残り')+' ')+Math.max(0,s.capG-(s.booked||0))+(T('組')+'</em>'):s.capP?('<em>'+T('残り')+' ')+Math.max(0,s.capP-(s.people||0))+(T('名')+'</em>'):('<em>'+T('受付中')+'</em>'));
-    h+='<button class="slot" data-i="'+i+'"'+(full&&!ev.wait?' disabled':'')+'><b>'+rng(s)+'</b>'+lab+'</button>';
+    var lab=past?('<em class="f">'+T('受付終了')+'</em>'):ev.method==='抽選'?('<em>'+T('抽選受付中')+'</em>'):full?(ev.wait?('<em class="f">'+T('満席・キャンセル待ち')+'</em>'):('<em class="f">'+T('満席')+'</em>')):(s.capG?('<em>'+T('残り')+' ')+Math.max(0,s.capG-(s.booked||0))+(T('組')+'</em>'):s.capP?('<em>'+T('残り')+' ')+Math.max(0,s.capP-(s.people||0))+(T('名')+'</em>'):('<em>'+T('受付中')+'</em>'));
+    h+='<button class="slot" data-i="'+i+'"'+((full&&!ev.wait)||past?' disabled style="opacity:.55"':'')+'><b>'+rng(s)+'</b>'+lab+'</button>';
   });
   app.innerHTML=h;
   q('bk').onclick=home;
