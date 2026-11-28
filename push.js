@@ -16,10 +16,14 @@
     await db.collection('pushSubs').doc(await hash(tok)).set({ t: tok, rids: list, updatedAt: root.firebase.firestore.FieldValue.serverTimestamp() });
     try { localStorage.setItem(KEY, tok); } catch (e) {}
   }
+  // 通知の受け取り先（トークン）をもらう。アプリを入れ直した直後は、受け取り係（サービスワーカー）が、まだ動き始めていないことがあるため、
+  // 動き始めるのを待ってから、もらう（だめなら、少し待って、もう一度）
   async function token() {
     await load();
-    var m = root.firebase.messaging();
-    return m.getToken({ vapidKey: root.PUSH_VAPID, serviceWorkerRegistration: reg });
+    var m = root.firebase.messaging(), r = reg;
+    try { r = await Promise.race([navigator.serviceWorker.ready, new Promise(function (y) { setTimeout(function () { y(reg); }, 8000); })]) || reg; } catch (e) {}
+    try { return await m.getToken({ vapidKey: root.PUSH_VAPID, serviceWorkerRegistration: r }); }
+    catch (e) { await new Promise(function (y) { setTimeout(y, 1500); }); return m.getToken({ vapidKey: root.PUSH_VAPID, serviceWorkerRegistration: r }); }
   }
   // 許可されている端末：予約番号の一覧を新しくする（予約したあと・アプリを開いたとき）
   async function sync() {
@@ -42,7 +46,7 @@
     d.querySelector('#pushOn').onclick = async function () {
       this.disabled = true;
       try { var y = await enable(); d.innerHTML = y ? '<b>' + T('通知を受け取る設定にしました。') + '</b>' : '<span class="note">' + T('通知は受け取らない設定です。あとで受け取る場合は、スマホの設定で、このアプリの通知を許可してください。') + '</span>'; setTimeout(function () { d.remove(); }, 4000); }
-      catch (e) { d.querySelector('.note').textContent = T('通知の設定ができませんでした。電波の良い場所で、もう一度お試しください。'); this.disabled = false; }
+      catch (e) { var nt = d.querySelector('.note'); if (!nt) { nt = document.createElement('span'); nt.className = 'note'; d.insertBefore(nt, d.querySelector('.tools')); } nt.textContent = T('通知の設定ができませんでした。電波の良い場所で、もう一度お試しください。') + ' (' + String((e && (e.code || e.name || e.message)) || '').slice(0, 80) + ')'; this.disabled = false; }
     };
   }
   // ホーム画面を表示したときに呼ぶ：条件がそろえば「通知を受け取りますか？」を出す
