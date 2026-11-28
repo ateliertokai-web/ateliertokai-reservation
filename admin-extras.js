@@ -159,7 +159,7 @@
     /* ---------- 通知・メールを、すぐ届ける（GASのウェブアプリを呼ぶ）。設定は adminConfig/gas（管理者だけが読み書き） ---------- */
   var GAS = undefined;
   function gasCfg() { if (GAS !== undefined) return Promise.resolve(GAS); return firebase.firestore().collection('adminConfig').doc('gas').get().then(function (s) { GAS = (s.exists && s.data().url && s.data().key) ? s.data() : null; return GAS; }).catch(function () { GAS = null; return null; }); }
-  // 送信予約を、すぐ処理させる。設定がない・失敗しても、5分ごとの自動処理が送るので、何も困らない。戻り値：呼び出せたか
+  // 送信予約を、すぐ処理させる。設定がない・失敗しても、1分ごとの自動処理が送るので、何も困らない。戻り値：呼び出せたか
   function kick() {
     return gasCfg().then(function (c) {
       if (!c) return false;
@@ -167,7 +167,7 @@
     });
   }
   function kickCard(box, say) {
-    box.innerHTML = '<div class="card"><h2 style="margin-top:0">通知・メールを、すぐ届ける設定</h2><p class="note">いまは、5分ごとの自動処理で、通知・メールが届きます。ここを設定すると、管理画面の「お知らせを送る」「繰り上げ」「抽選」のあと、数秒で届きます。<br>設定の手順：GASで、「デプロイ」→「新しいデプロイ」→ 種類「ウェブアプリ」（実行するユーザー「自分」、アクセスできるユーザー「全員」）→ 出てきたURLをコピー。次に、関数 <code>makeWebhookKey</code> を実行して、実行ログに出た「合言葉」をコピー。2つを、下に入れます。<br>※ 自動処理と、この「すぐ届ける」が同時に動いても、同じ通知・メールが、二重に届くことはありません。</p>' +
+    box.innerHTML = '<div class="card"><h2 style="margin-top:0">通知・メールを、すぐ届ける設定</h2><p class="note">いまは、1分ごとの自動処理で、通知・メールが届きます。ここを設定すると、管理画面の「お知らせを送る」「繰り上げ」「抽選」のあと、数秒で届きます。<br>設定の手順：GASで、「デプロイ」→「新しいデプロイ」→ 種類「ウェブアプリ」（実行するユーザー「自分」、アクセスできるユーザー「全員」）→ 出てきたURLをコピー。次に、関数 <code>makeWebhookKey</code> を実行して、実行ログに出た「合言葉」をコピー。2つを、下に入れます。<br>※ 自動処理と、この「すぐ届ける」が同時に動いても、同じ通知・メールが、二重に届くことはありません。</p>' +
       '<label>ウェブアプリのURL<input id="kkU" placeholder="https://script.google.com/macros/s/…/exec"></label><label>合言葉<input id="kkK" autocomplete="off"></label><div class="tools"><button class="p" id="kkS" type="button" style="max-width:180px">保存する</button><button class="s" id="kkT" type="button">いま、動くか試す</button><button class="s d" id="kkD" type="button">設定を消す</button></div><div id="kkM" class="note"></div></div>';
     var q = function (id) { return box.querySelector('#' + id); };
     gasCfg().then(function (c) { if (c) { q('kkU').value = c.url; q('kkK').value = c.key; q('kkM').textContent = '設定済みです。'; } });
@@ -178,9 +178,10 @@
       catch (e) { say('保存できませんでした: ' + (e.code === 'permission-denied' ? 'Firestoreのルールに「adminConfig」の設定がまだありません' : e.message)); }
     };
     q('kkT').onclick = async function () { var ok = await kick(); say(ok ? '呼び出しました（送る予約があれば、数秒で届きます）' : '呼び出せませんでした（URLと設定を確認してください）'); };
-    q('kkD').onclick = async function () { if (!confirm('設定を消します（5分ごとの自動処理では、これまでどおり届きます）。よろしいですか？')) return; try { await firebase.firestore().collection('adminConfig').doc('gas').delete(); GAS = null; q('kkU').value = ''; q('kkK').value = ''; q('kkM').textContent = ''; say('消しました'); } catch (e) { say('消せませんでした: ' + e.message); } };
+    q('kkD').onclick = async function () { if (!confirm('設定を消します（1分ごとの自動処理では、これまでどおり届きます）。よろしいですか？')) return; try { await firebase.firestore().collection('adminConfig').doc('gas').delete(); GAS = null; q('kkU').value = ''; q('kkK').value = ''; q('kkM').textContent = ''; say('消しました'); } catch (e) { say('消せませんでした: ' + e.message); } };
   }
 
-  root.AX = { kick: kick, kickCard: kickCard, audit: audit, auditView: auditView, duplicate: duplicate, statusView: statusView, stop: stop };
+  function hasKick() { return gasCfg().then(function (c) { return !!c; }); }
+  root.AX = { hasKick: hasKick, kick: kick, kickCard: kickCard, audit: audit, auditView: auditView, duplicate: duplicate, statusView: statusView, stop: stop };
   root.AUDIT = audit;
 })(window);

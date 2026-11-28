@@ -31,6 +31,7 @@
 <script src="admin-extras.js"></script>
 <script src="checkin.js"></script>
 <script src="delreq.js"></script>
+<script src="news.js"></script>
 <script src="visit-sheet.js"></script>
 <script src="privacy-text.js"></script>
 <script src="texts.js"></script>
@@ -98,7 +99,7 @@ async function loadSlots(){
 }
 function shell(){
   app.className='wide';
-  app.innerHTML='<div class="tools" style="justify-content:space-between"><div class="tabs" style="border:0;margin:0"><button data-t="res" class="'+(S.tab==='res'?'on':'')+'">予約一覧</button><button data-t="stt" class="'+(S.tab==='stt'?'on':'')+'">受付状況</button><button data-t="ck" class="'+(S.tab==='ck'?'on':'')+'">来場受付</button><button data-t="ev" class="'+(S.tab==='ev'?'on':'')+'">イベント・枠</button><button data-t="cs" class="'+(S.tab==='cs'?'on':'')+'">お客様画面</button><button data-t="tx" class="'+(S.tab==='tx'?'on':'')+'">お客様画面の文言</button><button data-t="dl" class="'+(S.tab==='dl'?'on':'')+'">削除依頼<span id="dlb" style="color:#c0392b;font-weight:700">'+(S.dlN?' ('+S.dlN+')':'')+'</span></button>'+(isOwnerUser(auth.currentUser)?'<button data-t="st" class="'+(S.tab==='st'?'on':'')+'">スタッフ</button>':'')+'</div><div class="tools" style="margin:0;align-items:center"><a class="s" href="staff-guide.html" target="_blank" rel="noopener">使い方</a><button class="s" id="lo">ログアウト</button></div></div><div id="msg" class="box" '+(S.msg?'':'hidden')+'>'+esc(S.msg)+'</div><div id="pane"></div>';
+  app.innerHTML='<div class="tools" style="justify-content:space-between"><div class="tabs" style="border:0;margin:0"><button data-t="res" class="'+(S.tab==='res'?'on':'')+'">予約一覧</button><button data-t="stt" class="'+(S.tab==='stt'?'on':'')+'">受付状況</button><button data-t="ck" class="'+(S.tab==='ck'?'on':'')+'">来場受付</button><button data-t="ev" class="'+(S.tab==='ev'?'on':'')+'">イベント・枠</button><button data-t="cs" class="'+(S.tab==='cs'?'on':'')+'">お客様画面</button><button data-t="tx" class="'+(S.tab==='tx'?'on':'')+'">お客様画面の文言</button><button data-t="nw" class="'+(S.tab==='nw'?'on':'')+'">お知らせ</button><button data-t="dl" class="'+(S.tab==='dl'?'on':'')+'">削除依頼<span id="dlb" style="color:#c0392b;font-weight:700">'+(S.dlN?' ('+S.dlN+')':'')+'</span></button>'+(isOwnerUser(auth.currentUser)?'<button data-t="st" class="'+(S.tab==='st'?'on':'')+'">スタッフ</button>':'')+'</div><div class="tools" style="margin:0;align-items:center"><a class="s" href="staff-guide.html" target="_blank" rel="noopener">使い方</a><button class="s" id="lo">ログアウト</button></div></div><div id="msg" class="box" '+(S.msg?'':'hidden')+'>'+esc(S.msg)+'</div><div id="pane"></div>';
   app.querySelectorAll('[data-t]').forEach(function(b){b.onclick=function(){if(S.tab==='tx'&&S.txed&&S.txed.dirty()&&b.dataset.t!=='tx'&&!confirm('文言の変更が、まだ保存されていません。保存せずに、移動しますか？'))return;S.tab=b.dataset.t;S.msg='';go()}});
   q('lo').onclick=function(){auth.signOut()};
 }
@@ -110,7 +111,7 @@ async function go(){
   shell();q('pane').innerHTML='<div class="loading" role="status"><span class="spin"></span>読み込み中…</div>';
   try{await loadEvents();await loadSlots()}catch(e){say('読み込めませんでした: '+(e.code==='permission-denied'?'このアカウントは管理者として登録されていません。オーナーにスタッフ登録を依頼してください':e.message));return}
   if(window.AX)AX.stop();
-  if(S.tab==='res')resView();else if(S.tab==='stt')AX.statusView(C,q('pane'),S.events);else if(S.tab==='ck')S.unsub=CHK.view(C,q('pane'),S.events,say);else if(S.tab==='cs')csView();else if(S.tab==='dl')S.unsub=DELREQ.view(C,q('pane'),say,window.AUDIT,function(n){if(typeof n==='number')setDl(n)});else if(S.tab==='tx')S.txed=TXED.view(q('pane'),{C:C,say:say,esc:esc});else if(S.tab==='st'&&isOwnerUser(auth.currentUser))staffView();else evView();
+  if(S.tab==='res')resView();else if(S.tab==='stt')AX.statusView(C,q('pane'),S.events);else if(S.tab==='ck')S.unsub=CHK.view(C,q('pane'),S.events,say);else if(S.tab==='cs')csView();else if(S.tab==='nw')S.unsub=NEWS.view(C,q('pane'),S.events,say,window.AUDIT,AX.kick);else if(S.tab==='dl')S.unsub=DELREQ.view(C,q('pane'),say,window.AUDIT,function(n){if(typeof n==='number')setDl(n)});else if(S.tab==='tx')S.txed=TXED.view(q('pane'),{C:C,say:say,esc:esc});else if(S.tab==='st'&&isOwnerUser(auth.currentUser))staffView();else evView();
   scrubOnce();
   if(!S.dlSub&&window.DELREQ){var f0=true;S.dlSub=DELREQ.count(function(n){var up=n>(S.dlN||0)&&!f0;if(f0&&n)toast('お客様情報の削除のご依頼が、'+n+'件 届いています（「削除依頼」タブ）');else if(up)toast('お客様情報の削除のご依頼が、新しく届きました');f0=false;setDl(n)})}
   if(!S.albClean){S.albClean=1;C.albumCleanup().then(function(n){if(n)toast('掲載期間が終わった写真・成績表を削除しました（'+n+'組）')}).catch(function(){})}
@@ -155,7 +156,7 @@ function resView(){
   S.unsub=function(){u1();u2();u3()};
 }
 // 通知（プッシュ通知）の送信予約。GAS（sendPushes）が数分ごとに送る
-function pushQ(o){try{return firebase.firestore().collection('pushQueue').add(Object.assign({sent:false,createdAt:firebase.firestore.FieldValue.serverTimestamp()},o)).then(function(){if(window.AX)AX.kick()}).catch(function(){})}catch(e){return Promise.resolve()}}
+function pushQ(o){try{var u0=firebase.auth().currentUser;return firebase.firestore().collection('pushQueue').add(Object.assign({sent:false,by:(u0&&u0.email)||'',createdAt:firebase.firestore.FieldValue.serverTimestamp()},o)).then(function(){if(window.AX)AX.kick()}).catch(function(){})}catch(e){return Promise.resolve()}}
 function uniq(a){var o={};return a.filter(function(x){if(!x||o[x])return false;o[x]=1;return true}).sort()}
 function kidsN(r){return (+r.k||0)+(+r.s||0)+(+r.m||0)}
 // 参加者名。ゴルフで「レクサスオーナー」にチェックがある方には（オーナー）を付ける
@@ -243,7 +244,7 @@ function draw(){
   if(q('dr'))q('dr').onclick=async function(){
     if(!confirm('「'+ev.name+'」の抽選を実行します。実行後は新しいお申し込みができなくなり、取り消せません。よろしいですか？'))return;
     this.disabled=true;
-    try{var r=await C.runLottery(S.evId);if(r.ok){pushQ({type:'lottery',eid:S.evId});AUDIT('抽選を実行',ev.name+'（当選'+r.win+'・待ち'+r.wait+'・落選'+r.lost+'）');say('抽選しました。当選 '+r.win+'組 / キャンセル待ち '+r.wait+'組 / 落選 '+r.lost+'組');await loadEvents();await loadSlots();resView()}else say(r.msg)}catch(er){say('失敗しました: '+er.message)}
+    try{var r=await C.runLottery(S.evId);if(r.ok){pushQ({type:'lottery',eid:S.evId,evName:ev.name});AUDIT('抽選を実行',ev.name+'（当選'+r.win+'・待ち'+r.wait+'・落選'+r.lost+'）');say('抽選しました。当選 '+r.win+'組 / キャンセル待ち '+r.wait+'組 / 落選 '+r.lost+'組');await loadEvents();await loadSlots();resView()}else say(r.msg)}catch(er){say('失敗しました: '+er.message)}
   };
 }
 function csv(list){
@@ -427,26 +428,6 @@ function privacyCard(p){
     this.disabled=true;try{await C.cfg.doc('privacy').set(o);say('プライバシーポリシーを保存しました')}catch(e){say('保存できませんでした: '+(e.code==='permission-denied'?'Firestoreのルールに「config」の設定がありません':e.message))}this.disabled=false;
   };
 }
-// アプリの通知で、お知らせを送る（通知を許可した方だけに届く）
-function newsCard(p){
-  var d=document.createElement('div');d.className='card';
-  d.innerHTML='<h2 style="margin-top:0">アプリの通知でお知らせを送る</h2><p class="note">予約ページをホーム画面に追加し、通知を許可したお客様のスマホに届きます。<span id="nwN"></span>キャンセル待ちの繰り上げ・抽選の結果は、自動で届きます。</p>'+
-    '<label>送る相手<select id="nwT"><option value="">通知を許可した全員</option>'+S.events.map(function(e){return '<option value="'+e.id+'">「'+esc(e.name)+'」を予約した方</option>'}).join('')+'</select></label>'+
-    '<label>見出し<input id="nwH" maxlength="40" placeholder="例：レクサス鹿児島東開からのお知らせ"></label><label>本文<textarea id="nwB" rows="3" maxlength="200" placeholder="例：明日のゴルフコンペは予定どおり開催します。"></textarea></label>'+
-    '<div class="tools"><button class="p" id="nwS" type="button" style="max-width:220px">お知らせを送る</button></div><p class="note">「すぐ届ける設定」（スタッフタブ）が済んでいれば、数秒で届きます。未設定のときは、5分ごとの自動処理で、数分以内に届きます。</p>';
-  p.insertBefore(d,p.firstChild);
-  firebase.firestore().collection('pushSubs').get().then(function(s){q('nwN').textContent='いま通知を受け取っている端末：'+s.size+'台。'}).catch(function(){});
-  q('nwS').onclick=async function(){
-    var t=q('nwH').value.trim()||'レクサス鹿児島東開からのお知らせ',b=q('nwB').value.trim(),ev=q('nwT').value,who=ev?'（'+((S.events.filter(function(e){return e.id===ev})[0]||{}).name||'')+'の予約者）':'（全員）';
-    if(!b){say('本文を入力してください');return}
-    var who=ev?'「'+(S.events.filter(function(e){return e.id===ev})[0]||{}).name+'」を予約した方':'通知を許可した全員';
-    if(!confirm(who+'に、お知らせを送ります。よろしいですか？\n\n'+t+'\n'+b))return;
-    this.disabled=true;
-    try{await firebase.firestore().collection('pushQueue').add({type:'news',eid:ev,title:t.slice(0,40),body:b.slice(0,200),sent:false,createdAt:firebase.firestore.FieldValue.serverTimestamp()});q('nwB').value='';AUDIT('お知らせを送信',t+'／'+who);AX.kick().then(function(k){say(k?'お知らせを送りました（数秒で届きます）':'お知らせの送信を受け付けました（数分以内に届きます）')})}
-    catch(e){say('送れませんでした: '+(e.code==='permission-denied'?'Firestoreのルールに「pushQueue」の設定がまだありません':e.message))}
-    this.disabled=false;
-  };
-}
 function csView(){
   var p=q('pane'),D=window.GUIDE_DEFAULT,M='①②③④⑤⑥⑦⑧⑨';
   p.innerHTML='<div class="loading sm" role="status"><span class="spin"></span>読み込み中…</div>';
@@ -480,7 +461,7 @@ function csView(){
     h+='<label>いちばん下の文<textarea id="gFoot" rows="2" maxlength="300">'+esc(val(g,'foot',D.foot))+'</textarea></label>'+
       '<p class="note">空欄にした欄は、初期の文章で表示されます。</p></div></details>'+
       '<div class="tools"><button class="p" id="gSave" style="max-width:260px">保存する</button><button class="s" id="gReset" type="button">文章を初期の内容に戻す</button></div>';
-    p.innerHTML=h;newsCard(p);privacyCard(p);
+    p.innerHTML=h;privacyCard(p);
     q('gReset').onclick=function(){if(!confirm('説明書の文章を、初期の内容に戻します（「保存する」を押すまで反映されません）。よろしいですか？'))return;var on=q('gOn').checked;draw({on:on});q('gOn').checked=on;p.querySelector('details').open=true};
     q('gSave').onclick=async function(){
       var b=this,o={on:q('gOn').checked,label:q('gLabel').value.trim(),title:q('gTitle').value.trim(),intro:q('gIntro').value.trim(),foot:q('gFoot').value.trim(),steps:[],updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
