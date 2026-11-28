@@ -15,7 +15,14 @@
   function view(C, box, events, say, audit, kick) {
     var db = firebase.firestore(), FV = firebase.firestore.FieldValue, subs = [], rs = [], sel = {}, mode = 'all', eid = events[0] ? events[0].id : '', unsub = function () {}, gasOk = null;
     var q = function (id) { return box.querySelector('#' + id); };
-    box.innerHTML = '<div class="card" id="nwF"></div><div class="card" id="nwH"></div>';
+    box.innerHTML = '<div class="card" id="nwF"></div><div class="card" id="nwD"></div><div class="card" id="nwH"></div>';
+    // お客様のアプリの上に、読んだお知らせを出す日数（config/push の days）
+    (function () {
+      var D = q('nwD');
+      D.innerHTML = '<h2 style="margin-top:0;font-size:16px">お客様のアプリに、お知らせを出す期間</h2><p class="note" style="margin:0 0 6px">新しいお知らせは、お客様が読むまで出ます。読んだお知らせは、届いてから、この日数のあいだ、「これまでのお知らせ」に出ます。</p><div class="row2" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><input id="nwDays" type="number" min="1" max="365" value="7" inputmode="numeric" style="width:6em">日間<button class="s" id="nwDs" type="button">保存</button></div>';
+      C.cfg.doc('push').get().then(function (s) { var d = s.exists ? +s.data().days : 0; if (d >= 1) q('nwDays').value = d; }).catch(function () {});
+      q('nwDs').onclick = async function () { var d = Math.round(+q('nwDays').value); if (!(d >= 1 && d <= 365)) { say('1〜365日で入れてください'); return; } this.disabled = true; try { await C.cfg.doc('push').set({ days: d }, { merge: true }); if (audit) audit('お知らせを出す期間を変更', d + '日間'); say('お知らせを出す期間を、' + d + '日間にしました'); } catch (e) { say('保存できませんでした: ' + e.message); } this.disabled = false; };
+    })();
     function subsOf(rid) { return subs.some(function (s) { return (s.data().rids || []).indexOf(rid) >= 0; }); }
     function live() { return rs.filter(function (r) { return r.status === 'confirmed' || r.status === 'won'; }).sort(function (a, b) { return ((a.date + a.start) < (b.date + b.start)) ? -1 : ((a.date + a.start) > (b.date + b.start)) ? 1 : String(a.name).localeCompare(String(b.name), 'ja'); }); }
     function form() {
