@@ -27,7 +27,7 @@ body{background:var(--bg);color:var(--ink);font:18px/1.6 -apple-system,BlinkMacS
 .msg{text-align:center;padding:10px 6px 4px}.msg b{display:block;font-size:clamp(22px,3.6vw,44px);line-height:1.35}.msg span{display:block;color:#cfcfcf;font-size:clamp(15px,2.2vw,24px);margin-top:4px}
 .ov{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:30px;z-index:20}
 .ov.on{display:flex}.ov.ok{background:var(--ok)}.ov.dup{background:var(--warn)}.ov.ng{background:var(--ng)}
-.ov .ic{font-size:clamp(70px,14vw,170px);line-height:1}.ov .t1{font-size:clamp(30px,6vw,72px);font-weight:700;margin:10px 0}.ov .t2{font-size:clamp(24px,4.4vw,52px);font-weight:700}.ov .t3{font-size:clamp(18px,3vw,34px);margin-top:14px;opacity:.95}
+.ov .ic{font-size:clamp(70px,14vw,170px);line-height:1}.ov .t1{font-size:clamp(30px,6vw,72px);font-weight:700;margin:10px 0}.ov .t2{font-size:clamp(24px,4.4vw,52px);font-weight:700}.ov .seat{font-size:clamp(30px,6vw,72px);font-weight:700;margin:8px 0}.ov .seat b{font-size:1.5em;color:#ffe08a}.ov .smap{max-width:min(90%,720px);max-height:34vh;margin:8px auto;display:block;border-radius:10px;background:#fff}.ov .t3{font-size:clamp(18px,3vw,34px);margin-top:14px;opacity:.95}
 .sm{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;z-index:30;padding:20px}.sm.on{display:flex}
 .sm .in{background:#fff;color:#111;border-radius:16px;padding:18px;max-width:440px;width:100%;font-size:16px;-webkit-user-select:text;user-select:text}
 .sm h2{margin:0 0 8px;font-size:18px}.sm input{width:100%;padding:12px;font:inherit;border:1px solid #ccc;border-radius:10px;margin:6px 0}.sm .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
@@ -67,8 +67,10 @@ function show(k,h,sec){
   clearTimeout(hideT);ov.className='ov on '+k;ov.innerHTML=h;chime(k);hideT=setTimeout(function(){ov.className='ov';ov.innerHTML=''},sec*1000);
 }
 ov.onclick=function(){clearTimeout(hideT);ov.className='ov';ov.innerHTML=''};
-function okView(r){show('ok','<div class="ic">✓</div><div class="t1">ご来場ありがとうございます</div><div class="t2">'+esc(r.name)+' 様　'+r.n+'名様</div><div class="t3">受付が完了しました。どうぞ、ご入場ください。</div>',5)}
-function dupView(r){var d=r.checkin&&r.checkin.at&&r.checkin.at.toDate?r.checkin.at.toDate():null,t=d?('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2):'';show('dup','<div class="ic">✓</div><div class="t1">すでに受付が済んでいます</div><div class="t2">'+esc(r.name)+' 様</div>'+(t?'<div class="t3">'+t+' に、受付済みです</div>':''),5)}
+var SEATIMG=null;
+function seatHtml(r){return r.seat?('<div class="seat">お席は <b>'+esc(r.seat)+'</b> 番です</div>'+(SEATIMG?'<img class="smap" alt="席図" src="'+SEATIMG.replace(/"/g,'')+'">':'')):''}
+function okView(r){show('ok','<div class="ic">✓</div><div class="t1">ご来場ありがとうございます</div><div class="t2">'+esc(r.name)+' 様　'+r.n+'名様</div>'+seatHtml(r)+'<div class="t3">受付が完了しました。どうぞ、ご入場ください。</div>',r.seat?9:5)}
+function dupView(r){var d=r.checkin&&r.checkin.at&&r.checkin.at.toDate?r.checkin.at.toDate():null,t=d?('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2):'';show('dup','<div class="ic">✓</div><div class="t1">すでに受付が済んでいます</div><div class="t2">'+esc(r.name)+' 様</div>'+seatHtml(r)+(t?'<div class="t3">'+t+' に、受付済みです</div>':''),r.seat?9:5)}
 function ngView(){show('ng','<div class="ic">!</div><div class="t1">受付できませんでした</div><div class="t3">お手数ですが、スタッフにお声がけください。</div>',6)}
 /* ---- 受付の処理 ---- */
 async function handle(text){
@@ -80,9 +82,9 @@ async function handle(text){
     if(r.eventId!==EID||!(r.status==='confirmed'||r.status==='won')){ngView();return}
     if(r.checkin){dupView(r);return}
     var u=firebase.auth().currentUser;
-    await C.res.doc(id).update({checkin:{at:firebase.firestore.FieldValue.serverTimestamp(),by:(u&&u.email)||''},updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
-    try{await db.collection('auditLog').add({by:(u&&u.email)||'',action:'来場受付（受付画面）',detail:(r.name||'')+' 様（'+id+'）',at:firebase.firestore.FieldValue.serverTimestamp()})}catch(e){}
-    okView(r);
+    var o=await CHK.doCheckin(C,r,EV,(u&&u.email)||'',{});if(o==='dup'){dupView(r);return}
+    try{await db.collection('auditLog').add({by:(u&&u.email)||'',action:'来場受付（受付画面）',detail:(r.name||'')+' 様（'+id+'）'+(o.seat?'／席 '+o.seat:''),at:firebase.firestore.FieldValue.serverTimestamp()})}catch(e){}
+    r.seat=o.seat||'';okView(r);
   }catch(e){ngView()}
   finally{busy=false}
 }
@@ -104,7 +106,7 @@ async function startCam(){
       }catch(e){txt=''}
       b2=false;
       var id=txt?CHK.parseId(txt):'';
-      if(id&&(id!==hold||Date.now()-holdAt>7000)){hold=id;holdAt=Date.now();await handle(txt)}
+      if(id&&(id!==hold||Date.now()-holdAt>12000)){hold=id;holdAt=Date.now();await handle(txt)}
     }
     raf=requestAnimationFrame(tick);
   };
@@ -138,7 +140,7 @@ function boot(){
         big(l.length?'<b>受付するイベントを選んでください</b><br><br>'+l.map(function(e){return '<a style="display:block;margin:10px 0;padding:14px;border:1px solid #555;border-radius:12px;color:#fff;text-decoration:none" href="?e='+esc(e.id)+'">'+esc(e.name)+'</a>'}).join(''):'来場受付を使うイベントがありません。<br><a href="admin.html">管理画面</a>で、イベントの設定の「来場受付（QR）を使う」にチェックを入れてください。');return}
       var d=await C.events.doc(EID).get();if(!d.exists){big('イベントが見つかりません。<a href="admin.html">管理画面</a>から開き直してください。');return}
       EV=Object.assign({id:EID},d.data());if(!EV.checkin){big('このイベントは、来場受付を使わない設定です。<a href="admin.html">管理画面</a>で設定してください。');return}
-      screen();stage='完了';
+      CHK.seatImg(C,EID).then(function(i){SEATIMG=i||''});screen();stage='完了';
     }catch(e){big('読み込めませんでした。管理者としてログインしているか、ご確認ください。<br><a href="admin.html">管理画面</a>')}
   });
 }
