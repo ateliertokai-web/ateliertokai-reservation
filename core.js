@@ -88,6 +88,8 @@ function makeCore(firebase, db, opts) {
     return fail(_T('混み合っていて処理できませんでした。少し待ってもう一度お試しください'));
   }
 
+  // 枠の開始時刻（日本時間）を過ぎたか（「終日」の枠は、その日の終わりまで）
+  var slotStarted = function (s) { var all = s.start === '00:00' && s.end === '24:00'; return !!s.date && now() >= new Date(s.date + 'T' + (all ? '23:59' : (s.start || '00:00')) + ':00+09:00').getTime() + (all ? 60000 : 0); };
   var fits = function (s, n, extraGroups) { return (!s.capG || (s.booked || 0) + (extraGroups || 1) <= s.capG) && (!s.capP || (s.people || 0) + n <= s.capP); };
 
   /* ---------- お客様: 申し込み ---------- */
@@ -107,10 +109,9 @@ function makeCore(firebase, db, opts) {
         var ev = eS.data();
         if (!ev.visible && !ev.test) return fail(_T('このイベントは受付を終了しました')); // テスト用イベントは非表示でも予約できる（動作確認用）
         var lot = ev.method === '抽選';
-        if (lot) {
-          if (ev.drawn) return fail(_T('抽選は終了したため、新しいお申し込みはできません'));
-          if (ev.deadlineMs && now() > ev.deadlineMs) return fail(_T('申込の受付は締め切りました'));
-        }
+        if (lot && ev.drawn) return fail(_T('抽選は終了したため、新しいお申し込みはできません'));
+        if (ev.deadlineMs && now() > ev.deadlineMs) return fail(_T('申込の受付は締め切りました'));   // 抽選も、先着も、締切後は受け付けない
+        if (!ev.test && slotStarted(s)) return fail(_T('この枠は、受付を終了しました'));   // 枠の開始時刻を過ぎたら、受け付けない
         var n = (+d.a || 0) + (+d.k || 0) + (+d.s || 0) + (+d.m || 0);
         if (n < 1 || n > s.maxPer) return fail(_T('人数は1〜{n}名で入力してください', { n: s.maxPer }));
         var ak = await appKey(ev, s.eventId, d.mail, d.tel), aRef = apps.doc(ak), aS = await tx.get(aRef);
